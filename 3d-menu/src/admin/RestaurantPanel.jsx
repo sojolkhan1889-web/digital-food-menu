@@ -69,7 +69,9 @@ import {
   getStoredSettlementDue,
   saveStoredSettlementDue,
   settlePlatformDues,
-  resetPlatformDues
+  resetPlatformDues,
+  getMenuScans,
+  getRestaurantFollowers
 } from '../data/menuStore';
 
 // Animated count-up component for metrics on page load/refresh
@@ -431,25 +433,37 @@ export default function RestaurantPanel({
     };
   }, [foods, orders]);
 
-  // Platform Fees & Due Settlement Calculation (Linked: Today's Fee Collections accumulate into Due Settlement)
-  const todayFeesAmount = metrics.todayOrders ? metrics.todayOrders * 5 : 55;
+  // Dynamic Real Scans & Loyal Diners calculated from real customer interactions
+  const scansData = useMemo(() => {
+    return getMenuScans('resto_001', orders.length);
+  }, [orders.length]);
+
+  const followersData = useMemo(() => {
+    return getRestaurantFollowers('resto_001', orders);
+  }, [orders]);
+
+  // Platform Fees & Due Settlement Calculation: Real ৳5 fee per confirmed order
+  const todayFeesAmount = (metrics.todayOrders || 0) * 5;
   const [dueSettlementAmount, setDueSettlementAmount] = useState(() => {
-    return getStoredSettlementDue(55);
+    const isPaid = localStorage.getItem('dgm_restaurant_due_settled') === 'true';
+    if (isPaid) return 0;
+    const lifetimeFees = orders.filter(o => o.orderStatus !== 'cancelled').length * 5;
+    return getStoredSettlementDue(lifetimeFees);
   });
   const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
   const [settlementSuccessMsg, setSettlementSuccessMsg] = useState('');
 
-  // Keep due settlement synchronized with today's fee collections
+  // Keep due settlement synchronized with real confirmed orders & settlements
   useEffect(() => {
     const isPaid = localStorage.getItem('dgm_restaurant_due_settled') === 'true';
     if (!isPaid) {
-      const targetDue = Math.max(dueSettlementAmount, todayFeesAmount);
-      if (targetDue !== dueSettlementAmount) {
-        setDueSettlementAmount(targetDue);
-        saveStoredSettlementDue(targetDue);
+      const lifetimeFees = orders.filter(o => o.orderStatus !== 'cancelled').length * 5;
+      if (lifetimeFees !== dueSettlementAmount && dueSettlementAmount === 0 && lifetimeFees > 0) {
+        setDueSettlementAmount(lifetimeFees);
+        saveStoredSettlementDue(lifetimeFees);
       }
     }
-  }, [todayFeesAmount]);
+  }, [orders, dueSettlementAmount]);
 
   const handleSettleDue = () => {
     settlePlatformDues();
@@ -1090,10 +1104,10 @@ export default function RestaurantPanel({
                     {
                       id: 'total_items',
                       title: 'Total Items',
-                      value: foods.length || 8,
+                      value: foods.length,
                       icon: Layers,
-                      trend: '+3 items',
-                      comparison: 'vs. last 7 days',
+                      trend: `${metrics.totalPublishedItems} Active`,
+                      comparison: `${metrics.unpublishedItems} Draft`,
                       trendType: 'up',
                       sparkColor: 'orange',
                       isHighlighted: true,
@@ -1101,63 +1115,63 @@ export default function RestaurantPanel({
                     {
                       id: 'categories',
                       title: 'Categories',
-                      value: uniqueCategories.length || 5,
+                      value: uniqueCategories.length,
                       icon: LayoutGrid,
-                      trend: '+1 category',
-                      comparison: 'vs. last 7 days',
+                      trend: `${subcategories?.length || 0} Sub-types`,
+                      comparison: 'Catalog Groups',
                       trendType: 'up',
                       sparkColor: 'orange',
                     },
                     {
                       id: 'total_scan',
                       title: 'Total Scan',
-                      value: '1,428',
+                      value: scansData.totalScans,
                       icon: QrCode,
-                      trend: '+12.6%',
-                      comparison: 'vs. last 7 days',
-                      trendType: 'up',
-                      sparkColor: 'orange',
+                      trend: scansData.totalScans > 0 ? `${scansData.totalScans} visits` : '0 visits',
+                      comparison: 'QR & Web Traffic',
+                      trendType: scansData.totalScans > 0 ? 'up' : 'neutral',
+                      sparkColor: scansData.totalScans > 0 ? 'orange' : 'gray',
                     },
                     {
                       id: 'today_scan',
                       title: 'Today Scan',
-                      value: '86',
+                      value: scansData.todayScans,
                       icon: Scan,
-                      trend: '+18.6%',
-                      comparison: 'vs. yesterday',
-                      trendType: 'up',
-                      sparkColor: 'orange',
+                      trend: scansData.todayScans > 0 ? `+${scansData.todayScans} today` : '0 today',
+                      comparison: 'Since 12:00 AM',
+                      trendType: scansData.todayScans > 0 ? 'up' : 'neutral',
+                      sparkColor: scansData.todayScans > 0 ? 'orange' : 'gray',
                     },
                     {
                       id: 'total_dgm_orders',
                       title: 'Total DGM Orders',
-                      value: metrics.totalOrders || orders.length || 15,
+                      value: metrics.totalOrders,
                       icon: ShoppingCart,
-                      trend: '+25.0%',
-                      comparison: 'vs. last 7 days',
-                      trendType: 'up',
-                      sparkColor: 'orange',
+                      trend: `${orders.filter(o => o.orderStatus === 'completed' || o.orderStatus === 'confirmed').length} Confirmed`,
+                      comparison: 'All-time bills',
+                      trendType: metrics.totalOrders > 0 ? 'up' : 'neutral',
+                      sparkColor: metrics.totalOrders > 0 ? 'orange' : 'gray',
                     },
                     {
                       id: 'today_dgm_orders',
                       title: 'Today DGM Orders',
-                      value: metrics.todayOrders || 11,
+                      value: metrics.todayOrders,
                       icon: ShoppingCart,
                       isCartWithClock: true,
-                      trend: '+57.1%',
-                      comparison: 'vs. yesterday',
-                      trendType: 'up',
-                      sparkColor: 'orange',
+                      trend: metrics.todayOrders > 0 ? `+${metrics.todayOrders} today` : '0 today',
+                      comparison: 'Since 12:00 AM',
+                      trendType: metrics.todayOrders > 0 ? 'up' : 'neutral',
+                      sparkColor: metrics.todayOrders > 0 ? 'orange' : 'gray',
                     },
                     {
                       id: 'today_fees_collection',
                       title: 'Today Fees Collection',
                       value: `৳${todayFeesAmount}`,
                       icon: Coins,
-                      trend: '+10.0%',
-                      comparison: 'vs. yesterday',
-                      trendType: 'up',
-                      sparkColor: 'orange',
+                      trend: '৳5.00 / bill',
+                      comparison: metrics.todayOrders > 0 ? `${metrics.todayOrders} bills today` : 'No bills today',
+                      trendType: todayFeesAmount > 0 ? 'up' : 'neutral',
+                      sparkColor: todayFeesAmount > 0 ? 'orange' : 'gray',
                     },
                     {
                       id: 'total_due_settlement',
@@ -1174,22 +1188,22 @@ export default function RestaurantPanel({
                     {
                       id: 'total_followers',
                       title: 'Total Followers',
-                      value: '342',
+                      value: followersData.totalFollowers,
                       icon: Users,
-                      trend: '+7.5%',
-                      comparison: 'vs. last 7 days',
-                      trendType: 'up',
-                      sparkColor: 'orange',
+                      trend: followersData.totalFollowers > 0 ? `${followersData.totalFollowers} diners` : '0 diners',
+                      comparison: 'Loyal diner base',
+                      trendType: followersData.totalFollowers > 0 ? 'up' : 'neutral',
+                      sparkColor: followersData.totalFollowers > 0 ? 'orange' : 'gray',
                     },
                     {
                       id: 'today_followers',
                       title: 'Today Followers',
-                      value: '+14',
+                      value: followersData.todayFollowers,
                       icon: UserPlus,
-                      trend: '+75.0%',
-                      comparison: 'vs. yesterday',
-                      trendType: 'up',
-                      sparkColor: 'orange',
+                      trend: followersData.todayFollowers > 0 ? `+${followersData.todayFollowers} today` : '0 today',
+                      comparison: 'Since 12:00 AM',
+                      trendType: followersData.todayFollowers > 0 ? 'up' : 'neutral',
+                      sparkColor: followersData.todayFollowers > 0 ? 'orange' : 'gray',
                     },
                   ].map((card, idx) => (
                     <div
@@ -1396,17 +1410,19 @@ export default function RestaurantPanel({
                       <div className={`h-48 relative flex items-center justify-center p-4 overflow-hidden ${
                         isDark ? 'bg-[#080B11] border-b border-slate-800/80' : 'bg-slate-50 border-b border-slate-200'
                       }`}>
-                        {/* Tag Badge (top-left) */}
-                        <span className="absolute top-3 left-3 px-2 py-0.5 rounded-[5px] bg-orange-600 text-white text-[10px] font-black uppercase tracking-wider shadow-sm z-10">
-                          {food.tag || 'BEST SELLING'}
-                        </span>
+                        {/* Tag Badge (top-left) - only render if real tag exists */}
+                        {food.tag && (
+                          <span className="absolute top-3 left-3 px-2 py-0.5 rounded-[5px] bg-orange-600 text-white text-[10px] font-black uppercase tracking-wider shadow-sm z-10">
+                            {food.tag}
+                          </span>
+                        )}
 
-                        {/* Rating Badge (top-right) */}
+                        {/* Rating Badge (top-right) - show real rating or New */}
                         <span className={`absolute top-3 right-3 px-2 py-0.5 rounded-[5px] text-[11px] font-bold flex items-center gap-1 z-10 ${
                           isDark ? 'bg-black/60 text-amber-400 border border-amber-500/30 backdrop-blur-xs' : 'bg-white/90 text-amber-600 border border-amber-200 shadow-xs'
                         }`}>
                           <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                          <span>{food.rating ? Number(food.rating).toFixed(1) : '4.9'}</span>
+                          <span>{food.rating ? Number(food.rating).toFixed(1) : 'New'}</span>
                         </span>
 
                         {/* Centered Food Photo */}
@@ -1444,7 +1460,7 @@ export default function RestaurantPanel({
 
                           {/* Description Snippet */}
                           <p className={`text-xs mt-1.5 line-clamp-2 leading-relaxed min-h-[32px] ${isDark ? 'text-slate-500' : 'text-slate-600'}`}>
-                            {food.description || 'Delicious freshly prepared dish crafted with premium ingredients.'}
+                            {food.description || 'No description added yet.'}
                           </p>
                         </div>
 

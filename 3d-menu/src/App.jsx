@@ -73,6 +73,7 @@ import {
   saveStoredRestaurantProfile,
   syncSettingsToSupabase,
   getStoredTickets,
+  recordMenuScan,
   saveStoredTickets,
   syncTicketToSupabase,
   getStoredChatMessages,
@@ -283,7 +284,8 @@ export default function App() {
       remoteSliders,
       remoteSettings,
       remoteTickets,
-      remoteChat
+      remoteChat,
+      remoteOrders
     }) => {
       if (remoteFoods && remoteFoods.length > 0) {
         setFoodsList(remoteFoods);
@@ -321,8 +323,19 @@ export default function App() {
         setChatMessagesList(remoteChat);
         saveStoredChatMessages(remoteChat);
       }
+      if (remoteOrders && remoteOrders.length > 0) {
+        setOrdersList(remoteOrders);
+        saveStoredOrders(remoteOrders);
+      }
     });
   }, []);
+
+  // Record real menu scan when customer accesses the digital menu view
+  useEffect(() => {
+    if (currentView === 'menu') {
+      recordMenuScan('resto_001');
+    }
+  }, [currentView]);
 
   // Active Featured Sliders or fallback to foodsList for Digital Menu (declared early before any useEffect)
   const activeFeaturedSliders = useMemo(() => {
