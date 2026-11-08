@@ -1,0 +1,11 @@
+{
+  "name": "digital-food-menu",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Universal 3D Digital Food Menu & Restaurant Management Platform with Holographic AR Canvas and Super Admin Portal",
+  "scripts": {
+    "dev": "npm --prefix 3d-menu run dev",
+    "build": "cd 3d-menu && npm install && npm run build",
+    "preview": "npm --prefix 3d-menu run preview"
+  }
+}

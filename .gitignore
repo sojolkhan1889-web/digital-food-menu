@@ -1,0 +1,42 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules
+3d-menu/node_modules
+
+# Build artifacts
+dist
+dist-ssr
+3d-menu/dist
+3d-menu/dist-ssr
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.local
+
+# IDE & Editor files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Agent skills & local tools (internal)
+.agents/
+.hallmark/
+ui-ux-pro-max-skill/
+.gemini/
+scratch/

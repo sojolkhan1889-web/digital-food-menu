@@ -1,0 +1,1529 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700;750;800&display=swap');
+
+/* Super Admin Scoped Styling - Preserves exact reference design */
+.superadmin-app {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #111a2c;
+  background: #f7f9fc;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --grid: #e7eaf0;
+  --muted: #6a7890;
+  --border: #d8e0ea;
+  --panel: #fff;
+  --bg: #f7f9fc;
+  --foreground: #111a2c;
+  min-height: 100vh;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.superadmin-app * {
+  box-sizing: border-box;
+}
+
+.superadmin-app button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.superadmin-app button:focus-visible {
+  outline: 3px solid #ffb66e;
+  outline-offset: 2px;
+}
+
+.superadmin-app .app {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--foreground);
+  display: flex;
+  width: 100%;
+}
+
+.superadmin-app .sidebar {
+  flex: 0 0 282px;
+  width: 282px;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  background: linear-gradient(125deg, #101a2d 0%, #131e33 62%, #0e1829 100%);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+}
+
+.superadmin-app .brand {
+  height: 88px;
+  padding: 21px 23px;
+  display: flex;
+  gap: 13px;
+  align-items: center;
+  border-bottom: 1px solid #ffffff15;
+}
+
+.superadmin-app .brand-logo {
+  background: linear-gradient(135deg, #ff940d, #ff5a00);
+  height: 43px;
+  width: 43px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  box-shadow: 0 4px 16px #f56c0045;
+  color: #ffffff;
+}
+
+.superadmin-app .brand-title {
+  font-size: 19px;
+  font-weight: 750;
+  letter-spacing: -0.65px;
+  white-space: nowrap;
+  color: #ffffff;
+}
+
+.superadmin-app .brand-sub {
+  font-size: 13px;
+  color: #d8e0eb;
+  margin-top: 5px;
+}
+
+.superadmin-app .navigation {
+  padding: 15px 11px 16px;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #344059 transparent;
+  flex: 1;
+}
+
+.superadmin-app .nav-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #f6f7fb;
+  padding: 12px 16px;
+  gap: 14px;
+  text-align: left;
+  font-size: 13.4px;
+  font-weight: 600;
+  border-radius: 9px;
+  min-height: 44px;
+}
+
+.superadmin-app .nav-item span:nth-child(2) {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.superadmin-app .nav-item:hover {
+  background: #ffffff12;
+}
+
+.superadmin-app .nav-item.active {
+  background: linear-gradient(96deg, #e75400, #ff7809);
+  box-shadow: 0 4px 13px #e45f001e;
+  color: #ffffff;
+}
+
+.superadmin-app .nav-chevron {
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+
+.superadmin-app .nav-chevron.up {
+  transform: rotate(180deg);
+}
+
+.superadmin-app .nav-count {
+  background: #ef3c31;
+  color: white;
+  border-radius: 20px;
+  padding: 3px 7px;
+  min-width: 29px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.superadmin-app .subnav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 7px 52px;
+  padding-left: 12px;
+  border-left: 1px solid #4b5a6d;
+}
+
+.superadmin-app .subnav button {
+  border: 0;
+  background: none;
+  color: #c2cbd9;
+  text-align: left;
+  padding: 7px;
+  font-size: 12px;
+  border-radius: 5px;
+}
+
+.superadmin-app .subnav button:hover,
+.superadmin-app .subnav button.subactive {
+  color: white;
+  background: #ffffff16;
+}
+
+.superadmin-app .sidebar-footer {
+  padding: 0 17px 27px;
+}
+
+.superadmin-app .sidebar-footer small {
+  font-size: 12px;
+  color: #d2dae6;
+  display: block;
+  margin-top: 14px;
+  margin-left: 8px;
+}
+
+.superadmin-app .system-status {
+  background: linear-gradient(110deg, #26334a, #1b2840);
+  padding: 14px 18px;
+  border-radius: 11px;
+  border: 1px solid #ffffff20;
+  box-shadow: inset 0 0 20px #ffffff08;
+}
+
+.superadmin-app .system-status strong {
+  font-size: 13px;
+  color: #ffffff;
+}
+
+.superadmin-app .status-line {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  gap: 8px;
+  color: #e7ebf4;
+  white-space: nowrap;
+}
+
+.superadmin-app .green-dot {
+  height: 10px;
+  width: 10px;
+  border-radius: 50%;
+  background: #28dc75;
+}
+
+.superadmin-app .live-pulse-bars {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 14px;
+}
+
+.superadmin-app .pulse-bar {
+  width: 3.5px;
+  background: #28dc75;
+  border-radius: 2px;
+  animation: pulseBars 1.3s ease-in-out infinite alternate;
+}
+
+.superadmin-app .pulse-bar.bar-1 { height: 6px; animation-delay: 0s; }
+.superadmin-app .pulse-bar.bar-2 { height: 13px; animation-delay: 0.25s; }
+.superadmin-app .pulse-bar.bar-3 { height: 9px; animation-delay: 0.5s; }
+.superadmin-app .pulse-bar.bar-4 { height: 14px; animation-delay: 0.15s; }
+
+@keyframes pulseBars {
+  0% { height: 4px; opacity: 0.5; }
+  50% { height: 14px; opacity: 1; }
+  100% { height: 7px; opacity: 0.8; }
+}
+
+.superadmin-app .main-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.superadmin-app .topbar {
+  height: 72px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px 0 24px;
+  gap: 15px;
+}
+
+.superadmin-app .page-identity {
+  display: flex;
+  align-items: center;
+  gap: 19px;
+}
+
+.superadmin-app .page-identity h1 {
+  font-size: 24px;
+  letter-spacing: -1.1px;
+  line-height: 1.1;
+  margin: 0;
+  font-weight: 750;
+  color: var(--foreground);
+}
+
+.superadmin-app .page-identity p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: #34425b;
+}
+
+.superadmin-app .hamburger {
+  width: 44px;
+  height: 42px;
+  border: 0;
+  border-radius: 11px;
+  background: #f2f5f9;
+  color: #152038;
+  display: grid;
+  place-items: center;
+}
+
+.superadmin-app .top-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.superadmin-app .date-button {
+  height: 40px;
+  min-width: 175px;
+  background: #fbfcfe;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  gap: 10px;
+  color: var(--foreground);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.superadmin-app .date-button:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.superadmin-app .date-button svg:first-child {
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.superadmin-app .date-button span {
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.superadmin-app .date-button svg:last-child {
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.superadmin-app .dropdown-wrap {
+  position: relative;
+}
+
+.superadmin-app .dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: 0 14px 38px #0e18252b;
+  border-radius: 10px;
+  padding: 9px;
+  min-width: 190px;
+  z-index: 12;
+}
+
+.superadmin-app .dropdown button {
+  display: block;
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 10px 11px;
+  text-align: left;
+  border-radius: 7px;
+  color: var(--foreground);
+  font-size: 12px;
+}
+
+.superadmin-app .dropdown button:hover {
+  background: #eef1f6;
+}
+
+.superadmin-app .dropdown p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.superadmin-app .notification-button {
+  position: relative;
+  border: 0;
+  background: none;
+  color: var(--foreground);
+  padding: 6px;
+}
+
+.superadmin-app .notification-dot {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  background: #ec3431;
+  color: white;
+  font-size: 11px;
+  padding: 3px 6px;
+  border-radius: 20px;
+  font-weight: 700;
+}
+
+.superadmin-app .header-divider {
+  height: 32px;
+  width: 1px;
+  background: var(--border);
+}
+
+.superadmin-app .profile-button {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: none;
+  border: 0;
+  color: var(--foreground);
+}
+
+.superadmin-app .avatar {
+  width: 42px;
+  height: 42px;
+  background: linear-gradient(135deg, #ef9400, #e96100);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: white;
+}
+
+.superadmin-app .profile-copy {
+  text-align: left;
+  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.superadmin-app .profile-copy strong {
+  font-size: 13.5px;
+  color: var(--foreground);
+}
+
+.superadmin-app .profile-copy small {
+  font-size: 12px;
+  color: #37445a;
+}
+
+.superadmin-app .content {
+  padding: 20px 24px 36px;
+  max-width: 1660px;
+  margin: auto;
+  width: 100%;
+}
+
+.superadmin-app .welcome-banner {
+  height: 104px;
+  border-radius: 12px;
+  border: 1px solid #f0d9c8;
+  background: linear-gradient(103deg, #fff1e8 0%, #fff3ef 65%, #fdd8c3 100%);
+  position: relative;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  margin: 0 0 17px;
+}
+
+.superadmin-app .welcome-text {
+  position: relative;
+  z-index: 2;
+  padding: 0 27px;
+}
+
+.superadmin-app .welcome-banner h2 {
+  font-size: 25px;
+  font-weight: 750;
+  letter-spacing: -1px;
+  color: #0d172b;
+  margin: 0 0 10px;
+}
+
+.superadmin-app .welcome-banner h2 span {
+  font-size: 23px;
+}
+
+.superadmin-app .welcome-banner p {
+  font-size: 14px;
+  margin: 0;
+  color: #293f56;
+}
+
+.superadmin-app .banner-burger {
+  position: absolute;
+  right: 0;
+  height: 100%;
+  width: 330px;
+  object-fit: cover;
+  object-position: center;
+}
+
+.superadmin-app .welcome-banner::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  right: 255px;
+  top: 0;
+  bottom: 0;
+  width: 130px;
+  background: linear-gradient(90deg, #fff0e9 0%, #fff0e9d9 25%, transparent 100%);
+}
+
+.superadmin-app .kpi-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.superadmin-app .kpi-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  min-height: 119px;
+  padding: 16px 15px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  user-select: none;
+}
+
+.superadmin-app .kpi-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px -6px rgba(15, 23, 42, 0.12), 0 4px 8px -2px rgba(15, 23, 42, 0.06);
+  border-color: #cbd5e1;
+}
+
+.superadmin-app .kpi-card:hover .kpi-icon {
+  transform: scale(1.08) rotate(3deg);
+}
+
+.superadmin-app .kpi-card:active {
+  transform: translateY(-1px) scale(0.99);
+}
+
+.superadmin-app .kpi-icon {
+  height: 52px;
+  width: 52px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  transition: transform 0.25s ease;
+}
+
+.superadmin-app .kpi-icon.orange { background: #fff0e7; color: #f17a00; }
+.superadmin-app .kpi-icon.red { background: #fff0f0; color: #f45222; }
+.superadmin-app .kpi-icon.purple { background: #f1efff; color: #6542ff; }
+.superadmin-app .kpi-icon.gold { background: #fff3e6; color: #fa9800; }
+.superadmin-app .kpi-icon.teal { background: #eafaf7; color: #06a886; }
+.superadmin-app .kpi-icon.blue { background: #eff6ff; color: #2563eb; }
+.superadmin-app .kpi-icon.cyan { background: #ecfeff; color: #0891b2; }
+.superadmin-app .kpi-icon.emerald { background: #ecfdf5; color: #059669; }
+.superadmin-app .kpi-icon.amber { background: #fffbeb; color: #d97706; }
+.superadmin-app .kpi-icon.violet { background: #f5f3ff; color: #7c3aed; }
+.superadmin-app .kpi-icon.rose { background: #fff1f2; color: #e11d48; }
+
+/* Dark mode icon backgrounds */
+.superadmin-app.dark-mode .kpi-icon.orange { background: #431407; color: #fb923c; }
+.superadmin-app.dark-mode .kpi-icon.red { background: #450a0a; color: #f87171; }
+.superadmin-app.dark-mode .kpi-icon.purple { background: #2e1065; color: #a78bfa; }
+.superadmin-app.dark-mode .kpi-icon.gold { background: #451a03; color: #fbbf24; }
+.superadmin-app.dark-mode .kpi-icon.teal { background: #042f2e; color: #2dd4bf; }
+.superadmin-app.dark-mode .kpi-icon.blue { background: #172554; color: #60a5fa; }
+.superadmin-app.dark-mode .kpi-icon.cyan { background: #083344; color: #38bdf8; }
+.superadmin-app.dark-mode .kpi-icon.emerald { background: #022c22; color: #34d399; }
+.superadmin-app.dark-mode .kpi-icon.amber { background: #451a03; color: #fcd34d; }
+.superadmin-app.dark-mode .kpi-icon.violet { background: #2e1065; color: #c084fc; }
+.superadmin-app.dark-mode .kpi-icon.rose { background: #4c0519; color: #fb7185; }
+
+.superadmin-app .kpi-card {
+  overflow: visible;
+}
+
+.superadmin-app .kpi-card.earnings-glow {
+  background: linear-gradient(135deg, var(--panel) 0%, var(--panel) 75%, rgba(16, 185, 129, 0.08) 100%);
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 4px 18px rgba(16, 185, 129, 0.08);
+}
+
+.superadmin-app .kpi-card.today-card {
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.superadmin-app .kpi-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.superadmin-app .kpi-dropdown-wrap {
+  position: relative;
+}
+
+.superadmin-app .kpi-period-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.superadmin-app .kpi-period-btn:hover {
+  background: var(--panel);
+  color: var(--foreground);
+  border-color: #cbd5e1;
+}
+
+.superadmin-app .kpi-period-menu {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
+  padding: 4px;
+  min-width: 135px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: kpiMenuFadeIn 0.15s ease;
+}
+
+@keyframes kpiMenuFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.superadmin-app .kpi-period-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.superadmin-app .kpi-period-item:hover {
+  background: var(--bg);
+  color: #f45100;
+}
+
+.superadmin-app .kpi-period-item.active {
+  background: #f4510015;
+  color: #f45100;
+  font-weight: 700;
+}
+
+.superadmin-app .kpi-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  display: inline-block;
+  box-shadow: 0 0 6px #22c55e;
+  animation: kpiDotPulse 1.8s infinite ease-in-out;
+}
+
+@keyframes kpiDotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.superadmin-app .kpi-copy {
+  min-width: 0;
+}
+
+.superadmin-app .kpi-label {
+  font-size: 12px;
+  color: #26334d;
+  margin: 3px 0 8px;
+  white-space: nowrap;
+}
+
+.superadmin-app .kpi-value {
+  font-size: 26px;
+  letter-spacing: -0.8px;
+  font-weight: 750;
+  line-height: 1.05;
+  white-space: nowrap;
+  color: var(--foreground);
+}
+
+.superadmin-app .kpi-change {
+  color: #0ca44d;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 12px;
+  white-space: nowrap;
+}
+
+.superadmin-app .charts-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.superadmin-app .bottom-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.superadmin-app .panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px #1b2a4110;
+  min-width: 0;
+}
+
+.superadmin-app .trend-panel,
+.superadmin-app .status-panel {
+  height: 285px;
+  padding: 18px 20px 12px;
+}
+
+.superadmin-app .panel h2 {
+  font-size: 19px;
+  letter-spacing: -0.65px;
+  line-height: 1.2;
+  margin: 0;
+  font-weight: 750;
+  color: var(--foreground);
+}
+
+.superadmin-app .panel-titleline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.superadmin-app .chart-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: #2d3347;
+}
+
+.superadmin-app .chart-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.superadmin-app .legend-bullet {
+  width: 11px;
+  height: 11px;
+  display: inline-block;
+  border-radius: 50%;
+}
+
+.superadmin-app .legend-bullet.orange { background: #f58a15; }
+.superadmin-app .legend-bullet.purple { background: #7346ff; }
+
+.superadmin-app .chart-scroller {
+  height: 225px;
+  width: 100%;
+  position: relative;
+}
+
+.superadmin-app .trend-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.superadmin-app .axis-label {
+  font-size: 11.5px;
+  fill: #64748b;
+  font-weight: 500;
+}
+
+.superadmin-app .right-axis-label {
+  fill: #7c3aed;
+  font-weight: 600;
+}
+
+.superadmin-app .trend-tooltip {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  background: #0f172a;
+  color: #ffffff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -4px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  z-index: 20;
+  min-width: 145px;
+  border: 1px solid #334155;
+  transition: left 0.08s ease, top 0.08s ease;
+}
+
+.superadmin-app .tooltip-date {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-bottom: 5px;
+  border-bottom: 1px solid #1e293b;
+  padding-bottom: 4px;
+}
+
+.superadmin-app .tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.superadmin-app .tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.superadmin-app .tooltip-dot.orange { background: #ff7809; }
+.superadmin-app .tooltip-dot.purple { background: #8b5cf6; }
+
+.superadmin-app .tooltip-label {
+  color: #cbd5e1;
+  font-weight: 400;
+}
+
+.superadmin-app .tooltip-val {
+  color: #ffffff;
+  margin-left: auto;
+  font-weight: 700;
+}
+
+.superadmin-app .status-panel h2 span {
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.superadmin-app .status-content {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 228px;
+}
+
+.superadmin-app .donut-wrap {
+  position: relative;
+  width: 170px;
+  height: 170px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.superadmin-app .donut-svg {
+  display: block;
+}
+
+.superadmin-app .donut-center-info {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+}
+
+.superadmin-app .center-default {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.superadmin-app .center-default strong {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--foreground);
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.superadmin-app .center-default span {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.superadmin-app .center-hovered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.superadmin-app .center-hovered strong {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.superadmin-app .center-hovered-name {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--foreground);
+  max-width: 115px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.superadmin-app .center-hovered-pct {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.superadmin-app .status-labels {
+  min-width: 0;
+  flex: 1;
+}
+
+.superadmin-app .status-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  white-space: nowrap;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.superadmin-app .status-label:last-child {
+  border-bottom: 0;
+}
+
+.superadmin-app .status-label:hover,
+.superadmin-app .status-label.hovered-row {
+  background: #f1f5f9;
+  transform: translateX(3px);
+}
+
+.superadmin-app .status-color {
+  height: 12px;
+  width: 12px;
+  border-radius: 4px;
+  flex: none;
+}
+
+.superadmin-app .status-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--foreground);
+}
+
+.superadmin-app .status-num {
+  font-weight: 650;
+  color: var(--foreground);
+}
+
+.superadmin-app .status-pct {
+  color: #66738d;
+  margin-left: 5px;
+}
+
+.superadmin-app .restaurant-panel,
+.superadmin-app .pending-panel {
+  min-height: 328px;
+  padding: 17px 20px;
+}
+
+.superadmin-app .view-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  color: #f15b00;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.superadmin-app .view-all:hover {
+  text-decoration: underline;
+}
+
+.superadmin-app .table-scroll {
+  overflow-x: auto;
+  margin-top: 14px;
+  width: 100%;
+}
+
+.superadmin-app .recent-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  table-layout: fixed;
+  font-size: 13px;
+}
+
+.superadmin-app .recent-table thead th {
+  background: #f1f5f9;
+  color: #0f172a;
+  font-weight: 650;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.superadmin-app .recent-table thead th:first-child {
+  border-top-left-radius: 9px;
+  border-bottom-left-radius: 9px;
+}
+
+.superadmin-app .recent-table thead th:last-child {
+  border-top-right-radius: 9px;
+  border-bottom-right-radius: 9px;
+}
+
+.superadmin-app .recent-table tbody tr {
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.superadmin-app .recent-table tbody tr:hover {
+  background-color: #f8fafc;
+  transform: translateY(-1px);
+}
+
+.superadmin-app .recent-table td {
+  border-bottom: 1px solid #eef2f6;
+  padding: 11px 14px;
+  color: #1e293b;
+  vertical-align: middle;
+}
+
+.superadmin-app .resto-cell-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.superadmin-app .resto-name-text {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.superadmin-app .resto-location-text,
+.superadmin-app .resto-joined-text {
+  color: #334155;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.superadmin-app .restaurant-brand-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  font-weight: 800;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.superadmin-app .kacchi-badge {
+  background: #2e140d;
+}
+
+.superadmin-app .burger-badge {
+  background: linear-gradient(135deg, #ff7809, #f59e0b);
+  color: #ffffff;
+}
+
+.superadmin-app .burger-badge .monogram-text {
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.superadmin-app .spice-badge {
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+}
+
+.superadmin-app .court-badge {
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+}
+
+.superadmin-app .royal-badge {
+  background: #261108;
+  border: 1px solid #78350f;
+}
+
+.superadmin-app .emoji-icon {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.superadmin-app .restaurant-status-cell {
+  text-align: center;
+}
+
+.superadmin-app .restaurant-status {
+  padding: 4.5px 14px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+}
+
+.superadmin-app .restaurant-status.active {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.superadmin-app .restaurant-status.pending {
+  background: #ffedd5;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+}
+
+.superadmin-app .pending-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.superadmin-app .pending-total {
+  background: #f1372c;
+  color: white;
+  border-radius: 20px;
+  padding: 3px 8px;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+.superadmin-app .pending-list {
+  margin-top: 15px;
+}
+
+.superadmin-app .pending-action {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  border: 0;
+  background: none;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 3px 10px 0;
+  gap: 14px;
+  min-height: 62px;
+  color: var(--foreground);
+}
+
+.superadmin-app .pending-action:last-child {
+  border-bottom: 0;
+}
+
+.superadmin-app .pending-action:hover {
+  background: #fafbfc;
+}
+
+.superadmin-app .pending-icon {
+  display: grid;
+  place-items: center;
+  height: 45px;
+  width: 45px;
+  flex: none;
+  background: #fff2e9;
+  border-radius: 16px;
+  color: #fa7a05;
+}
+
+.superadmin-app .pending-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.superadmin-app .pending-copy strong {
+  font-size: 13px;
+  color: var(--foreground);
+}
+
+.superadmin-app .pending-copy small {
+  font-size: 11.5px;
+  color: #344158;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.superadmin-app .pending-number {
+  background: #fff0e4;
+  border-radius: 50px;
+  min-width: 40px;
+  text-align: center;
+  padding: 5px;
+  color: #f26100;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.superadmin-app .pending-chevron {
+  flex: none;
+  color: #27364e;
+}
+
+.superadmin-app .placeholder-page {
+  margin: 35px auto;
+  max-width: 900px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 30px;
+  text-align: left;
+}
+
+.superadmin-app .placeholder-header svg {
+  color: #ff7800;
+}
+
+.superadmin-app .placeholder-header h2 {
+  font-size: 24px;
+  font-weight: 750;
+  color: var(--foreground);
+  margin: 10px 0 6px;
+}
+
+.superadmin-app .placeholder-header p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.superadmin-app .placeholder-button {
+  border: 1px solid #d9dfe9;
+  background: var(--panel);
+  padding: 10px 14px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--foreground);
+  font-weight: 600;
+  font-size: 13px;
+  margin-top: 20px;
+}
+
+.superadmin-app .modal-screen {
+  position: fixed;
+  inset: 0;
+  background: #0e1829a8;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.superadmin-app .modal-card {
+  position: relative;
+  text-align: left;
+  background: var(--panel);
+  color: var(--foreground);
+  padding: 32px;
+  max-width: 500px;
+  width: 100%;
+  border-radius: 16px;
+  box-shadow: 0 30px 80px #0004;
+}
+
+.superadmin-app .modal-card p {
+  color: var(--muted);
+  line-height: 1.6;
+  font-size: 13px;
+}
+
+.superadmin-app .modal-card > button:not(.modal-close) {
+  background: #f65300;
+  color: white;
+  border: 0;
+  padding: 10px 25px;
+  border-radius: 7px;
+  margin-top: 12px;
+  font-weight: 700;
+}
+
+.superadmin-app .modal-close {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+}
+
+.superadmin-app .mobile-close,
+.superadmin-app .sidebar-backdrop {
+  display: none;
+}
+
+/* Dark Mode Overrides */
+.superadmin-app.dark-mode,
+.superadmin-app .dark-mode {
+  --bg: #111927;
+  --panel: #1b2738;
+  --foreground: #f3f5fa;
+  --muted: #a9b5c8;
+  --border: #344155;
+  --grid: #324154;
+}
+
+.superadmin-app .dark-mode .page-identity p,
+.superadmin-app .dark-mode .profile-copy small,
+.superadmin-app .dark-mode .kpi-label,
+.superadmin-app .dark-mode .status-label,
+.superadmin-app .dark-mode .status-name,
+.superadmin-app .dark-mode .donut-inner span,
+.superadmin-app .dark-mode .pending-copy small {
+  color: #d3dcea;
+}
+
+.superadmin-app .dark-mode .hamburger,
+.superadmin-app .dark-mode .dark-button,
+.superadmin-app .dark-mode .date-button {
+  background: #273549;
+  color: #f3f6fa;
+  border-color: #3c4c60;
+}
+
+.superadmin-app .dark-mode .welcome-banner {
+  background: linear-gradient(100deg, #3c2930, #372a32);
+  border-color: #694334;
+}
+
+.superadmin-app .dark-mode .welcome-banner h2,
+.superadmin-app .dark-mode .welcome-banner p {
+  color: #f8f3f1;
+}
+
+.superadmin-app .dark-mode .welcome-banner:after {
+  background: linear-gradient(90deg, #372a32, transparent);
+}
+
+.superadmin-app .dark-mode .recent-table thead {
+  background: #27354a;
+}
+
+.superadmin-app .dark-mode .recent-table th,
+.superadmin-app .dark-mode .recent-table td,
+.superadmin-app .dark-mode .axis-label {
+  color: #e7ebf3;
+  fill: #e7ebf3;
+}
+
+.superadmin-app .dark-mode .recent-table td {
+  border-color: #344155;
+}
+
+.superadmin-app .dark-mode .pending-action:hover {
+  background: #263449;
+}
+
+.superadmin-app .dark-mode .dropdown button:hover {
+  background: #29374d;
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 1380px) {
+  .superadmin-app .sidebar { width: 245px; flex-basis: 245px; }
+  .superadmin-app .brand { padding-left: 15px; }
+  .superadmin-app .brand-title { font-size: 17px; }
+  .superadmin-app .nav-item { font-size: 12px; padding-left: 12px; gap: 10px; }
+  .superadmin-app .kpi-card { padding: 13px 10px; gap: 9px; }
+  .superadmin-app .kpi-icon { width: 43px; height: 43px; }
+  .superadmin-app .kpi-value { font-size: 23px; }
+  .superadmin-app .kpi-label { font-size: 10px; }
+  .superadmin-app .status-content { gap: 11px; }
+  .superadmin-app .donut { height: 150px; width: 150px; }
+  .superadmin-app .donut-inner { height: 103px; width: 103px; }
+  .superadmin-app .status-label { font-size: 10px; }
+}
+
+@media (max-width: 1130px) {
+  .superadmin-app .kpi-row { grid-template-columns: repeat(3, 1fr); }
+  .superadmin-app .charts-row,
+  .superadmin-app .bottom-row { grid-template-columns: 1fr; }
+  .superadmin-app .status-content { justify-content: flex-start; }
+  .superadmin-app .donut { height: 174px; width: 174px; }
+  .superadmin-app .donut-inner { height: 118px; width: 118px; }
+  .superadmin-app .status-labels { max-width: 420px; }
+  .superadmin-app .utility-row { display: none; }
+}
+
+@media (max-width: 760px) {
+  .superadmin-app .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    transform: translateX(-100%);
+    transition: transform 0.25s;
+    width: 282px;
+  }
+  .superadmin-app .sidebar.mobile-visible {
+    transform: translateX(0);
+  }
+  .superadmin-app .mobile-close {
+    display: block;
+    background: none;
+    border: 0;
+    color: white;
+    margin-left: auto;
+  }
+  .superadmin-app .sidebar-backdrop.visible {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: #0c14239c;
+    z-index: 19;
+  }
+  .superadmin-app .topbar { padding: 0 14px; height: 70px; }
+  .superadmin-app .page-identity { gap: 10px; }
+  .superadmin-app .page-identity h1 { font-size: 20px; }
+  .superadmin-app .page-identity p { font-size: 11px; }
+  .superadmin-app .hamburger { width: 38px; height: 38px; }
+  .superadmin-app .content { padding: 14px; }
+  .superadmin-app .content-utilities { display: none; }
+  .superadmin-app .top-actions { gap: 8px; }
+  .superadmin-app .date-button {
+    min-width: 0;
+    width: 40px;
+    height: 40px;
+    overflow: hidden;
+    font-size: 0;
+    gap: 0;
+  }
+  .superadmin-app .date-button svg:last-child { display: none; }
+  .superadmin-app .header-divider,
+  .superadmin-app .profile-copy,
+  .superadmin-app .profile-button > svg { display: none; }
+  .superadmin-app .avatar { height: 36px; width: 36px; }
+  .superadmin-app .welcome-banner { height: 115px; }
+  .superadmin-app .welcome-text { padding: 16px; max-width: 75%; }
+  .superadmin-app .welcome-banner h2 { font-size: 18px; }
+  .superadmin-app .welcome-banner p { font-size: 11px; line-height: 1.5; }
+  .superadmin-app .banner-burger { width: 38%; }
+  .superadmin-app .welcome-banner:after { right: 28%; width: 60px; }
+  .superadmin-app .kpi-row { grid-template-columns: repeat(2, 1fr); gap: 9px; }
+  .superadmin-app .kpi-card { min-height: 105px; }
+  .superadmin-app .kpi-value { font-size: 20px; }
+  .superadmin-app .kpi-label { white-space: normal; }
+  .superadmin-app .kpi-icon { width: 38px; height: 38px; border-radius: 12px; }
+  .superadmin-app .kpi-icon svg { width: 21px; }
+  .superadmin-app .kpi-change { font-size: 10px; }
+  .superadmin-app .trend-panel,
+  .superadmin-app .status-panel { padding: 15px; height: auto; min-height: 265px; }
+  .superadmin-app .panel h2 { font-size: 16px; }
+  .superadmin-app .chart-legend { font-size: 9px; gap: 6px; }
+  .superadmin-app .status-content { height: auto; min-height: 210px; }
+  .superadmin-app .status-label { font-size: 10px; }
+  .superadmin-app .status-panel h2 span { font-size: 11px; }
+  .superadmin-app .donut { height: 130px; width: 130px; }
+  .superadmin-app .donut-inner { height: 90px; width: 90px; }
+  .superadmin-app .donut-inner strong { font-size: 19px; }
+  .superadmin-app .donut-inner span { font-size: 10px; }
+  .superadmin-app .pending-panel,
+  .superadmin-app .restaurant-panel { padding: 15px; }
+  .superadmin-app .pending-icon { width: 38px; height: 38px; }
+  .superadmin-app .pending-copy strong { font-size: 12px; }
+  .superadmin-app .pending-copy small { font-size: 10px; }
+  .superadmin-app .pending-action { gap: 9px; }
+  .superadmin-app .pending-number { min-width: 29px; }
+  .superadmin-app .pending-chevron { width: 14px; }
+}
+
+@media (max-width: 420px) {
+  .superadmin-app .kpi-row { grid-template-columns: 1fr 1fr; }
+  .superadmin-app .kpi-card { flex-direction: column; gap: 7px; }
+  .superadmin-app .kpi-value { font-size: 23px; }
+  .superadmin-app .status-content { flex-direction: column; padding-top: 14px; }
+  .superadmin-app .status-labels { width: 100%; }
+  .superadmin-app .welcome-text { max-width: 80%; }
+}
+

@@ -1,0 +1,11 @@
+{
+  "buildCommand": "cd 3d-menu && npm install && npm run build",
+  "outputDirectory": "3d-menu/dist",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
