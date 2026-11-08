@@ -870,3 +870,39 @@ This file records all architectural specifications, resolved issues, feature imp
 - **Verification:**
   - `npm --prefix 3d-menu run build` compiled cleanly in 1.54s with 0 errors.
   - Vite dev server running and hot-reloaded.
+
+---
+
+## 33. Restaurant Panel: Purge of Dummy Metrics & Live Connection to Real Data in 'Live Food Menu Catalog' (2026-11-09)
+- **User Request:**
+  - In Restaurant Panel, under the 'Live Food Menu Catalog' section cards, delete all dummy data so only real data is displayed.
+- **Root Cause Analysis:**
+  - The 10 KPI metric cards under `Live Food Menu Catalog` contained hardcoded strings (`1,428`, `86`, `342`, `+14`), dummy fallback values (`|| 8`, `|| 5`, `|| 15`, `|| 11`, `55`), and fake static percentage trends (`+12.6%`, `+18.6%`, `+25.0%`, `+57.1%`, `+10.0%`, `+7.5%`, `+75.0%`, `+3 items`, `+1 category`).
+  - `fetchRemoteData()` in `menuStore.js` was querying food items, categories, and settings, but was omitting the `orders` table. Thus, order metrics fell back to `initialOrders` or mock counts.
+  - The food cards below the banner also had fake tag fallbacks (`|| 'BEST SELLING'`), fake rating fallbacks (`|| '4.9'`), and generic placeholder descriptions.
+- **Key Changes Implemented:**
+  1. **Supabase Orders Hydration (`menuStore.js` & `App.jsx`):**
+     - Updated `fetchRemoteData()` to query Supabase `orders` table for `resto_001` and map to normalized camelCase records.
+     - Handled `remoteOrders` in `App.jsx` on mount, updating both state and `localStorage`.
+  2. **Real Customer Engagement Tracking (`menuStore.js`):**
+     - Built `recordMenuScan(restaurantId)` to record real menu scans every time a diner visits `/`.
+     - Built `getMenuScans(restaurantId, ordersCount)` to aggregate total and today scans.
+     - Built `getRestaurantFollowers(restaurantId, ordersList)` to compute real distinct customer diners and followers (defaults strictly to 0, no mock `342` or `+14`).
+  3. **Real Metric Calculation & Purge of Fallbacks (`RestaurantPanel.jsx`):**
+     - **Card 1 (Total Items):** Strictly `foods.length`. Trend shows real active/draft breakdown (`${metrics.totalPublishedItems} Active` / `${metrics.unpublishedItems} Draft`).
+     - **Card 2 (Categories):** Strictly `uniqueCategories.length`. Trend shows real sub-category count (`${subcategories.length} Sub-types`).
+     - **Card 3 (Total Scan):** Real tracked customer visits (`scansData.totalScans`).
+     - **Card 4 (Today Scan):** Real scans recorded today (`scansData.todayScans`).
+     - **Card 5 (Total DGM Orders):** Live confirmed orders from Supabase (`metrics.totalOrders`).
+     - **Card 6 (Today DGM Orders):** Orders created today from Supabase (`metrics.todayOrders`).
+     - **Card 7 (Today Fees Collection):** Accurately `metrics.todayOrders * 5` (৳0 if 0 orders, never fake ৳55).
+     - **Card 8 (Total Due Settlement):** Real platform due calculated from `orders * 5 - clearedSettlements` (৳0 if settled).
+     - **Card 9 (Total Followers):** Real distinct diner base (`followersData.totalFollowers`).
+     - **Card 10 (Today Followers):** Real new diners/followers today (`followersData.todayFollowers`).
+  4. **Clean Food Item Cards:**
+     - Removed fake `|| 'BEST SELLING'` tag (tags render only when explicitly defined).
+     - Removed fake `|| '4.9'` rating (renders `New` for unrated items).
+     - Cleaned description fallback from generic marketing filler to honest `No description added yet.`.
+  5. **Git & Build Verification:**
+     - `npm --prefix 3d-menu run build` passed in 4.33s with 0 errors.
+     - Committed and pushed cleanly to GitHub `sojolkhan1889-web/digital-food-menu` on `main`.
