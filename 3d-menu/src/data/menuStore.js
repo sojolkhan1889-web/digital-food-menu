@@ -634,7 +634,23 @@ export const broadcastRestaurantNotification = async (restaurantId = 'resto_001'
     console.warn('broadcastRestaurantNotification caught:', err);
   }
 
-  // 2. Save locally for instant cache
+  // 2. Direct broadcast over Realtime channel for instant sub-second delivery
+  try {
+    const bChannel = supabase.channel('dgm_restaurant_realtime_broadcast');
+    bChannel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        bChannel.send({
+          type: 'broadcast',
+          event: 'new_slider_notif',
+          payload
+        });
+      }
+    });
+  } catch (err) {
+    console.warn('Realtime broadcast error:', err);
+  }
+
+  // 3. Save locally for instant cache
   try {
     const key = `dgm_notifications_${restaurantId}`;
     const raw = localStorage.getItem(key);
@@ -685,10 +701,26 @@ export const showBrowserNotification = async (title, options = {}) => {
     ...options
   };
 
+  // Strip invalid dev assets path in production to prevent mobile notification drops
+  if (notifOptions.image && typeof notifOptions.image === 'string' && notifOptions.image.startsWith('/src/assets/')) {
+    delete notifOptions.image;
+  }
+
   // 1. Service Worker showNotification (Works on Android Mobile Chrome & Desktop)
   if ('serviceWorker' in navigator) {
     try {
-      const reg = await navigator.serviceWorker.ready;
+      let reg = null;
+      try {
+        reg = await navigator.serviceWorker.getRegistration();
+      } catch (e) {}
+
+      if (!reg) {
+        reg = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise(res => setTimeout(() => res(null), 1500))
+        ]);
+      }
+
       if (reg && reg.showNotification) {
         await reg.showNotification(title, notifOptions);
         return true;

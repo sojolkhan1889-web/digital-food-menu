@@ -743,9 +743,6 @@ export default function App() {
 
   // Follower Notification Realtime & Polling Listener
   useEffect(() => {
-    // Session start timestamp - only alert on notifications sent around or after page load
-    const sessionStartTime = Date.now() - 60000;
-
     const handleIncomingNotification = async (notif) => {
       if (!notif || !notif.id) return;
 
@@ -757,67 +754,81 @@ export default function App() {
       const notifKey = `dgm_notif_seen_${notif.id}`;
       if (localStorage.getItem(notifKey)) return;
 
-      // Filter out notifications created well before this session started
-      const notifTime = notif.created_at ? new Date(notif.created_at).getTime() : Date.now();
-      if (notifTime < sessionStartTime) {
+      // Ignore notifications older than 24 hours (so recent notifications are NEVER dropped by clock skew)
+      const notifTimeStr = notif.created_at ? String(notif.created_at).replace(' ', 'T') : null;
+      const notifTime = notifTimeStr ? new Date(notifTimeStr).getTime() : Date.now();
+      const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+      if (!isNaN(notifTime) && notifTime < twentyFourHoursAgo) {
         localStorage.setItem(notifKey, 'true');
         return;
       }
 
       localStorage.setItem(notifKey, 'true');
 
-      // 1. Native System / Browser Notification (Phone screen / Desktop OS)
-      try {
-        const notifTargetUrl = notif.url || `/?openSlide=${encodeURIComponent(notif.slider_id || '')}`;
-        await showBrowserNotification(notif.title || '🔥 New Special Offer from Moneky Bhai!', {
-          body: notif.body || 'Check out our newly published special dish on the 3D menu!',
-          icon: notif.icon || restaurantProfile?.logo || '/monkey_bhai_logo.png',
-          image: notif.image || undefined,
-          tag: notif.id,
-          data: {
-            url: notifTargetUrl,
-            sliderId: notif.slider_id,
-            foodId: notif.food_id || notif.foodId || ''
-          }
-        });
-      } catch (err) {
-        console.warn('showBrowserNotification caught:', err);
-      }
-
-      // 2. In-App Floating Notification Banner (Visible on digital menu)
+      // 1. In-App Floating Notification Banner (Visible on digital menu) - instant non-blocking
       setFollowerNotification(notif);
 
       if (followerNotifTimerRef.current) clearTimeout(followerNotifTimerRef.current);
       followerNotifTimerRef.current = setTimeout(() => {
         setFollowerNotification(null);
-      }, 12000);
+      }, 14000);
+
+      // 2. Native System / Browser Notification (Phone screen / Desktop OS) - non-blocking
+      const notifTargetUrl = notif.url || `/?openSlide=${encodeURIComponent(notif.slider_id || '')}`;
+      showBrowserNotification(notif.title || '🔥 New Special Offer from Moneky Bhai!', {
+        body: notif.body || 'Check out our newly published special dish on the 3D menu!',
+        icon: notif.icon || restaurantProfile?.logo || '/monkey_bhai_logo.png',
+        image: notif.image || undefined,
+        tag: notif.id,
+        data: {
+          url: notifTargetUrl,
+          sliderId: notif.slider_id,
+          foodId: notif.food_id || notif.foodId || ''
+        }
+      }).catch(err => {
+        console.warn('showBrowserNotification caught:', err);
+      });
     };
 
-    // Layer 1: Supabase Realtime Channel
-    let channel = null;
+    // Layer 1: Supabase Direct Broadcast Channel (instant websocket message)
+    let broadcastChannel = null;
     try {
-      channel = supabase
-        .channel('realtime_restaurant_notifications')
+      broadcastChannel = supabase
+        .channel('dgm_restaurant_realtime_broadcast')
+        .on('broadcast', { event: 'new_slider_notif' }, (data) => {
+          if (data?.payload) {
+            handleIncomingNotification(data.payload);
+          }
+        })
+        .subscribe();
+    } catch (e) {
+      console.warn('Realtime broadcast subscribe caught:', e);
+    }
+
+    // Layer 2: Supabase Postgres Changes Channel (database insert event)
+    let dbChannel = null;
+    try {
+      dbChannel = supabase
+        .channel('realtime_restaurant_notifications_db')
         .on(
           'postgres_changes',
           {
             event: 'INSERT',
             schema: 'public',
-            table: 'restaurant_notifications',
-            filter: 'restaurant_id=eq.resto_001'
+            table: 'restaurant_notifications'
           },
           (payload) => {
-            if (payload?.new) {
+            if (payload?.new && (payload.new.restaurant_id === 'resto_001' || !payload.new.restaurant_id)) {
               handleIncomingNotification(payload.new);
             }
           }
         )
         .subscribe();
     } catch (e) {
-      console.warn('Realtime channel subscribe caught:', e);
+      console.warn('Database channel subscribe caught:', e);
     }
 
-    // Layer 2: Fast Polling Fallback (every 4 seconds)
+    // Layer 3: Fast Polling Fallback (every 3 seconds)
     const pollInterval = setInterval(async () => {
       try {
         const latest = await fetchLatestRestaurantNotifications('resto_001', 3);
@@ -827,14 +838,15 @@ export default function App() {
           });
         }
       } catch (e) {}
-    }, 4000);
+    }, 3000);
 
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      if (broadcastChannel) supabase.removeChannel(broadcastChannel);
+      if (dbChannel) supabase.removeChannel(dbChannel);
       clearInterval(pollInterval);
       if (followerNotifTimerRef.current) clearTimeout(followerNotifTimerRef.current);
     };
-  }, [restaurantProfile?.logo, featuredSliders, publishedFoods]);
+  }, [restaurantProfile?.logo, featuredSliders, publishedFoods, isFollowing]);
 
   // Handle URL redirect query parameters on initial page load (e.g. from Push Notification click)
   useEffect(() => {
@@ -3014,6 +3026,49 @@ export default function App() {
 
             {/* Scrollable Content Container */}
             <div ref={menuScrollContainerRef} className="flex-1 overflow-y-auto pt-3.5 pb-6 space-y-5 pr-1 scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              {/* Active Special Offer Alert Banner inside Menu & Specials modal */}
+              {followerNotification && (
+                <div
+                  onClick={() => handleOpenNotificationDish(followerNotification)}
+                  className="rounded-2xl p-3.5 sm:p-4 bg-gradient-to-r from-amber-950/90 via-[#24120a] to-amber-950/90 border border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.3)] flex items-center justify-between gap-3 cursor-pointer transition-all hover:scale-[1.01] animate-in fade-in slide-in-from-top-2 select-none"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-12 rounded-xl bg-black/50 border border-amber-500/40 flex items-center justify-center shrink-0 overflow-hidden p-1 relative">
+                      {followerNotification.image ? (
+                        <img src={followerNotification.image} alt={followerNotification.title} className="w-full h-full object-contain drop-shadow" />
+                      ) : (
+                        <Bell className="w-6 h-6 text-amber-400" />
+                      )}
+                      <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider block">
+                        🔥 Special Offer Just Received
+                      </span>
+                      <h4 className="text-white font-bold text-sm tracking-tight truncate">
+                        {followerNotification.title}
+                      </h4>
+                      <p className="text-xs text-slate-300 mt-0.5 truncate">
+                        {followerNotification.body}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenNotificationDish(followerNotification);
+                    }}
+                    className="px-3.5 py-1.5 rounded-full bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs shrink-0 flex items-center gap-1 shadow-[0_0_12px_rgba(245,158,11,0.4)] cursor-pointer"
+                  >
+                    <span>View in 3D</span>
+                  </button>
+                </div>
+              )}
+
               {/* Follow Restaurant Section (Directly Above Featured Specials) */}
               {isFollowBannerVisible && (
                 <div className={`rounded-2xl p-3.5 sm:p-4 bg-[#1a120e] border border-amber-900/40 shadow-xl flex items-center justify-between gap-3 transition-all duration-700 ease-in-out ${
@@ -3713,7 +3768,8 @@ export default function App() {
         <div
           role="alert"
           onClick={() => handleOpenNotificationDish(followerNotification)}
-          className="fixed top-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md z-[99999] bg-[#0d131f]/95 backdrop-blur-xl border border-amber-500/40 rounded-[8px] p-4 shadow-[0_20px_50px_rgba(0,0,0,0.85),0_0_25px_rgba(245,158,11,0.25)] animate-[slideDown_0.35s_ease-out] text-white cursor-pointer select-none transition-transform hover:scale-[1.01]"
+          style={{ zIndex: 9999999 }}
+          className="fixed top-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md bg-[#0d131f]/95 backdrop-blur-xl border border-amber-500/40 rounded-[8px] p-4 shadow-[0_20px_50px_rgba(0,0,0,0.85),0_0_25px_rgba(245,158,11,0.25)] animate-[slideDown_0.35s_ease-out] text-white cursor-pointer select-none transition-transform hover:scale-[1.01]"
         >
           <div className="flex items-start gap-3.5">
             {/* Pulsing Bell Icon / Food Thumbnail */}

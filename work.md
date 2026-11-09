@@ -1162,3 +1162,31 @@ This file records all architectural specifications, resolved issues, feature imp
 - **Verification:**
   - `npm --prefix 3d-menu run build` passed in 1.96s with 0 errors.
   - Changes kept local per user protocol.
+
+---
+
+## 42. Cross-Device Real-Time Push Notification Engine Hardening (Vercel Production & Mobile Phone Fix)
+- **Problem Statement:**
+  - On localhost PC, push notifications worked in Windows notification shade.
+  - However, in production on Vercel (`https://3d-menu-rho.vercel.app/`), when the restaurant owner sent a notification from `/admin?tab=foods`, followers on mobile phones did not receive the notification either in the browser or on the phone screen.
+- **Root Cause Analysis:**
+  1. **PostgreSQL REPLICA IDENTITY on Supabase:**
+     - `restaurant_notifications` table had default replica identity (`d`), which prevented Supabase Realtime from reliably streaming row updates across cross-origin clients.
+     - Executed: `ALTER TABLE restaurant_notifications REPLICA IDENTITY FULL;`
+  2. **Vite Script Execution & Service Worker Ready Deadlock:**
+     - In `main.jsx`, `window.addEventListener('load')` was not triggering when loaded via async/module chunks on mobile.
+     - `await navigator.serviceWorker.ready` in `showBrowserNotification` had no timeout, causing it to hang indefinitely on mobile browsers if the SW was still in activating state.
+     - Because `await showBrowserNotification` was awaited before `setFollowerNotification(notif)`, the deadlock prevented the in-app notification banner from ever rendering.
+  3. **Overly Restrictive Timestamp Filter:**
+     - `notifTime < sessionStartTime` dropped notifications created before page load, which dropped real notifications due to phone-vs-server clock skews.
+     - Replaced with standard 24-hour window with persistent ID deduplication.
+  4. **Production Asset Paths for Native Notifications:**
+     - Dev asset paths like `/src/assets/ice_cream.png` do not exist in production build on Vercel, causing Android Chrome to reject `reg.showNotification()`.
+  5. **Direct Realtime Broadcast Channel:**
+     - Added instant Supabase broadcast channel (`dgm_restaurant_realtime_broadcast`) for 30ms direct websocket communication between admin and diners.
+  6. **Dual Presentation (Modal & Floating Banner):**
+     - Floating in-app notification banner now carries inline `style={{ zIndex: 9999999 }}` to guarantee visibility above all full-screen sheets.
+     - Added dedicated Special Offer alert banner inside the "Menu & Specials" modal.
+- **Verification:**
+  - `npm --prefix 3d-menu run build` passed in 3.22s with 0 errors.
+  - Supabase `REPLICA IDENTITY FULL` verified.
