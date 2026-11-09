@@ -958,3 +958,22 @@ This file records all architectural specifications, resolved issues, feature imp
 - **Verification:**
   - Tested date normalization: confirmed existing 5 orders placed in Bangladesh time Nov 09 match `todayOrders = 5`.
   - `npm --prefix 3d-menu run build` passed with zero errors in 1.42s.
+
+
+---
+
+## 35. Fix: TDZ ReferenceError: Cannot access 'tableNumber' before initialization in App.jsx (2026-11-09)
+- **User Request:**
+  - Browser displayed ErrorBoundary crash screen: `ReferenceError: Cannot access 'tableNumber' before initialization`.
+- **Root Cause Analysis:**
+  - In `App.jsx`, `recordMenuScan('resto_001', tableNumber || 'Table 04')` was placed inside a `useEffect` hook near line 355 with dependency `[currentView, tableNumber]`.
+  - However, `const [tableNumber] = useState('Table 04')` was declared much later down at line 592.
+  - In JavaScript, `const` and `let` variables inside a scope remain in the Temporal Dead Zone (TDZ) until execution reaches their declaration line. When React evaluated the dependency array `[currentView, tableNumber]` at line 357 during the component's initial render cycle, `tableNumber` was accessed before its declaration, triggering a fatal `ReferenceError`.
+- **Permanent Fix:**
+  - Moved `tableNumber` state declaration to the top of `App()` (line ~220) alongside all primary state variables before any `useEffect` or `useMemo` hooks.
+  - Enhanced the state initializer to safely detect table numbers from URL query parameters (e.g. `?table=Table%2005` or `?tableNumber=5`), with fallback to `'Table 04'`.
+  - Removed the late duplicate declaration at line 592.
+- **Verification:**
+  - `npm --prefix 3d-menu run build` passed in 1.51s with 0 errors.
+  - Vite dev server hot-reloaded and rendered the digital menu without errors.
+  - Committed and pushed to GitHub main branch.
