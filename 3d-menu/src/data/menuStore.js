@@ -604,6 +604,121 @@ export const getRestaurantFollowers = (restaurantId = 'resto_001', ordersList = 
   }
 };
 
+// --- Restaurant Follower Notifications System ---
+export const broadcastRestaurantNotification = async (restaurantId = 'resto_001', notificationData = {}) => {
+  const notifId = `ntf_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+  const now = new Date().toISOString();
+  const sliderId = notificationData.sliderId || '';
+  const foodId = notificationData.foodId || '';
+  const targetUrl = notificationData.url || (sliderId ? `/?openSlide=${encodeURIComponent(sliderId)}${foodId ? `&foodId=${encodeURIComponent(foodId)}` : ''}` : '/');
+
+  const payload = {
+    id: notifId,
+    restaurant_id: restaurantId,
+    slider_id: sliderId || null,
+    title: notificationData.title || '🔥 New Special Offer!',
+    body: notificationData.body || 'Check out our new special dish on the digital menu.',
+    icon: notificationData.icon || '/monkey_bhai_logo.png',
+    image: notificationData.image || null,
+    url: targetUrl,
+    status: 'sent',
+    recipients_count: Number(notificationData.recipientsCount || 0),
+    created_at: now
+  };
+
+  // 1. Sync directly to Supabase restaurant_notifications table
+  try {
+    const { error } = await supabase.from('restaurant_notifications').insert([payload]);
+    if (error) console.warn('Supabase broadcast notification error:', error);
+  } catch (err) {
+    console.warn('broadcastRestaurantNotification caught:', err);
+  }
+
+  // 2. Save locally for instant cache
+  try {
+    const key = `dgm_notifications_${restaurantId}`;
+    const raw = localStorage.getItem(key);
+    let list = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) list = [];
+    list.unshift(payload);
+    if (list.length > 50) list = list.slice(0, 50);
+    localStorage.setItem(key, JSON.stringify(list));
+  } catch {}
+
+  return payload;
+};
+
+export const fetchLatestRestaurantNotifications = async (restaurantId = 'resto_001', limit = 5) => {
+  try {
+    const { data, error } = await supabase
+      .from('restaurant_notifications')
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (!error && Array.isArray(data)) {
+      return data;
+    }
+  } catch (err) {
+    console.warn('fetchLatestRestaurantNotifications caught:', err);
+  }
+
+  // Fallback to local storage
+  try {
+    const key = `dgm_notifications_${restaurantId}`;
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const showBrowserNotification = async (title, options = {}) => {
+  if (typeof window === 'undefined' || !('Notification' in window)) return false;
+  if (Notification.permission !== 'granted') return false;
+
+  const notifOptions = {
+    icon: '/monkey_bhai_logo.png',
+    badge: '/favicon.svg',
+    vibrate: [200, 100, 200],
+    ...options
+  };
+
+  // 1. Service Worker showNotification (Works on Android Mobile Chrome & Desktop)
+  if ('serviceWorker' in navigator) {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      if (reg && reg.showNotification) {
+        await reg.showNotification(title, notifOptions);
+        return true;
+      }
+    } catch (swErr) {
+      console.warn('ServiceWorker showNotification failed:', swErr);
+    }
+  }
+
+  // 2. Native window.Notification fallback (Desktop browsers)
+  try {
+    const notifInstance = new Notification(title, notifOptions);
+    notifInstance.onclick = (e) => {
+      e.preventDefault();
+      window.focus();
+      if (typeof options.onClick === 'function') {
+        options.onClick();
+      }
+      window.dispatchEvent(new CustomEvent('dgm_notification_click', {
+        detail: notifOptions.data || {}
+      }));
+    };
+    return true;
+  } catch (err) {
+    console.warn('Native Notification fallback error:', err);
+  }
+
+  return false;
+};
+
 export const syncFoodToSupabase = async (food) => {
   try {
     const isPub = food.is_published !== false && food.status !== 'unpublished' && food.status !== 'draft';

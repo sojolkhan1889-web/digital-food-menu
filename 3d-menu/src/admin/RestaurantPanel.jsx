@@ -58,7 +58,8 @@ import {
   Coins,
   Wallet,
   Users,
-  UserPlus
+  UserPlus,
+  Bell
 } from 'lucide-react';
 
 import AddFoodWizard from './AddFoodWizard';
@@ -174,6 +175,7 @@ export default function RestaurantPanel({
   onAddFeaturedSlider,
   onDeleteFeaturedSlider,
   onToggleFeaturedSlider,
+  onBroadcastSliderNotification,
   onSaveRestaurantProfile,
   onAddTicket,
   onSendMessage,
@@ -508,6 +510,7 @@ export default function RestaurantPanel({
 
   const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
   const [settlementSuccessMsg, setSettlementSuccessMsg] = useState('');
+  const [sliderSuccessNotice, setSliderSuccessNotice] = useState('');
 
   const handleSettleDue = async () => {
     const settleAmt = dueSettlementAmount;
@@ -1829,6 +1832,22 @@ export default function RestaurantPanel({
           {activeTab === 'sliders' && (
             <div className="space-y-6">
 
+              {/* Slider Success / Broadcast Notice Banner */}
+              {sliderSuccessNotice && (
+                <div className="p-3.5 rounded-[5px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs sm:text-sm font-semibold flex items-center justify-between gap-3 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2">
+                    <Bell className="w-4 h-4 shrink-0 text-emerald-500" />
+                    <span>{sliderSuccessNotice}</span>
+                  </div>
+                  <button
+                    onClick={() => setSliderSuccessNotice('')}
+                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
               {/* Header Card with CTA */}
               <div className={`p-6 rounded-[5px] border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-300 shadow-sm'
                 }`}>
@@ -1911,6 +1930,22 @@ export default function RestaurantPanel({
                         </button>
 
                         <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={async () => {
+                              if (onBroadcastSliderNotification) {
+                                await onBroadcastSliderNotification(slide);
+                                setSliderSuccessNotice(`🔔 Push notification broadcasted to all followers for "${slide.title}"!`);
+                                setTimeout(() => setSliderSuccessNotice(''), 5000);
+                              }
+                            }}
+                            className={`p-1.5 rounded-[5px] transition-colors cursor-pointer ${
+                              isDark ? 'text-slate-400 hover:text-amber-400 hover:bg-slate-800' : 'text-slate-500 hover:text-amber-600 hover:bg-slate-200/70'
+                            }`}
+                            title="Send Push Notification to Followers"
+                          >
+                            <Bell className="w-3.5 h-3.5 text-amber-500" />
+                          </button>
+
                           <button
                             onClick={() => {
                               setEditingSlider(slide);
@@ -3237,9 +3272,11 @@ export default function RestaurantPanel({
           setIsSliderWizardOpen(false);
           setEditingSlider(null);
         }}
-        onSave={(slide) => {
-          onAddFeaturedSlider(slide);
+        onSave={async (slide) => {
+          await onAddFeaturedSlider(slide);
           setEditingSlider(null);
+          setSliderSuccessNotice(`🎉 Slider "${slide.title}" published! Push notification broadcasted to all restaurant followers.`);
+          setTimeout(() => setSliderSuccessNotice(''), 6000);
         }}
         foods={foods}
         editingSlider={editingSlider}

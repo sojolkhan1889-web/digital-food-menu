@@ -85,8 +85,13 @@ import {
   getSuperAdminConfig,
   saveSuperAdminConfig,
   isCustomerFollowingRestaurant,
-  recordRestaurantFollow
+  recordRestaurantFollow,
+  broadcastRestaurantNotification,
+  fetchLatestRestaurantNotifications,
+  showBrowserNotification,
+  fetchLiveFollowersFromSupabase
 } from './data/menuStore';
+import { supabase } from './lib/supabaseClient';
 
 const categories = [
   { name: 'All', icon: Utensils },
@@ -542,7 +547,32 @@ export default function App() {
     deleteSubcategoryFromSupabase(subId);
   };
 
-  const handleAddFeaturedSlider = (newSlide) => {
+  const handleBroadcastSliderNotification = async (slide) => {
+    if (!slide) return;
+    try {
+      const followersData = await fetchLiveFollowersFromSupabase('resto_001');
+      const recipientsCount = followersData?.totalFollowers || 1;
+      const currencySymbol = restaurantProfile?.currency || '৳';
+      const priceStr = slide.price ? ` (${currencySymbol}${slide.price})` : '';
+      const bodyText = `${slide.badge ? `[${slide.badge}] ` : ''}${slide.subtitle || 'Special offer now live on our 3D menu!'}${priceStr}`;
+      const targetUrl = `/?openSlide=${encodeURIComponent(slide.id || '')}${slide.foodId ? `&foodId=${encodeURIComponent(slide.foodId)}` : ''}`;
+
+      await broadcastRestaurantNotification('resto_001', {
+        sliderId: slide.id,
+        foodId: slide.foodId || '',
+        title: `🔥 New Special Offer: ${slide.title}!`,
+        body: bodyText,
+        icon: restaurantProfile?.logo || '/monkey_bhai_logo.png',
+        image: slide.image || null,
+        url: targetUrl,
+        recipientsCount: recipientsCount
+      });
+    } catch (notifErr) {
+      console.warn('Broadcast notification error:', notifErr);
+    }
+  };
+
+  const handleAddFeaturedSlider = async (newSlide) => {
     const exists = featuredSliders.some(s => String(s.id) === String(newSlide.id));
     let updated;
     if (exists) {
@@ -552,7 +582,12 @@ export default function App() {
     }
     setFeaturedSliders(updated);
     saveStoredFeaturedSliders(updated);
-    syncSliderToSupabase(newSlide);
+    await syncSliderToSupabase(newSlide);
+
+    // If published and active, broadcast push notification to all followers
+    if (newSlide.isActive !== false) {
+      await handleBroadcastSliderNotification(newSlide);
+    }
   };
 
   const handleDeleteFeaturedSlider = (slideId) => {
@@ -648,6 +683,198 @@ export default function App() {
       if (followBannerTimerRef.current) clearTimeout(followBannerTimerRef.current);
     };
   }, []);
+
+  // Live Follower Notification Banner State (For Customer 3D Menu)
+  const [followerNotification, setFollowerNotification] = useState(null);
+  const followerNotifTimerRef = useRef(null);
+
+  // Open and display the promoted special dish directly on the 3D home screen
+  const handleActivateOfferDish = (sliderId, foodId) => {
+    // 1. Ensure view is Customer Menu
+    if (currentView !== 'menu') {
+      navigateToMenu();
+    }
+
+    // 2. Close all open overlays and modals so the customer directly sees the home screen
+    setIsMenuOpen(false);
+    setIsCartOpen(false);
+    setIsCheckoutOpen(false);
+    setIsSearchOpen(false);
+    setIsCustomizeOpen(false);
+    setFollowerNotification(null);
+
+    // 3. Find matching slider
+    let targetSlide = featuredSliders.find(s => String(s.id) === String(sliderId));
+    if (!targetSlide && sliderId) {
+      const stored = getStoredFeaturedSliders();
+      targetSlide = stored.find(s => String(s.id) === String(sliderId));
+    }
+
+    const resolvedFoodId = foodId || targetSlide?.foodId;
+
+    // 4. Find matching food item
+    let targetFood = foodsList.find(f => String(f.id) === String(resolvedFoodId));
+    if (!targetFood && targetSlide) {
+      targetFood = foodsList.find(f => f.title === targetSlide.foodTitle || f.title === targetSlide.title);
+    }
+    if (!targetFood && publishedFoods.length > 0) {
+      targetFood = publishedFoods[0];
+    }
+
+    // 5. Land on home screen with the offer food showcased in 3D
+    if (targetFood) {
+      const promoFood = {
+        ...targetFood,
+        price: (targetSlide && targetSlide.price !== undefined) ? targetSlide.price : targetFood.price,
+        promoBadge: (targetSlide && targetSlide.badge) ? targetSlide.badge : 'FEATURED SPECIAL',
+        promoTitle: (targetSlide && targetSlide.title) ? targetSlide.title : targetFood.title
+      };
+      setSelectedPortion(0);
+      setSelectedFeaturedDish(promoFood);
+      setActiveCategory('All Items');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleOpenNotificationDish = (notif) => {
+    if (!notif) return;
+    handleActivateOfferDish(notif.slider_id, notif.food_id || notif.foodId);
+  };
+
+  // Follower Notification Realtime & Polling Listener
+  useEffect(() => {
+    // Session start timestamp - only alert on notifications sent around or after page load
+    const sessionStartTime = Date.now() - 60000;
+
+    const handleIncomingNotification = async (notif) => {
+      if (!notif || !notif.id) return;
+
+      // Check if user has followed this restaurant
+      const isUserFollower = isCustomerFollowingRestaurant('resto_001');
+      if (!isUserFollower) return;
+
+      // Deduplication: only alert once per notification ID
+      const notifKey = `dgm_notif_seen_${notif.id}`;
+      if (localStorage.getItem(notifKey)) return;
+
+      // Filter out notifications created well before this session started
+      const notifTime = notif.created_at ? new Date(notif.created_at).getTime() : Date.now();
+      if (notifTime < sessionStartTime) {
+        localStorage.setItem(notifKey, 'true');
+        return;
+      }
+
+      localStorage.setItem(notifKey, 'true');
+
+      // 1. Native System / Browser Notification (Phone screen / Desktop OS)
+      try {
+        const notifTargetUrl = notif.url || `/?openSlide=${encodeURIComponent(notif.slider_id || '')}`;
+        await showBrowserNotification(notif.title || '🔥 New Special Offer from Moneky Bhai!', {
+          body: notif.body || 'Check out our newly published special dish on the 3D menu!',
+          icon: notif.icon || restaurantProfile?.logo || '/monkey_bhai_logo.png',
+          image: notif.image || undefined,
+          tag: notif.id,
+          data: {
+            url: notifTargetUrl,
+            sliderId: notif.slider_id,
+            foodId: notif.food_id || notif.foodId || ''
+          }
+        });
+      } catch (err) {
+        console.warn('showBrowserNotification caught:', err);
+      }
+
+      // 2. In-App Floating Notification Banner (Visible on digital menu)
+      setFollowerNotification(notif);
+
+      if (followerNotifTimerRef.current) clearTimeout(followerNotifTimerRef.current);
+      followerNotifTimerRef.current = setTimeout(() => {
+        setFollowerNotification(null);
+      }, 12000);
+    };
+
+    // Layer 1: Supabase Realtime Channel
+    let channel = null;
+    try {
+      channel = supabase
+        .channel('realtime_restaurant_notifications')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'restaurant_notifications',
+            filter: 'restaurant_id=eq.resto_001'
+          },
+          (payload) => {
+            if (payload?.new) {
+              handleIncomingNotification(payload.new);
+            }
+          }
+        )
+        .subscribe();
+    } catch (e) {
+      console.warn('Realtime channel subscribe caught:', e);
+    }
+
+    // Layer 2: Fast Polling Fallback (every 4 seconds)
+    const pollInterval = setInterval(async () => {
+      try {
+        const latest = await fetchLatestRestaurantNotifications('resto_001', 3);
+        if (Array.isArray(latest)) {
+          latest.forEach(notif => {
+            handleIncomingNotification(notif);
+          });
+        }
+      } catch (e) {}
+    }, 4000);
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+      clearInterval(pollInterval);
+      if (followerNotifTimerRef.current) clearTimeout(followerNotifTimerRef.current);
+    };
+  }, [restaurantProfile?.logo, featuredSliders, publishedFoods]);
+
+  // Handle URL redirect query parameters on initial page load (e.g. from Push Notification click)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const openSlide = params.get('openSlide');
+      const openFood = params.get('foodId');
+      if (openSlide || openFood) {
+        handleActivateOfferDish(openSlide, openFood);
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    } catch (e) {}
+  }, [foodsList.length, featuredSliders.length]);
+
+  // Handle Service Worker postMessage & Desktop Notification click events
+  useEffect(() => {
+    const handleSwMessage = (event) => {
+      if (event.data?.type === 'DGM_NOTIFICATION_CLICK') {
+        const { sliderId, foodId } = event.data.data || {};
+        handleActivateOfferDish(sliderId, foodId);
+      }
+    };
+
+    const handleCustomNotifClick = (event) => {
+      const { sliderId, foodId } = event.detail || {};
+      handleActivateOfferDish(sliderId, foodId);
+    };
+
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+    }
+    window.addEventListener('dgm_notification_click', handleCustomNotifClick);
+
+    return () => {
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      }
+      window.removeEventListener('dgm_notification_click', handleCustomNotifClick);
+    };
+  }, [foodsList, featuredSliders, publishedFoods]);
 
 
   // Customization Modal State
@@ -1797,6 +2024,7 @@ export default function App() {
         onAddFeaturedSlider={handleAddFeaturedSlider}
         onDeleteFeaturedSlider={handleDeleteFeaturedSlider}
         onToggleFeaturedSlider={handleToggleFeaturedSlider}
+        onBroadcastSliderNotification={handleBroadcastSliderNotification}
         onSaveRestaurantProfile={handleSaveRestaurantProfile}
         onAddTicket={handleAddTicket}
         onSendMessage={handleSendMessage}
@@ -3474,6 +3702,93 @@ export default function App() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* 8. LIVE FOLLOWER NOTIFICATION BANNER (SPECIAL OFFER)     */}
+      {/* ======================================================== */}
+      {followerNotification && (
+        <div
+          role="alert"
+          onClick={() => handleOpenNotificationDish(followerNotification)}
+          className="fixed top-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md z-[99999] bg-[#0d131f]/95 backdrop-blur-xl border border-amber-500/40 rounded-[8px] p-4 shadow-[0_20px_50px_rgba(0,0,0,0.85),0_0_25px_rgba(245,158,11,0.25)] animate-[slideDown_0.35s_ease-out] text-white cursor-pointer select-none transition-transform hover:scale-[1.01]"
+        >
+          <div className="flex items-start gap-3.5">
+            {/* Pulsing Bell Icon / Food Thumbnail */}
+            <div className="relative shrink-0">
+              {followerNotification.image ? (
+                <div className="w-12 h-12 rounded-[6px] overflow-hidden bg-black/40 border border-amber-500/30 flex items-center justify-center p-1">
+                  <img
+                    src={followerNotification.image}
+                    alt={followerNotification.title}
+                    className="w-full h-full object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]"
+                  />
+                </div>
+              ) : (
+                <div className="w-11 h-11 rounded-[6px] bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
+                  <Bell className="w-5 h-5 text-black" />
+                </div>
+              )}
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+              </span>
+            </div>
+
+            {/* Notification Text */}
+            <div className="flex-1 min-w-0 pr-1">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-amber-400">
+                  {restaurantProfile?.name || 'Moneky Bhai'} • Follower Special
+                </span>
+              </div>
+              <h4 className="text-sm font-bold text-white tracking-tight line-clamp-1">
+                {followerNotification.title}
+              </h4>
+              <p className="text-xs text-slate-300 mt-0.5 line-clamp-2 leading-relaxed">
+                {followerNotification.body}
+              </p>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenNotificationDish(followerNotification);
+                  }}
+                  className="px-3 py-1.5 rounded-[5px] bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(245,158,11,0.4)] cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Explore Special Dish</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFollowerNotification(null);
+                  }}
+                  className="px-2.5 py-1.5 rounded-[5px] bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white font-medium text-xs transition-colors cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+
+            {/* Dismiss Cross */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setFollowerNotification(null);
+              }}
+              className="p-1 rounded-[4px] text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+              title="Close notification"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}

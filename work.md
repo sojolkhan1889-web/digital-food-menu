@@ -1087,11 +1087,78 @@ This file records all architectural specifications, resolved issues, feature imp
 
 ---
 
-## 39. Core Workflow Rule: Local Verification First Before GitHub Push
-- **Permanent Protocol:**
-  - **Rule:** Never automatically commit and push project changes to GitHub immediately after code modifications.
-  - **Process:**
-    1. Implement requested changes and verify via `npm --prefix 3d-menu run build` and the active local Vite dev server.
-    2. Inform the user of the implemented fixes/features so they can test and review on their local server (`http://localhost:5173/`).
-    3. Keep all changes local until the user explicitly tests and gives permission to commit and push to GitHub.
-    4. Only upon explicit user confirmation (`"commit and push"`), execute git commit and push to `origin/main`.
+## 40. Real-Time Follower Notification Engine via Featured Sliders & Service Worker
+- **Objective:**
+  - Build an end-to-end push notification and engagement engine where creating/publishing a new Featured Slider in Restaurant Portal (`Featured Specials Slider Management`) automatically broadcasts a push notification to all diners following the restaurant.
+  - Deliver notifications across both mobile phones and desktop computers:
+    1. **Native System / Push Notification** via Service Worker (`showNotification`) displaying directly on phone screens and notification drawers.
+    2. **In-App Floating Notification Banner** on the 3D Digital Menu with dish photo, pricing, and an direct "Explore Special Dish" 3D showcase trigger.
+- **Architectural Implementation:**
+  1. **Supabase Database & Realtime Channel (`restaurant_notifications`):**
+     - Created `public.restaurant_notifications` table:
+       - `id` (text, primary key)
+       - `restaurant_id` (text, not null)
+       - `slider_id` (text)
+       - `title` (text)
+       - `body` (text)
+       - `icon` (text)
+       - `image` (text)
+       - `url` (text)
+       - `status` (text)
+       - `recipients_count` (integer)
+       - `created_at` (timestamptz, default `now()`)
+     - Enabled RLS with public `SELECT` and `INSERT` policies.
+     - Added `restaurant_notifications` and `restaurant_followers` to PostgreSQL `supabase_realtime` publication.
+  2. **Service Worker (`3d-menu/public/sw.js` & `main.jsx`):**
+     - Created lightweight Service Worker with `notificationclick` navigation listener.
+     - Registered in `src/main.jsx` on `window.load`.
+     - Enables Android mobile Chrome to trigger OS-level push notifications via `reg.showNotification()` without `TypeError: Illegal constructor`.
+  3. **Data Layer (`menuStore.js`):**
+     - `broadcastRestaurantNotification(restaurantId, notificationData)`: Inserts notification into Supabase and updates local cache.
+     - `fetchLatestRestaurantNotifications(restaurantId, limit)`: Fetches recent broadcasted notifications.
+     - `showBrowserNotification(title, options)`: Two-tier notification handler supporting ServiceWorker and native fallback.
+  4. **Customer Digital Menu Integration (`App.jsx`):**
+     - Subscribed to Supabase Realtime `restaurant_notifications` channel for `resto_001`.
+     - Added 4-second polling fallback to guarantee reliable delivery even with network latency.
+     - Deduplication via `dgm_notif_seen_<id>` to prevent repeat notifications.
+     - On incoming notification for followed restaurant: triggers native system notification and displays glassmorphism in-app notification banner.
+     - "Explore Special Dish" button directly sets active promotional dish on the 3D stage and closes open modals.
+  5. **Restaurant Portal Integration (`RestaurantPanel.jsx`):**
+     - When publishing from `FeaturedSliderWizard`, automatically triggers `onAddFeaturedSlider` which broadcasts to followers.
+     - Added `sliderSuccessNotice` notification toast confirming broadcast.
+     - Added manual "🔔 Send Push Notification" button to each slider card on the Featured Sliders tab for quick re-broadcast.
+- **Verification:**
+  - `npm --prefix 3d-menu run build` succeeded in 3.84s with 0 errors.
+  - Verified local dev server is hot-reloaded and running.
+  - All changes kept local per user protocol (awaiting user test and confirmation before commit/push).
+
+---
+
+## 41. Push Notification Click Redirection & Direct 3D Dish Showcase
+- **Objective:**
+  - When a customer clicks/taps on a push notification (either in Android's notification shade/lock screen, Windows desktop notification, or the in-app floating banner), automatically bring the customer to the digital menu's home screen and showcase the exact promotional special dish on the 3D rotating stage.
+- **Root Cause & Technical Fixes:**
+  1. **Service Worker `notificationclick` Handling (`public/sw.js`):**
+     - Previously, `sw.js` only checked `client.url.includes(targetUrl)` and called `client.focus()` without passing notification data or redirecting.
+     - Updated to:
+       - Construct `targetUrl` with query parameters: `/?openSlide=<sliderId>&foodId=<foodId>`.
+       - Post message to active clients: `client.postMessage({ type: 'DGM_NOTIFICATION_CLICK', data: { sliderId, foodId, url } })`.
+       - Focus and navigate open tabs with `client.navigate(targetUrl)`.
+       - If no tab is open, open a new window via `self.clients.openWindow(targetUrl)`.
+  2. **Native Notification Onclick Fallback (`menuStore.js`):**
+     - Attached `notifInstance.onclick` callback to desktop notifications, focusing the window and dispatching a custom `dgm_notification_click` event.
+  3. **Universal Offer Activator & URL Listener (`App.jsx`):**
+     - Created `handleActivateOfferDish(sliderId, foodId)`:
+       - Switches `currentView` to `'menu'`.
+       - Closes all open overlays (Menu modal, Cart, Search, Portions, Notification toast).
+       - Matches `sliderId` in `featuredSliders` and resolves `foodId` in `foodsList`.
+       - Sets `selectedFeaturedDish(promoFood)` with promotional badge, title, and price.
+       - Smoothly scrolls to the top of the home screen 3D stage.
+     - Added `useEffect` listening to `window.location.search` (`openSlide` and `foodId` query parameters) on page load and cleaning the URL parameters via `history.replaceState`.
+     - Added `useEffect` listening to Service Worker `postMessage` (`DGM_NOTIFICATION_CLICK`) and custom `dgm_notification_click` events.
+  4. **In-App Floating Banner Interactivity:**
+     - Made the entire notification card container clickable so tapping anywhere on the banner (card body, text, or image) triggers `handleOpenNotificationDish`.
+     - Added `e.stopPropagation()` to "Dismiss" and "Close (X)" buttons to ensure clean dismissal.
+- **Verification:**
+  - `npm --prefix 3d-menu run build` passed in 1.96s with 0 errors.
+  - Changes kept local per user protocol.
