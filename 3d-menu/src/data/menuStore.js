@@ -497,6 +497,94 @@ export const getMenuScans = (restaurantId = 'resto_001', ordersCount = 0) => {
 // --- Real Restaurant Followers & Loyal Diners ---
 const FOLLOWERS_STORAGE_KEY = 'dgm_followers_data';
 
+export const isCustomerFollowingRestaurant = (restaurantId = 'resto_001') => {
+  try {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(`dgm_following_${restaurantId}`) === 'true';
+  } catch (e) {
+    return false;
+  }
+};
+
+export const recordRestaurantFollow = async (restaurantId = 'resto_001') => {
+  const now = new Date().toISOString();
+  let customerId = '';
+  try {
+    customerId = localStorage.getItem('dgm_customer_device_id') || '';
+    if (!customerId) {
+      customerId = `cust_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      localStorage.setItem('dgm_customer_device_id', customerId);
+    }
+    localStorage.setItem(`dgm_following_${restaurantId}`, 'true');
+
+    // Update local cache
+    const key = `${FOLLOWERS_STORAGE_KEY}_${restaurantId}`;
+    const raw = localStorage.getItem(key);
+    let list = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) list = [];
+    if (!list.some(f => (typeof f === 'object' && f.customerId === customerId))) {
+      list.push({ customerId, date: now, followed_at: now });
+      localStorage.setItem(key, JSON.stringify(list));
+    }
+  } catch (e) {
+    console.warn('Local follow save warning:', e);
+  }
+
+  // Request browser Notification permission
+  let notifStatus = 'default';
+  if (typeof window !== 'undefined' && 'Notification' in window) {
+    try {
+      if (Notification.permission === 'default') {
+        notifStatus = await Notification.requestPermission();
+      } else {
+        notifStatus = Notification.permission;
+      }
+    } catch (err) {
+      console.warn('Notification permission caught:', err);
+    }
+  }
+
+  // Sync to Supabase restaurant_followers table
+  try {
+    const userAgent = typeof navigator !== 'undefined' ? (navigator.userAgent || '').slice(0, 150) : '';
+    await supabase.from('restaurant_followers').insert([{
+      id: `flw_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      restaurant_id: restaurantId,
+      customer_id: customerId,
+      device_info: userAgent,
+      notification_status: notifStatus,
+      followed_at: now,
+      created_at: now
+    }]);
+  } catch (err) {
+    console.warn('Supabase follower sync caught:', err);
+  }
+
+  return { customerId, notifStatus };
+};
+
+export const fetchLiveFollowersFromSupabase = async (restaurantId = 'resto_001') => {
+  try {
+    const { data, error } = await supabase
+      .from('restaurant_followers')
+      .select('*')
+      .eq('restaurant_id', restaurantId);
+
+    if (!error && Array.isArray(data)) {
+      const uniqueFollowerIds = new Set(data.map(f => f.customer_id || f.id));
+      const todayFollowers = data.filter(f => isSameCalendarDay(f.followed_at || f.created_at)).length;
+      return {
+        totalFollowers: uniqueFollowerIds.size,
+        todayFollowers,
+        followersList: data
+      };
+    }
+  } catch (err) {
+    console.warn('Supabase fetch followers caught:', err);
+  }
+  return null;
+};
+
 export const getRestaurantFollowers = (restaurantId = 'resto_001', ordersList = []) => {
   try {
     const key = `${FOLLOWERS_STORAGE_KEY}_${restaurantId}`;
@@ -504,15 +592,8 @@ export const getRestaurantFollowers = (restaurantId = 'resto_001', ordersList = 
     let list = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(list)) list = [];
 
-    // Distinct customer diners who have placed orders
-    const dinerSet = new Set(
-      ordersList
-        .filter(o => o.customerName && o.customerName !== 'Customer')
-        .map(o => o.customerPhone || o.customerName)
-    );
-
-    const totalFollowers = Math.max(list.length, dinerSet.size);
-    const todayFollowers = list.filter(f => isSameCalendarDay(f.date || f)).length;
+    const totalFollowers = list.length;
+    const todayFollowers = list.filter(f => isSameCalendarDay(f.date || f.followed_at || f)).length;
 
     return {
       totalFollowers,

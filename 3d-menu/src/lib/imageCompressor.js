@@ -12,13 +12,41 @@ export const compressImage = (fileOrDataUrl, options = {}) => {
   } = options;
 
   return new Promise((resolve, reject) => {
+    if (!fileOrDataUrl) {
+      resolve({ dataUrl: '', width: 0, height: 0, didTrim: false, origW: 0, origH: 0 });
+      return;
+    }
+
     const img = new Image();
+    let hasProcessed = false;
+
+    // Safety timeout to prevent hanging forever
+    const timeoutId = setTimeout(() => {
+      if (!hasProcessed) {
+        hasProcessed = true;
+        reject(new Error('Image processing timed out'));
+      }
+    }, 10000);
+
+    const safeProcess = () => {
+      if (hasProcessed) return;
+      hasProcessed = true;
+      clearTimeout(timeoutId);
+      processImage();
+    };
 
     const processImage = () => {
       let origW = img.naturalWidth || img.width;
       let origH = img.naturalHeight || img.height;
       if (!origW || !origH) {
-        resolve(typeof fileOrDataUrl === 'string' ? fileOrDataUrl : '');
+        resolve({
+          dataUrl: typeof fileOrDataUrl === 'string' ? fileOrDataUrl : '',
+          width: 0,
+          height: 0,
+          didTrim: false,
+          origW: 0,
+          origH: 0
+        });
         return;
       }
 
@@ -91,7 +119,14 @@ export const compressImage = (fileOrDataUrl, options = {}) => {
       canvas.height = targetH;
       const ctx = canvas.getContext('2d');
       if (!ctx) {
-        resolve(typeof fileOrDataUrl === 'string' ? fileOrDataUrl : '');
+        resolve({
+          dataUrl: typeof fileOrDataUrl === 'string' ? fileOrDataUrl : '',
+          width: targetW,
+          height: targetH,
+          didTrim: false,
+          origW,
+          origH
+        });
         return;
       }
 
@@ -126,19 +161,39 @@ export const compressImage = (fileOrDataUrl, options = {}) => {
       });
     };
 
-    img.onerror = (err) => reject(err);
+    img.onload = safeProcess;
+    img.onerror = (err) => {
+      if (!hasProcessed) {
+        hasProcessed = true;
+        clearTimeout(timeoutId);
+        reject(err);
+      }
+    };
 
     if (typeof fileOrDataUrl === 'string') {
       img.src = fileOrDataUrl;
+      if (img.complete && img.naturalWidth) {
+        safeProcess();
+      }
     } else if (fileOrDataUrl instanceof Blob || fileOrDataUrl instanceof File) {
       const reader = new FileReader();
       reader.onload = (e) => {
         img.src = e.target.result;
+        if (img.complete && img.naturalWidth) {
+          safeProcess();
+        }
       };
-      reader.onerror = (err) => reject(err);
+      reader.onerror = (err) => {
+        if (!hasProcessed) {
+          hasProcessed = true;
+          clearTimeout(timeoutId);
+          reject(err);
+        }
+      };
       reader.readAsDataURL(fileOrDataUrl);
     } else {
-      resolve('');
+      clearTimeout(timeoutId);
+      resolve({ dataUrl: '', width: 0, height: 0, didTrim: false, origW: 0, origH: 0 });
     }
   });
 };

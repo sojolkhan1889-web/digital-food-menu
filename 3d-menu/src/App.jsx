@@ -30,7 +30,8 @@ import {
   ShieldCheck,
   RotateCcw,
   Receipt,
-  ArrowLeft
+  ArrowLeft,
+  Bell
 } from 'lucide-react';
 
 import foodGif from './assets/Food.gif';
@@ -82,7 +83,9 @@ import {
   saveStoredChatMessages,
   syncChatMessageToSupabase,
   getSuperAdminConfig,
-  saveSuperAdminConfig
+  saveSuperAdminConfig,
+  isCustomerFollowingRestaurant,
+  recordRestaurantFollow
 } from './data/menuStore';
 
 const categories = [
@@ -398,13 +401,13 @@ export default function App() {
   }, [publishedFoods, activeFeaturedFoodIds]);
 
   // Navigation & Category states
-  const [activeCategory, setActiveCategory] = useState('All');
+  const [activeCategory, setActiveCategory] = useState('All Items');
   
   // Specific dish activated from clicking a Featured Special slider (with promotional discount applied)
   const [selectedFeaturedDish, setSelectedFeaturedDish] = useState(null);
 
   const filteredFoods = useMemo(() => {
-    if (activeCategory === 'All') {
+    if (activeCategory === 'All Items' || activeCategory === 'All') {
       return regularCategoryFoods;
     }
     return regularCategoryFoods.filter(f => f.category === activeCategory);
@@ -443,7 +446,7 @@ export default function App() {
     }
 
     if (!exists) {
-      setActiveCategory('All');
+      setActiveCategory('All Items');
       setCurrentIndex(0);
     }
   };
@@ -617,6 +620,33 @@ export default function App() {
       setBadgeMode(prev => (prev === 'tag' ? 'rating' : 'tag'));
     }, 8000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Restaurant Follow State (Customer Connection & Marketing Notifications)
+  const [isFollowing, setIsFollowing] = useState(() => isCustomerFollowingRestaurant('resto_001'));
+  const [isFollowBannerVisible, setIsFollowBannerVisible] = useState(() => !isCustomerFollowingRestaurant('resto_001'));
+  const [isFadingOutFollowBanner, setIsFadingOutFollowBanner] = useState(false);
+  const followBannerTimerRef = useRef(null);
+
+  const handleFollowRestaurant = async () => {
+    setIsFollowing(true);
+    await recordRestaurantFollow('resto_001');
+
+    // 8 seconds after following, the follow banner disappears
+    if (followBannerTimerRef.current) clearTimeout(followBannerTimerRef.current);
+    followBannerTimerRef.current = setTimeout(() => {
+      setIsFadingOutFollowBanner(true);
+      setTimeout(() => {
+        setIsFollowBannerVisible(false);
+        setIsFadingOutFollowBanner(false);
+      }, 700);
+    }, 8000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (followBannerTimerRef.current) clearTimeout(followBannerTimerRef.current);
+    };
   }, []);
 
 
@@ -1678,6 +1708,7 @@ export default function App() {
   // Helper to map icons to category names
   const getCategoryIcon = (catName) => {
     switch (catName) {
+      case 'All Items':
       case 'All': return Sparkles;
       case 'Main Course': return Utensils;
       case 'Appetizers': return Pizza;
@@ -1687,10 +1718,16 @@ export default function App() {
     }
   };
 
-  const dynamicCategories = Array.from(new Set(categoriesList)).map(name => ({
-    name,
-    icon: getCategoryIcon(name)
-  }));
+  const dynamicCategories = useMemo(() => {
+    // Primary Category: 'All Items' is always the first category across all restaurants
+    const restCategories = Array.from(new Set(categoriesList)).filter(
+      c => Boolean(c) && c !== 'All' && c !== 'All Items'
+    );
+    return ['All Items', ...restCategories].map(name => ({
+      name,
+      icon: getCategoryIcon(name)
+    }));
+  }, [categoriesList]);
 
   // ========================================================
   // SUPER ADMIN MASTER SAAS PLATFORM VIEW
@@ -2724,10 +2761,18 @@ export default function App() {
                     <Utensils className="w-8 h-8 sm:w-9 sm:h-9 text-white" />
                   )}
                 </div>
-                <div>
+                <div className="flex items-center gap-2 sm:gap-2.5">
                   <h3 className="text-white font-black text-xl sm:text-2xl tracking-tight leading-tight">
                     Menu & Specials
                   </h3>
+                  {isFollowing && (
+                    <div 
+                      className="w-5 h-5 sm:w-5.5 sm:h-5.5 rounded-full bg-amber-500 flex items-center justify-center shadow-[0_0_12px_rgba(245,158,11,0.7)] shrink-0 animate-in fade-in zoom-in duration-300"
+                      title="You are following this restaurant"
+                    >
+                      <Check className="w-3.5 h-3.5 text-black stroke-[3.5]" />
+                    </div>
+                  )}
                 </div>
               </div>
               <button
@@ -2741,6 +2786,42 @@ export default function App() {
 
             {/* Scrollable Content Container */}
             <div ref={menuScrollContainerRef} className="flex-1 overflow-y-auto pt-3.5 pb-6 space-y-5 pr-1 scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              {/* Follow Restaurant Section (Directly Above Featured Specials) */}
+              {isFollowBannerVisible && (
+                <div className={`rounded-2xl p-3.5 sm:p-4 bg-[#1a120e] border border-amber-900/40 shadow-xl flex items-center justify-between gap-3 transition-all duration-700 ease-in-out ${
+                  isFadingOutFollowBanner ? 'opacity-0 -translate-y-2 max-h-0 overflow-hidden py-0 my-0 border-transparent pointer-events-none' : 'opacity-100 max-h-36'
+                }`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-[#2a1c14] border border-amber-700/30 flex items-center justify-center text-amber-500 shrink-0 shadow-inner">
+                      <Bell className="w-5 h-5 sm:w-5.5 sm:h-5.5 fill-amber-500/20" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-white font-bold text-sm sm:text-base tracking-tight leading-snug truncate">
+                        {isFollowing ? "You're following" : "Follow this restaurant"}
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-0.5 truncate">
+                        Get offers & discounts
+                      </p>
+                    </div>
+                  </div>
+
+                  {isFollowing ? (
+                    <div className="px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full border border-amber-500/80 bg-amber-500/10 text-amber-400 font-bold text-xs sm:text-sm flex items-center gap-1.5 shrink-0 shadow-[0_0_12px_rgba(245,158,11,0.25)] select-none animate-in fade-in duration-300">
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      <span>Following</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleFollowRestaurant}
+                      className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-amber-500 hover:bg-amber-400 active:scale-95 text-black font-black text-xs sm:text-sm shadow-md transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                    >
+                      <span>+ Follow</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Featured Promo Carousel */}
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -2819,7 +2900,9 @@ export default function App() {
                   {dynamicCategories.map((cat, idx) => {
                     const Icon = cat.icon;
                     const isSelected = activeCategory === cat.name;
-                    const count = cat.name === 'All' ? regularCategoryFoods.length : regularCategoryFoods.filter(f => f.category === cat.name).length;
+                    const count = (cat.name === 'All Items' || cat.name === 'All') 
+                      ? regularCategoryFoods.length 
+                      : regularCategoryFoods.filter(f => f.category === cat.name).length;
                     return (
                       <button
                         key={idx}

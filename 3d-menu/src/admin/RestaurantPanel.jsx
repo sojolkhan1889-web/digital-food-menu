@@ -75,6 +75,7 @@ import {
   fetchRestaurantSettlementsFromSupabase,
   recordRestaurantSettlementInSupabase,
   getRestaurantFollowers,
+  fetchLiveFollowersFromSupabase,
   isSameCalendarDay
 } from '../data/menuStore';
 
@@ -454,9 +455,24 @@ export default function RestaurantPanel({
     };
   }, []);
 
-  const followersData = useMemo(() => {
-    return getRestaurantFollowers('resto_001', orders);
-  }, [orders]);
+  // Dynamic Real Followers (fetched live from Supabase restaurant_followers and polled every 6s)
+  const [followersData, setFollowersData] = useState(() => getRestaurantFollowers('resto_001', orders));
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadFollowers = async () => {
+      const live = await fetchLiveFollowersFromSupabase('resto_001');
+      if (isMounted && live) {
+        setFollowersData(live);
+      }
+    };
+    loadFollowers();
+    const interval = setInterval(loadFollowers, 6000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Live settlements state from Supabase
   const [settlements, setSettlements] = useState([]);

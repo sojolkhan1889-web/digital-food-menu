@@ -13,7 +13,8 @@ import {
   ChevronDown,
   ChevronUp,
   GripVertical,
-  Sparkles
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 
 export default function AddFoodWizard({
@@ -48,6 +49,7 @@ export default function AddFoodWizard({
   const [foodImage, setFoodImage] = useState('');
   const [imagePreview, setImagePreview] = useState('');
   const [imageMeta, setImageMeta] = useState(null);
+  const [isOptimizingImage, setIsOptimizingImage] = useState(false);
 
   // Step 2: Size & Price State
   const [currency, setCurrency] = useState('৳');
@@ -169,6 +171,7 @@ export default function AddFoodWizard({
       setFoodImage('');
       setImagePreview('');
       setImageMeta(null);
+      setIsOptimizingImage(false);
       setHasDifferentSizes(false);
       setSinglePrice('');
       setSingleOldPrice('');
@@ -267,9 +270,13 @@ export default function AddFoodWizard({
   }, [isOpen, editingFood]);
 
   // Handle Photo Upload with Image Engine (Auto-Trim Transparent Borders & Client-Side Compression)
-  const handleImageFileChange = async (e) => {
-    const file = e.target.files?.[0];
+  const processSelectedImageFile = async (file) => {
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please select a valid image file (.png, .jpg, .webp).');
+      return;
+    }
+    setIsOptimizingImage(true);
 
     try {
       const res = await compressImage(file, {
@@ -287,20 +294,54 @@ export default function AddFoodWizard({
           height: res.origH || res.height,
           trimmedW: res.width,
           trimmedH: res.height,
-          ratio: (res.width / res.height).toFixed(2),
+          ratio: (res.width / (res.height || 1)).toFixed(2),
           isOptimal: (res.origW || res.width) >= 500,
           autoTrimmed: res.didTrim
         });
+      } else {
+        throw new Error('Compression returned empty payload');
       }
     } catch (err) {
-      console.warn('Image processing failed, falling back:', err);
+      console.warn('Image processing failed, falling back to direct FileReader:', err);
       const reader = new FileReader();
       reader.onloadend = () => {
         const dataUrl = reader.result;
-        setImagePreview(dataUrl);
-        setFoodImage(dataUrl);
+        if (dataUrl) {
+          setImagePreview(dataUrl);
+          setFoodImage(dataUrl);
+          setImageMeta({
+            width: 800,
+            height: 800,
+            trimmedW: 800,
+            trimmedH: 800,
+            ratio: '1.00',
+            isOptimal: true,
+            autoTrimmed: false
+          });
+        }
       };
       reader.readAsDataURL(file);
+    } finally {
+      setIsOptimizingImage(false);
+    }
+  };
+
+  const handleImageFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await processSelectedImageFile(file);
+    }
+    try {
+      e.target.value = '';
+    } catch (err) {}
+  };
+
+  const handleImageDrop = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer?.files?.[0];
+    if (file) {
+      await processSelectedImageFile(file);
     }
   };
 
@@ -727,10 +768,19 @@ export default function AddFoodWizard({
                 <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                   Food Photo / Transparent PNG Image
                 </label>
-                <div className={`p-4 rounded-[5px] border border-dashed flex flex-col sm:flex-row items-center gap-4 ${
-                  isDark ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-300'
-                }`}>
-                  {imagePreview ? (
+                <div 
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={handleImageDrop}
+                  className={`p-4 rounded-[5px] border border-dashed flex flex-col sm:flex-row items-center gap-4 transition-all ${
+                    isDark ? 'bg-slate-800/40 border-slate-700 hover:border-orange-500/50' : 'bg-slate-50 border-slate-300 hover:border-orange-500/50'
+                  }`}
+                >
+                  {isOptimizingImage ? (
+                    <div className="w-20 h-20 rounded-[5px] bg-orange-500/10 border border-orange-500/30 flex flex-col items-center justify-center shrink-0 text-orange-500 gap-1.5">
+                      <Loader2 className="w-7 h-7 animate-spin" />
+                      <span className="text-[10px] font-bold">Optimizing...</span>
+                    </div>
+                  ) : imagePreview ? (
                     <div className="relative w-24 h-24 rounded-[5px] overflow-hidden bg-black/20 border border-slate-400 shrink-0 flex items-center justify-center p-1">
                       <img src={imagePreview} alt="Preview" className="w-full h-full object-contain" />
                       <button
@@ -754,10 +804,12 @@ export default function AddFoodWizard({
 
                   <div className="flex-1 text-center sm:text-left">
                     <span className={`text-xs font-semibold block ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                      Upload High-Quality PNG or Photo
+                      {isOptimizingImage ? 'Processing & Optimizing Food Photo...' : 'Upload High-Quality PNG or Photo'}
                     </span>
                     <span className="text-[11px] text-slate-500 block mb-2">
-                      Transparent background PNG files look best for the 3D floating animation.
+                      {isOptimizingImage
+                        ? 'Auto-trimming transparent borders and preparing image for 3D stage...'
+                        : 'Transparent background PNG files look best for the 3D floating animation. Drag & drop or browse.'}
                     </span>
                     
                     {/* Live Image Resolution & Engine Badges */}
@@ -783,9 +835,20 @@ export default function AddFoodWizard({
                       </div>
                     )}
 
-                    <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[5px] bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold cursor-pointer transition-colors shadow-sm">
-                      <span>Browse File</span>
-                      <input type="file" accept="image/*" onChange={handleImageFileChange} className="hidden" />
+                    <label className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[5px] bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold cursor-pointer transition-colors shadow-sm ${
+                      isOptimizingImage ? 'opacity-60 pointer-events-none' : ''
+                    }`}>
+                      {isOptimizingImage ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Processing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Browse File</span>
+                          <input type="file" accept="image/*" onChange={handleImageFileChange} className="hidden" />
+                        </>
+                      )}
                     </label>
                   </div>
                 </div>
