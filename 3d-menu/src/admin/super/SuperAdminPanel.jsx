@@ -27,9 +27,11 @@ import {
   updateTicketInSupabase,
   fetchLiveSettlementsFromSupabase,
   recordSettlementInSupabase,
+  fetchLiveScansFromSupabase,
   getPlatformSettings,
   savePlatformSettings
 } from './superAdminStore';
+import { isSameCalendarDay } from '../../data/menuStore';
 
 const NAV = [
   { name: 'Dashboard', icon: LayoutDashboard, routes: [] },
@@ -90,22 +92,24 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
     notes: ''
   });
 
+  const [liveScans, setLiveScans] = useState({ totalScans: 0, todayScans: 0 });
+
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Sync latest live data from Supabase on mount
+  // Sync latest live data from Supabase on mount and poll every 6s for realtime parity
   const loadAllLiveData = async () => {
-    setIsRefreshing(true);
     try {
-      const [liveRestos, liveOrders, liveTickets, liveCatalog, liveSettings, liveSettlements] = await Promise.all([
+      const [liveRestos, liveOrders, liveTickets, liveCatalog, liveSettings, liveSettlements, liveScansRes] = await Promise.all([
         fetchLiveRestaurantsFromSupabase(),
         fetchLiveOrdersFromSupabase(),
         fetchLiveTicketsFromSupabase(),
         fetchLiveCatalogFromSupabase(),
         fetchLivePlatformSettingsFromSupabase(),
-        fetchLiveSettlementsFromSupabase()
+        fetchLiveSettlementsFromSupabase(),
+        fetchLiveScansFromSupabase()
       ]);
       if (liveRestos && liveRestos.length > 0) setRestaurants(liveRestos);
       if (liveOrders) setOrders(liveOrders);
@@ -113,6 +117,7 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
       if (liveCatalog) setCatalog(liveCatalog);
       if (liveSettings) setPlatformSettings(liveSettings);
       if (liveSettlements) setSettlements(liveSettlements);
+      if (liveScansRes) setLiveScans(liveScansRes);
     } catch (err) {
       console.warn('Super Admin load live data caught:', err);
     } finally {
@@ -122,6 +127,8 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
 
   useEffect(() => {
     loadAllLiveData();
+    const interval = setInterval(loadAllLiveData, 6000);
+    return () => clearInterval(interval);
   }, []);
 
   // Time & Period Buckets for Settlements
@@ -182,24 +189,22 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
   // 10 Dashboard KPI Statistics Cards
   const dynamicStats = useMemo(() => {
     const feePerBill = platformSettings?.feeRules?.platformFeePerBill ?? 5;
-    const now = new Date();
-    const todayStr = now.toISOString().slice(0, 10);
 
     // 1. Total DGM Orders
     const totalOrdersCount = orders.length;
 
-    // 2. Today DGM Orders (all restaurants)
-    const todayOrders = orders.filter(o => o.createdAt && o.createdAt.slice(0, 10) === todayStr);
+    // 2. Today DGM Orders (all restaurants) - Robust Local & UTC Date Matching
+    const todayOrders = orders.filter(o => isSameCalendarDay(o.createdAt || o.created_at));
     const todayOrdersCount = todayOrders.length;
 
     // 3. Total Suspended Restaurants
     const suspendedCount = restaurants.filter(r => r.status === 'suspended').length;
 
-    // 4. Total Scans (all restaurants)
-    const totalScans = Math.max(orders.length * 4, 38);
+    // 4. Total Scans (all restaurants - live from Supabase menu_scans table)
+    const totalScans = liveScans.totalScans;
 
-    // 5. Today Scans (all restaurants)
-    const todayScans = todayOrdersCount > 0 ? todayOrdersCount * 4 : 0;
+    // 5. Today Scans (all restaurants - live from Supabase menu_scans table)
+    const todayScans = liveScans.todayScans;
 
     // 6. Total Fees Collections (all restaurants)
     const totalFees = totalOrdersCount * feePerBill;
@@ -332,7 +337,7 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
         isEarnings: true
       }
     ];
-  }, [restaurants, orders, platformSettings, settlements, clearedPeriod, clearedByPeriod]);
+  }, [restaurants, orders, platformSettings, settlements, clearedPeriod, clearedByPeriod, liveScans]);
 
   // Pending Actions Data derived directly from real database records
   const pendingActions = useMemo(() => {

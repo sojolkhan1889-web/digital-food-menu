@@ -71,7 +71,9 @@ import {
   settlePlatformDues,
   resetPlatformDues,
   getMenuScans,
-  getRestaurantFollowers
+  fetchLiveMenuScansFromSupabase,
+  getRestaurantFollowers,
+  isSameCalendarDay
 } from '../data/menuStore';
 
 // Animated count-up component for metrics on page load/refresh
@@ -413,10 +415,8 @@ export default function RestaurantPanel({
       .reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
 
     const todayOrders = orders.filter(o => {
-      if (!o.createdAt) return true;
-      const d = new Date(o.createdAt);
-      const today = new Date();
-      return d.toDateString() === today.toDateString();
+      const orderDate = o.createdAt || o.created_at;
+      return isSameCalendarDay(orderDate);
     });
 
     const todaySales = todayOrders
@@ -433,10 +433,24 @@ export default function RestaurantPanel({
     };
   }, [foods, orders]);
 
-  // Dynamic Real Scans & Loyal Diners calculated from real customer interactions
-  const scansData = useMemo(() => {
-    return getMenuScans('resto_001', orders.length);
-  }, [orders.length]);
+  // Dynamic Real Cloud Scans (fetched live from Supabase menu_scans and polled every 6s)
+  const [scansData, setScansData] = useState(() => getMenuScans('resto_001', orders.length));
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadScans = async () => {
+      const live = await fetchLiveMenuScansFromSupabase('resto_001');
+      if (isMounted && live) {
+        setScansData(live);
+      }
+    };
+    loadScans();
+    const interval = setInterval(loadScans, 6000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const followersData = useMemo(() => {
     return getRestaurantFollowers('resto_001', orders);

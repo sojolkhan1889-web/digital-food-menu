@@ -906,3 +906,55 @@ This file records all architectural specifications, resolved issues, feature imp
   5. **Git & Build Verification:**
      - `npm --prefix 3d-menu run build` passed in 4.33s with 0 errors.
      - Committed and pushed cleanly to GitHub `sojolkhan1889-web/digital-food-menu` on `main`.
+
+
+---
+
+## 34. Fix: Cloud-Synced Menu Scan Tracking & Cross-Timezone 'Today Orders' Resolution (2026-11-09)
+- **User Request:**
+  1. When generating a QR code from the Vercel deployed link and scanning it to visit the digital menu on a mobile device, `Total Scan` and `Today Scan` were not counted in Super Admin Panel or Restaurant Panel.
+  2. When placing an order from the digital menu frontend via "YES, I ORDERED", the order counted in `Total Orders` in both Restaurant Panel and Super Admin Panel, but did NOT count in `Today Orders` in either panel.
+- **Root Cause Analysis:**
+  1. **Menu Scans Root Cause:**
+     - `recordMenuScan()` was previously writing scans strictly to the diner's mobile device `localStorage`. Because `localStorage` is isolated to the mobile device browser, the PC browser running the Restaurant and Super Admin panels never received the count.
+     - Furthermore, `SuperAdminPanel.jsx` did not query any scan records, instead computing mock scans based on order count multiplier.
+  2. **Today Orders Root Cause:**
+     - `SuperAdminPanel.jsx` calculated today's orders using raw UTC date string comparison: `o.createdAt && o.createdAt.slice(0, 10) === new Date().toISOString().slice(0, 10)`. When it is morning in Bangladesh (UTC+6, e.g. Nov 09 05:00 AM), `toISOString()` still reports Nov 08 (UTC 23:00). Hence, all orders placed today evaluated to false.
+     - In `App.jsx`, `handleConfirmOrderWithWaiter` inserted `created_at` (snake_case) into the order object without `createdAt` (camelCase). Components checking `o.createdAt` received `undefined`.
+     - PostgreSQL timestamps returned with `+00` timezone offset (e.g., `2026-11-08 23:57:43.236916+00`). In Javascript `new Date()`, substituting space with `T` without converting `+00` to standard ISO `Z` or `+00:00` resulted in `Invalid Date` in several browsers/V8 engines.
+     - Neither panel had live background polling for orders or scans, so orders placed on mobile devices did not update the PC screen without a hard browser reload.
+- **Key Changes Implemented:**
+  1. **Supabase Database Schema (`menu_scans` table):**
+     - Created `public.menu_scans` table in Supabase (`rsbwehchoovcmaclssuh`) with columns:
+       - `id` (text, primary key)
+       - `restaurant_id` (text, not null)
+       - `table_number` (text)
+       - `device_info` (text)
+       - `scanned_at` (timestamptz, default `now()`)
+       - `created_at` (timestamptz, default `now()`)
+     - Enabled RLS with public `INSERT` and `SELECT` policies for `anon` and `authenticated` roles.
+  2. **Timezone-Resilient Date Helper (`parseDateTime` & `isSameCalendarDay` in `menuStore.js`):**
+     - Built `parseDateTime(input)` to handle PostgreSQL timestamps, normalizing `+00` to `Z` and ISO strings so `new Date()` is consistently valid.
+     - Built `isSameCalendarDay(dateInput, referenceDate)` comparing:
+       - Local calendar date (`toDateString() === ref.toDateString()`)
+       - UTC calendar date (`toISOString().slice(0, 10) === ref.toISOString().slice(0, 10)`)
+       - Rolling 24-hour fallback if time is within 86,400,000 ms.
+  3. **Cloud Scan Tracking (`menuStore.js` & `superAdminStore.js`):**
+     - Updated `recordMenuScan(restaurantId, tableNumber)` to insert real scan records into Supabase `menu_scans` table asynchronously with fallback to `localStorage`.
+     - Built `fetchLiveMenuScansFromSupabase(restaurantId)` to fetch all real scans for a restaurant and calculate `{ totalScans, todayScans, rawScans }` using `isSameCalendarDay`.
+     - Built `fetchLiveScansFromSupabase()` in `superAdminStore.js` to aggregate scans globally across all restaurants for the Super Admin panel.
+  4. **Frontend & Panel Real-Time Sync:**
+     - **`App.jsx`:**
+       - Fires `recordMenuScan('resto_001', tableNumber || 'Table 04')` on diner menu mount.
+       - Guarantees both `createdAt` and `created_at` are populated on order confirmation in both `handleConfirmOrderWithWaiter` and `handleConfirmOrderFromAutoPopup`.
+       - Added 6-second live polling loop for `fetchLiveOrdersFromSupabase('resto_001')`.
+     - **`RestaurantPanel.jsx`:**
+       - Fetches real scans on mount and polls `fetchLiveMenuScansFromSupabase('resto_001')` every 6 seconds.
+       - Computes `metrics.todayOrders` using `isSameCalendarDay(o.createdAt || o.created_at)`.
+     - **`SuperAdminPanel.jsx`:**
+       - Integrates `fetchLiveScansFromSupabase()` into `loadAllLiveData()` and polls every 6 seconds.
+       - Computes `todayOrders` and `todayFees` using `isSameCalendarDay(o.createdAt || o.created_at)`.
+       - Renders live `totalScans` and `todayScans` from Supabase records.
+- **Verification:**
+  - Tested date normalization: confirmed existing 5 orders placed in Bangladesh time Nov 09 match `todayOrders = 5`.
+  - `npm --prefix 3d-menu run build` passed with zero errors in 1.42s.

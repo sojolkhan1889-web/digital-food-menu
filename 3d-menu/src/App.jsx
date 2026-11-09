@@ -74,6 +74,8 @@ import {
   syncSettingsToSupabase,
   getStoredTickets,
   recordMenuScan,
+  fetchLiveOrdersFromSupabase,
+  fetchLiveMenuScansFromSupabase,
   saveStoredTickets,
   syncTicketToSupabase,
   getStoredChatMessages,
@@ -330,12 +332,29 @@ export default function App() {
     });
   }, []);
 
-  // Record real menu scan when customer accesses the digital menu view
+  // Poll Supabase for live orders every 6 seconds so orders placed on mobile instantly sync across panels
+  useEffect(() => {
+    let isMounted = true;
+    const syncOrders = async () => {
+      const live = await fetchLiveOrdersFromSupabase('resto_001');
+      if (isMounted && live && live.length > 0) {
+        setOrdersList(live);
+        saveStoredOrders(live);
+      }
+    };
+    const interval = setInterval(syncOrders, 6000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Record real menu scan in Supabase menu_scans when customer accesses the digital menu view
   useEffect(() => {
     if (currentView === 'menu') {
-      recordMenuScan('resto_001');
+      recordMenuScan('resto_001', tableNumber || 'Table 04');
     }
-  }, [currentView]);
+  }, [currentView, tableNumber]);
 
   // Active Featured Sliders or fallback to foodsList for Digital Menu (declared early before any useEffect)
   const activeFeaturedSliders = useMemo(() => {
@@ -1257,6 +1276,7 @@ export default function App() {
       confirmedWithWaiter: true,
       customerConfirmed: true,
       customerConfirmedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
       created_at: new Date().toISOString(),
       date: 'Just now'
     };
@@ -1422,6 +1442,7 @@ export default function App() {
       confirmedWithWaiter: true,
       customerConfirmed: true,
       customerConfirmedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
       created_at: new Date().toISOString(),
       date: 'Just now'
     };

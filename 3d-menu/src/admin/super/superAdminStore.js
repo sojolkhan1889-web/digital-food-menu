@@ -1,5 +1,6 @@
 // Real Multi-Tenant Super Admin Data Store with Supabase Sync & Persistence
 import { supabase } from '../../lib/supabaseClient';
+import { isSameCalendarDay } from '../../data/menuStore';
 
 const SUPER_ADMIN_STORAGE_PREFIX = 'dgm_superadmin_live_v2_';
 
@@ -108,6 +109,25 @@ export const fetchLiveOrdersFromSupabase = async () => {
     console.warn('Supabase fetch orders caught:', err);
   }
   return [];
+};
+
+// 2.1 Fetch live menu scans across all restaurants from Supabase
+export const fetchLiveScansFromSupabase = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('menu_scans')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!error && Array.isArray(data)) {
+      const totalScans = data.length;
+      const todayScans = data.filter(s => isSameCalendarDay(s.scanned_at || s.created_at)).length;
+      return { totalScans, todayScans, rawScans: data };
+    }
+  } catch (err) {
+    console.warn('Supabase fetch scans caught:', err);
+  }
+  return { totalScans: 0, todayScans: 0, rawScans: [] };
 };
 
 // 3. Fetch live support tickets from Supabase

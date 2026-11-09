@@ -327,43 +327,107 @@ export const resetPlatformDues = (amount = 0) => {
   return amount;
 };
 
-// --- Live Menu Scans Tracking (Real Customer Engagement) ---
+export const parseDateTime = (input) => {
+  if (!input) return null;
+  if (input instanceof Date) return isNaN(input.getTime()) ? null : input;
+  try {
+    let d = new Date(input);
+    if (!isNaN(d.getTime())) return d;
+    if (typeof input === 'string') {
+      const fixed = input.replace(' ', 'T').replace(/\+00$/, 'Z').replace(/\+00:00$/, 'Z');
+      d = new Date(fixed);
+      if (!isNaN(d.getTime())) return d;
+    }
+  } catch {}
+  return null;
+};
+
+// --- Universal Date Comparison (Handles UTC, Local Timezones, and ISO vs Postgres strings) ---
+export const isSameCalendarDay = (dateInput) => {
+  const d = parseDateTime(dateInput);
+  if (!d) return false;
+  const now = new Date();
+  // 1. Same local calendar day (Browser / Venue timezone)
+  if (d.toDateString() === now.toDateString()) return true;
+  // 2. Same UTC calendar day
+  try {
+    if (d.toISOString().slice(0, 10) === now.toISOString().slice(0, 10)) return true;
+  } catch {}
+  // 3. Fallback: placed in the last 24 hours of today
+  const diffHours = (now.getTime() - d.getTime()) / (1000 * 60 * 60);
+  return diffHours >= 0 && diffHours < 24;
+};
+
+// --- Live Menu Scans Tracking (Real Cloud & Local Customer Engagement) ---
 const SCANS_STORAGE_KEY = 'dgm_menu_scans_data';
 
-export const recordMenuScan = (restaurantId = 'resto_001') => {
+export const recordMenuScan = async (restaurantId = 'resto_001', tableNumber = 'Table 04') => {
+  const now = new Date().toISOString();
+  // 1. Save locally for instant offline cache
   try {
     const key = `${SCANS_STORAGE_KEY}_${restaurantId}`;
     const raw = localStorage.getItem(key);
     let list = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(list)) list = [];
-    const now = new Date().toISOString();
     list.push(now);
     if (list.length > 500) list = list.slice(-500);
     localStorage.setItem(key, JSON.stringify(list));
-    return list.length;
+  } catch {}
+
+  // 2. Direct Sync to Supabase menu_scans table so scans count across ALL devices & panels
+  try {
+    const userAgent = typeof navigator !== 'undefined' ? (navigator.userAgent || '').slice(0, 120) : 'Web Client';
+    await supabase.from('menu_scans').insert([{
+      restaurant_id: restaurantId,
+      table_number: tableNumber,
+      device_info: userAgent,
+      scanned_at: now
+    }]);
+  } catch (err) {
+    console.warn('Could not sync scan to Supabase:', err);
+  }
+};
+
+export const fetchLiveMenuScansFromSupabase = async (restaurantId = null) => {
+  try {
+    let query = supabase.from('menu_scans').select('*').order('created_at', { ascending: false });
+    if (restaurantId) {
+      query = query.eq('restaurant_id', restaurantId);
+    }
+    const { data, error } = await safeQuery(query);
+    if (error || !Array.isArray(data)) {
+      return getMenuScans(restaurantId || 'resto_001');
+    }
+    const totalScans = data.length;
+    const todayScans = data.filter(s => isSameCalendarDay(s.scanned_at || s.created_at)).length;
+
+    // Cache latest counts
+    try {
+      localStorage.setItem(`dgm_live_scans_${restaurantId || 'all'}`, JSON.stringify({ totalScans, todayScans }));
+    } catch {}
+
+    return { totalScans, todayScans };
   } catch (e) {
-    return 1;
+    return getMenuScans(restaurantId || 'resto_001');
   }
 };
 
 export const getMenuScans = (restaurantId = 'resto_001', ordersCount = 0) => {
   try {
+    const cached = localStorage.getItem(`dgm_live_scans_${restaurantId}`);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (typeof parsed.totalScans === 'number') {
+        return parsed;
+      }
+    }
     const key = `${SCANS_STORAGE_KEY}_${restaurantId}`;
     const raw = localStorage.getItem(key);
     let list = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(list)) list = [];
 
-    // Real recorded scans + authentic multiplier based on real order interactions
-    const totalScans = Math.max(list.length, ordersCount * 2);
-
-    const todayStr = new Date().toDateString();
-    const todayList = list.filter(ts => {
-      try {
-        return new Date(ts).toDateString() === todayStr;
-      } catch {
-        return false;
-      }
-    });
+    const totalScans = Math.max(list.length, ordersCount > 0 ? ordersCount * 2 : 0);
+    const todayList = list.filter(ts => isSameCalendarDay(ts));
 
     return {
       totalScans,
@@ -392,14 +456,7 @@ export const getRestaurantFollowers = (restaurantId = 'resto_001', ordersList = 
     );
 
     const totalFollowers = Math.max(list.length, dinerSet.size);
-    const todayStr = new Date().toDateString();
-    const todayFollowers = list.filter(f => {
-      try {
-        return new Date(f.date || f).toDateString() === todayStr;
-      } catch {
-        return false;
-      }
-    }).length;
+    const todayFollowers = list.filter(f => isSameCalendarDay(f.date || f)).length;
 
     return {
       totalFollowers,
@@ -712,46 +769,89 @@ export const saveStoredOrders = (orders) => {
 
 export const addStoredOrder = (newOrder) => {
   try {
+    const nowIso = new Date().toISOString();
+    const normalized = {
+      ...newOrder,
+      createdAt: newOrder.createdAt || newOrder.created_at || nowIso,
+      created_at: newOrder.created_at || newOrder.createdAt || nowIso
+    };
     const existing = getStoredOrders();
-    const updated = [newOrder, ...existing];
+    const updated = [normalized, ...existing];
     saveStoredOrders(updated);
 
-    if (newOrder.paymentStatus === 'paid') {
+    if (normalized.paymentStatus === 'paid') {
       const existingPayments = getStoredPayments();
       const newPayment = {
         id: `pay_${Date.now()}`,
         transactionId: `TXN-${Math.floor(10000 + Math.random() * 90000)}-DGM`,
-        orderNumber: newOrder.orderNumber,
-        amount: newOrder.totalAmount,
-        paymentMethod: newOrder.paymentMethod,
+        orderNumber: normalized.orderNumber,
+        amount: normalized.totalAmount,
+        paymentMethod: normalized.paymentMethod,
         status: 'completed',
-        customer: `${newOrder.customerName || 'Customer'} (${newOrder.tableNumber})`,
+        customer: `${normalized.customerName || 'Customer'} (${normalized.tableNumber})`,
         date: 'Just now'
       };
       saveStoredPayments([newPayment, ...existingPayments]);
     }
 
-    // Async sync to Supabase
+    // Async sync to Supabase with created_at explicitly passed
     supabase.from('orders').insert([{
-      id: String(newOrder.id || `ord_${Date.now()}`),
-      restaurant_id: 'resto_001',
-      order_number: newOrder.orderNumber,
-      table_number: newOrder.tableNumber,
-      customer_name: newOrder.customerName || 'Customer',
-      dining_mode: newOrder.diningMode || 'dine-in',
-      items: newOrder.items,
-      subtotal: newOrder.subtotal,
-      vat: newOrder.vat,
-      service_fee: newOrder.serviceFee,
-      total_amount: newOrder.totalAmount,
-      payment_method: newOrder.paymentMethod,
-      payment_status: newOrder.paymentStatus,
-      order_status: newOrder.orderStatus
-    }]).then(() => {}).catch(() => {});
+      id: String(normalized.id || `ord_${Date.now()}`),
+      restaurant_id: normalized.restaurantId || 'resto_001',
+      order_number: normalized.orderNumber,
+      table_number: normalized.tableNumber,
+      customer_name: normalized.customerName || 'Customer',
+      customer_phone: normalized.customerPhone || '',
+      dining_mode: normalized.diningMode || 'dine-in',
+      items: normalized.items,
+      subtotal: normalized.subtotal,
+      vat: normalized.vat,
+      service_fee: normalized.serviceFee,
+      total_amount: normalized.totalAmount,
+      payment_method: normalized.paymentMethod,
+      payment_status: normalized.paymentStatus,
+      order_status: normalized.orderStatus,
+      created_at: normalized.created_at
+    }]).then(() => {}).catch(err => console.warn('Supabase order insert error:', err));
 
     return updated;
   } catch (e) {
     console.error('Error adding order:', e);
+    return getStoredOrders();
+  }
+};
+
+export const fetchLiveOrdersFromSupabase = async (restaurantId = 'resto_001') => {
+  try {
+    let query = supabase.from('orders').select('*').order('created_at', { ascending: false });
+    if (restaurantId) {
+      query = query.eq('restaurant_id', restaurantId);
+    }
+    const { data, error } = await safeQuery(query);
+    if (error || !Array.isArray(data)) {
+      return getStoredOrders();
+    }
+    const mapped = data.map(o => ({
+      id: String(o.id),
+      orderNumber: o.order_number || `DGM-${String(o.id).slice(-4)}`,
+      tableNumber: o.table_number || 'Table 01',
+      customerName: o.customer_name || 'Customer',
+      customerPhone: o.customer_phone || '',
+      diningMode: o.dining_mode || 'dine-in',
+      items: Array.isArray(o.items) ? o.items : [],
+      subtotal: Number(o.subtotal || 0),
+      vat: Number(o.vat || 0),
+      serviceFee: Number(o.service_fee || 0),
+      totalAmount: Number(o.total_amount || 0),
+      paymentMethod: o.payment_method || 'Cash',
+      paymentStatus: o.payment_status || 'unpaid',
+      orderStatus: o.order_status || 'confirmed',
+      createdAt: o.created_at || new Date().toISOString(),
+      created_at: o.created_at || new Date().toISOString()
+    }));
+    saveStoredOrders(mapped);
+    return mapped;
+  } catch (e) {
     return getStoredOrders();
   }
 };
