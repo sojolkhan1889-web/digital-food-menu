@@ -216,6 +216,18 @@ export default function App() {
   const [superAdminConfig, setSuperAdminConfig] = useState(getSuperAdminConfig);
   const [ordersList, setOrdersList] = useState(getStoredOrders);
   const [paymentsList, setPaymentsList] = useState(getStoredPayments);
+  const [tableNumber, setTableNumber] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const t = params.get('table') || params.get('tableNumber');
+        if (t) return decodeURIComponent(t);
+      } catch (e) {
+        // fallback
+      }
+    }
+    return 'Table 04';
+  });
   const currency = restaurantProfile?.currency || '$';
   const [isCarouselHovered, setIsCarouselHovered] = useState(false);
 
@@ -589,7 +601,6 @@ export default function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const [menuOfferIndex, setMenuOfferIndex] = useState(0);
-  const [tableNumber] = useState('Table 04');
   const [showScrollHint, setShowScrollHint] = useState(false);
   const [showDetailScrollHint, setShowDetailScrollHint] = useState(false);
   const [badgeMode, setBadgeMode] = useState('tag'); // 'tag' | 'rating'
