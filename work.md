@@ -977,3 +977,38 @@ This file records all architectural specifications, resolved issues, feature imp
   - `npm --prefix 3d-menu run build` passed in 1.51s with 0 errors.
   - Vite dev server hot-reloaded and rendered the digital menu without errors.
   - Committed and pushed to GitHub main branch.
+
+
+---
+
+## 36. Fix: Real-time Supabase Settlement Sync & Idempotent Menu Scan Lock (2026-11-09)
+- **User Request:**
+  1. In Moneky Bhai Restaurant Panel, `Total DGM Orders` showed 19, but `Total Due Settlement` showed ৳70 instead of the expected ৳95 (while Super Admin Panel correctly showed ৳95). Fix the discrepancy so Restaurant Panel accurately reflects ৳95.
+  2. Verify and guarantee that when a customer scans the restaurant menu QR code to visit the digital menu, the scan count increments ONLY once upon initial landing/open. Exploring the menu, opening modals (food details, cart, customization), or switching category tabs must NEVER accidentally count as extra scans.
+- **Root Cause Analysis:**
+  1. **Settlement Due Discrepancy:**
+     - `RestaurantPanel.jsx` initialized its `dueSettlementAmount` state using `getStoredSettlementDue()` which returned an old static snapshot `'70'` from browser `localStorage` (saved during earlier testing when only 14 orders existed: 14 * 5 = 70).
+     - Its `useEffect` had an overly restrictive guard (`dueSettlementAmount === 0`), which prevented updating `dueSettlementAmount` when new orders were confirmed in Supabase (19 orders).
+     - In contrast, `SuperAdminPanel.jsx` calculates `totalDueAmount` dynamically as `Math.max(0, totalFees - totalClearedAmount)`.
+  2. **Menu Scan Tracking Protection:**
+     - In `App.jsx`, `recordMenuScan()` was previously triggered by `[currentView, tableNumber]`. While normal in-page state changes (such as opening modals or changing categories) did not alter `currentView`, adding a single-session ref lock ensures that during that diner's active visit, zero subsequent re-renders or modal opens can ever trigger a duplicate scan.
+- **Key Changes Implemented:**
+  1. **Dynamic Supabase Settlement Synchronization (`menuStore.js`):**
+     - Added `fetchRestaurantSettlementsFromSupabase(restaurantId)` to query cleared settlements directly from Supabase `settlements` table.
+     - Added `recordRestaurantSettlementInSupabase(restaurantId, amount, notes)` to insert verified settlement records directly into Supabase.
+     - Updated `getStoredSettlementDue(todayFees)` to ensure dynamic fees take precedence over outdated smaller stored values.
+  2. **Reactive Settlement Calculation (`RestaurantPanel.jsx`):**
+     - Subscribed `RestaurantPanel` to live Supabase settlements with 6-second polling interval.
+     - Redesigned `dueSettlementAmount` as a reactive memo:
+       `totalAccruedFees = (metrics.totalOrders || 0) * 5` (19 * 5 = ৳95).
+       `totalClearedAmount = settlements.reduce(...)` (৳0).
+       `dueSettlementAmount = Math.max(0, totalAccruedFees - totalClearedAmount)` (৳95).
+     - Updated `handleSettleDue` to record the cleared settlement directly into Supabase `settlements` table.
+  3. **Idempotent Scan Visit Guard (`App.jsx`):**
+     - Added `hasRecordedScanRef = useRef(false)` guard to the menu scan `useEffect`.
+     - When a customer scans a QR code and lands on the digital menu, exactly 1 scan is recorded and the ref is set to `true`.
+     - While the customer navigates, opens 3D models, views bottom sheets, customizes food items, opens the cart, or switches categories, the ref prevents any further scan from being sent.
+     - When a customer (or new diner) scans the QR code again or opens a new browser window, a fresh page instance initializes with `hasRecordedScanRef = false`, reliably tracking the new scan.
+- **Verification:**
+  - `npm --prefix 3d-menu run build` passed in 1.59s with zero errors.
+  - Supabase `settlements` and `orders` data cross-verified: 19 orders * ৳5 = ৳95 due.

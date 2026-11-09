@@ -362,8 +362,12 @@ export default function App() {
   }, []);
 
   // Record real menu scan in Supabase menu_scans when customer accesses the digital menu view
+  // Uses ref lock so customer exploring food cards, opening modals, closing sheets or browsing never triggers extra scans
+  const hasRecordedScanRef = useRef(false);
+
   useEffect(() => {
-    if (currentView === 'menu') {
+    if (currentView === 'menu' && !hasRecordedScanRef.current) {
+      hasRecordedScanRef.current = true;
       recordMenuScan('resto_001', tableNumber || 'Table 04');
     }
   }, [currentView, tableNumber]);

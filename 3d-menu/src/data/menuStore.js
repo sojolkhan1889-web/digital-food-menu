@@ -298,7 +298,7 @@ export const getStoredSettlementDue = (todayFees = 0) => {
     const stored = localStorage.getItem(SETTLEMENT_KEY);
     if (stored !== null) {
       const num = Number(stored);
-      return isNaN(num) ? todayFees : num;
+      if (!isNaN(num) && num >= todayFees) return num;
     }
   } catch (e) {}
   return todayFees;
@@ -325,6 +325,62 @@ export const resetPlatformDues = (amount = 0) => {
     localStorage.setItem(SETTLEMENT_PAID_KEY, 'false');
   } catch (e) {}
   return amount;
+};
+
+// --- Fetch and Record Settlements via Supabase for Restaurants ---
+export const fetchRestaurantSettlementsFromSupabase = async (restaurantId = 'resto_001') => {
+  try {
+    const { data, error } = await supabase
+      .from('settlements')
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .order('cleared_at', { ascending: false });
+
+    if (!error && data) {
+      return data.map(s => ({
+        id: s.id,
+        restaurantId: s.restaurant_id,
+        amount: Number(s.amount || 0),
+        feePerBill: Number(s.fee_per_bill || 5.0),
+        ordersCount: Number(s.orders_count || 0),
+        paymentMethod: s.payment_method || 'bKash/Bank Transfer',
+        transactionRef: s.transaction_ref || '',
+        status: s.status || 'cleared',
+        periodStart: s.period_start,
+        periodEnd: s.period_end,
+        notes: s.notes || '',
+        clearedAt: s.cleared_at,
+        createdAt: s.created_at
+      }));
+    }
+  } catch (err) {
+    console.warn('Supabase fetch restaurant settlements caught:', err);
+  }
+  return [];
+};
+
+export const recordRestaurantSettlementInSupabase = async (restaurantId, amount, notes = '') => {
+  try {
+    const payload = {
+      id: `stl_${Date.now()}`,
+      restaurant_id: restaurantId,
+      amount: Number(amount || 0),
+      fee_per_bill: 5.0,
+      orders_count: Math.round(Number(amount || 0) / 5),
+      payment_method: 'Digital Payment / Settle Due',
+      transaction_ref: `TXN_${Date.now()}`,
+      status: 'cleared',
+      notes: notes || 'Settled from Restaurant Panel',
+      cleared_at: new Date().toISOString(),
+      created_at: new Date().toISOString()
+    };
+    const { error } = await supabase.from('settlements').insert([payload]);
+    if (error) console.warn('Supabase insert settlement error:', error);
+    return payload;
+  } catch (err) {
+    console.warn('Supabase record restaurant settlement caught:', err);
+    return null;
+  }
 };
 
 export const parseDateTime = (input) => {

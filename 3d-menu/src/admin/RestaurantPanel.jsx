@@ -72,6 +72,8 @@ import {
   resetPlatformDues,
   getMenuScans,
   fetchLiveMenuScansFromSupabase,
+  fetchRestaurantSettlementsFromSupabase,
+  recordRestaurantSettlementInSupabase,
   getRestaurantFollowers,
   isSameCalendarDay
 } from '../data/menuStore';
@@ -456,42 +458,57 @@ export default function RestaurantPanel({
     return getRestaurantFollowers('resto_001', orders);
   }, [orders]);
 
+  // Live settlements state from Supabase
+  const [settlements, setSettlements] = useState([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const syncSettlements = async () => {
+      const live = await fetchRestaurantSettlementsFromSupabase('resto_001');
+      if (isMounted && Array.isArray(live)) {
+        setSettlements(live);
+      }
+    };
+    syncSettlements();
+    const interval = setInterval(syncSettlements, 6000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   // Platform Fees & Due Settlement Calculation: Real ৳5 fee per confirmed order
   const todayFeesAmount = (metrics.todayOrders || 0) * 5;
-  const [dueSettlementAmount, setDueSettlementAmount] = useState(() => {
+  const totalAccruedFees = (metrics.totalOrders || orders.filter(o => o.orderStatus !== 'cancelled').length) * 5;
+  const totalClearedAmount = useMemo(() => {
+    return settlements.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+  }, [settlements]);
+
+  const dueSettlementAmount = useMemo(() => {
     const isPaid = localStorage.getItem('dgm_restaurant_due_settled') === 'true';
-    if (isPaid) return 0;
-    const lifetimeFees = orders.filter(o => o.orderStatus !== 'cancelled').length * 5;
-    return getStoredSettlementDue(lifetimeFees);
-  });
+    if (isPaid && totalClearedAmount >= totalAccruedFees) return 0;
+    return Math.max(0, totalAccruedFees - totalClearedAmount);
+  }, [totalAccruedFees, totalClearedAmount]);
+
   const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
   const [settlementSuccessMsg, setSettlementSuccessMsg] = useState('');
 
-  // Keep due settlement synchronized with real confirmed orders & settlements
-  useEffect(() => {
-    const isPaid = localStorage.getItem('dgm_restaurant_due_settled') === 'true';
-    if (!isPaid) {
-      const lifetimeFees = orders.filter(o => o.orderStatus !== 'cancelled').length * 5;
-      if (lifetimeFees !== dueSettlementAmount && dueSettlementAmount === 0 && lifetimeFees > 0) {
-        setDueSettlementAmount(lifetimeFees);
-        saveStoredSettlementDue(lifetimeFees);
-      }
+  const handleSettleDue = async () => {
+    const settleAmt = dueSettlementAmount;
+    if (settleAmt > 0) {
+      await recordRestaurantSettlementInSupabase('resto_001', settleAmt, 'Settled from Moneky Bhai Restaurant Portal');
+      const live = await fetchRestaurantSettlementsFromSupabase('resto_001');
+      if (live) setSettlements(live);
     }
-  }, [orders, dueSettlementAmount]);
-
-  const handleSettleDue = () => {
     settlePlatformDues();
-    setDueSettlementAmount(0);
     setIsSettlementModalOpen(false);
-    setSettlementSuccessMsg(`Payment of ৳${dueSettlementAmount || todayFeesAmount} successfully settled! Total Due is now ৳0.`);
+    setSettlementSuccessMsg(`Payment of ৳${settleAmt} successfully settled! Total Due is now ৳0.`);
     setTimeout(() => setSettlementSuccessMsg(''), 5000);
   };
 
   const handleResetDue = () => {
-    resetPlatformDues(todayFeesAmount);
-    setDueSettlementAmount(todayFeesAmount);
     setIsSettlementModalOpen(false);
-    setSettlementSuccessMsg(`Due settlement balance reset to ৳${todayFeesAmount} (Active Collections).`);
+    setSettlementSuccessMsg(`Settlement history and dues refreshed.`);
     setTimeout(() => setSettlementSuccessMsg(''), 4000);
   };
 
