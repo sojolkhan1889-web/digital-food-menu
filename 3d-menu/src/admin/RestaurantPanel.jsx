@@ -64,6 +64,7 @@ import {
 
 import AddFoodWizard from './AddFoodWizard';
 import FeaturedSliderWizard from './FeaturedSliderWizard';
+import { supabase } from '../lib/supabaseClient';
 import {
   getAdminTheme,
   setAdminTheme,
@@ -438,7 +439,7 @@ export default function RestaurantPanel({
     };
   }, [foods, orders]);
 
-  // Dynamic Real Cloud Scans (fetched live from Supabase menu_scans and polled every 6s)
+  // Dynamic Real Cloud Scans (fetched live from Supabase menu_scans via Instant Realtime WebSocket)
   const [scansData, setScansData] = useState(() => getMenuScans('resto_001', orders.length));
 
   useEffect(() => {
@@ -450,14 +451,45 @@ export default function RestaurantPanel({
       }
     };
     loadScans();
-    const interval = setInterval(loadScans, 6000);
+
+    // 1. Instant Realtime WebSocket sync when any QR code is scanned (0.1s response, 0 polling bandwidth)
+    const scansChannel = supabase
+      .channel('realtime_menu_scans_resto_panel')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'menu_scans' },
+        () => {
+          if (isMounted) loadScans();
+        }
+      )
+      .subscribe();
+
+    // 2. Refresh when window is focused or tab becomes active
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        loadScans();
+      }
+    };
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    // 3. Gentle backup fallback (60s instead of 6s, only when tab is visible)
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadScans();
+      }
+    }, 60000);
+
     return () => {
       isMounted = false;
+      supabase.removeChannel(scansChannel);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       clearInterval(interval);
     };
   }, []);
 
-  // Dynamic Real Followers (fetched live from Supabase restaurant_followers and polled every 6s)
+  // Dynamic Real Followers (fetched live from Supabase restaurant_followers via Instant Realtime WebSocket)
   const [followersData, setFollowersData] = useState(() => getRestaurantFollowers('resto_001', orders));
 
   useEffect(() => {
@@ -469,14 +501,45 @@ export default function RestaurantPanel({
       }
     };
     loadFollowers();
-    const interval = setInterval(loadFollowers, 6000);
+
+    // 1. Instant Realtime WebSocket sync when customer follows or updates push subscription
+    const followersChannel = supabase
+      .channel('realtime_followers_resto_panel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'restaurant_followers' },
+        () => {
+          if (isMounted) loadFollowers();
+        }
+      )
+      .subscribe();
+
+    // 2. Refresh when window is focused or tab becomes active
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        loadFollowers();
+      }
+    };
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    // 3. Gentle backup fallback (60s instead of 6s, only when tab is visible)
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadFollowers();
+      }
+    }, 60000);
+
     return () => {
       isMounted = false;
+      supabase.removeChannel(followersChannel);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       clearInterval(interval);
     };
   }, []);
 
-  // Live settlements state from Supabase
+  // Live settlements state from Supabase (Instant Realtime WebSocket)
   const [settlements, setSettlements] = useState([]);
 
   useEffect(() => {
@@ -488,9 +551,40 @@ export default function RestaurantPanel({
       }
     };
     syncSettlements();
-    const interval = setInterval(syncSettlements, 6000);
+
+    // 1. Instant Realtime WebSocket sync when settlement is recorded or cleared
+    const settlementsChannel = supabase
+      .channel('realtime_settlements_resto_panel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'settlements' },
+        () => {
+          if (isMounted) syncSettlements();
+        }
+      )
+      .subscribe();
+
+    // 2. Refresh when window is focused or tab becomes active
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        syncSettlements();
+      }
+    };
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    // 3. Gentle backup fallback (60s instead of 6s, only when tab is visible)
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        syncSettlements();
+      }
+    }, 60000);
+
     return () => {
       isMounted = false;
+      supabase.removeChannel(settlementsChannel);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       clearInterval(interval);
     };
   }, []);

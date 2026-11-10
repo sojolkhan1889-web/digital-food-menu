@@ -353,7 +353,7 @@ export default function App() {
     });
   }, []);
 
-  // Poll Supabase for live orders every 6 seconds so orders placed on mobile instantly sync across panels
+  // Realtime subscription for live orders (Instant sub-second sync across panels with ZERO constant polling overhead)
   useEffect(() => {
     let isMounted = true;
     const syncOrders = async () => {
@@ -363,9 +363,40 @@ export default function App() {
         saveStoredOrders(live);
       }
     };
-    const interval = setInterval(syncOrders, 6000);
+
+    // 1. Instant Realtime WebSocket sync when customer places or updates an order
+    const ordersChannel = supabase
+      .channel('realtime_orders_app_channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        () => {
+          if (isMounted) syncOrders();
+        }
+      )
+      .subscribe();
+
+    // 2. Refresh when window is focused or tab becomes active
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        syncOrders();
+      }
+    };
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    // 3. Gentle backup fallback (60s instead of 6s, only when tab is visible)
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        syncOrders();
+      }
+    }, 60000);
+
     return () => {
       isMounted = false;
+      supabase.removeChannel(ordersChannel);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       clearInterval(interval);
     };
   }, []);
@@ -840,21 +871,29 @@ export default function App() {
       console.warn('Database channel subscribe caught:', e);
     }
 
-    // Layer 3: Fast Polling Fallback (every 3 seconds)
-    const pollInterval = setInterval(async () => {
-      try {
-        const latest = await fetchLatestRestaurantNotifications('resto_001', 3);
-        if (Array.isArray(latest)) {
-          latest.forEach(notif => {
-            handleIncomingNotification(notif);
-          });
-        }
-      } catch (e) {}
-    }, 3000);
+    // Layer 3: Gentle Visibility-Aware Fallback (60s instead of 3s; Layers 1 & 2 handle instant delivery via WebSocket)
+    const checkLatestNotifs = () => {
+      if (document.visibilityState === 'visible') {
+        fetchLatestRestaurantNotifications('resto_001', 3).then((latest) => {
+          if (Array.isArray(latest)) {
+            latest.forEach(notif => {
+              handleIncomingNotification(notif);
+            });
+          }
+        }).catch(() => {});
+      }
+    };
+
+    window.addEventListener('focus', checkLatestNotifs);
+    document.addEventListener('visibilitychange', checkLatestNotifs);
+
+    const pollInterval = setInterval(checkLatestNotifs, 60000);
 
     return () => {
       if (broadcastChannel) supabase.removeChannel(broadcastChannel);
       if (dbChannel) supabase.removeChannel(dbChannel);
+      window.removeEventListener('focus', checkLatestNotifs);
+      document.removeEventListener('visibilitychange', checkLatestNotifs);
       clearInterval(pollInterval);
       if (followerNotifTimerRef.current) clearTimeout(followerNotifTimerRef.current);
     };

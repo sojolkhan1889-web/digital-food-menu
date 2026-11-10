@@ -398,20 +398,15 @@ export const parseDateTime = (input) => {
   return null;
 };
 
-// --- Universal Date Comparison (Handles UTC, Local Timezones, and ISO vs Postgres strings) ---
+// --- Universal Date Comparison (Strict Local Calendar Day from 00:00:00 to 23:59:59) ---
 export const isSameCalendarDay = (dateInput) => {
   const d = parseDateTime(dateInput);
   if (!d) return false;
   const now = new Date();
-  // 1. Same local calendar day (Browser / Venue timezone)
-  if (d.toDateString() === now.toDateString()) return true;
-  // 2. Same UTC calendar day
-  try {
-    if (d.toISOString().slice(0, 10) === now.toISOString().slice(0, 10)) return true;
-  } catch {}
-  // 3. Fallback: placed in the last 24 hours of today
-  const diffHours = (now.getTime() - d.getTime()) / (1000 * 60 * 60);
-  return diffHours >= 0 && diffHours < 24;
+  // Exact local calendar day comparison (Venue/Browser local timezone: same year, month, date)
+  return d.getFullYear() === now.getFullYear() &&
+         d.getMonth() === now.getMonth() &&
+         d.getDate() === now.getDate();
 };
 
 // --- Live Menu Scans Tracking (Real Cloud & Local Customer Engagement) ---
@@ -457,7 +452,7 @@ export const fetchLiveMenuScansFromSupabase = async (restaurantId = null) => {
     const totalScans = data.length;
     const todayScans = data.filter(s => isSameCalendarDay(s.scanned_at || s.created_at)).length;
 
-    // Cache latest counts
+    // Cache latest counts strictly matching true database state
     try {
       localStorage.setItem(`dgm_live_scans_${restaurantId || 'all'}`, JSON.stringify({ totalScans, todayScans }));
     } catch {}
@@ -482,7 +477,7 @@ export const getMenuScans = (restaurantId = 'resto_001', ordersCount = 0) => {
     let list = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(list)) list = [];
 
-    const totalScans = Math.max(list.length, ordersCount > 0 ? ordersCount * 2 : 0);
+    const totalScans = list.length;
     const todayList = list.filter(ts => isSameCalendarDay(ts));
 
     return {
@@ -490,7 +485,7 @@ export const getMenuScans = (restaurantId = 'resto_001', ordersCount = 0) => {
       todayScans: todayList.length
     };
   } catch (e) {
-    return { totalScans: ordersCount * 2, todayScans: 0 };
+    return { totalScans: 0, todayScans: 0 };
   }
 };
 

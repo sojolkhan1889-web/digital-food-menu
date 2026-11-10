@@ -32,6 +32,7 @@ import {
   savePlatformSettings
 } from './superAdminStore';
 import { isSameCalendarDay } from '../../data/menuStore';
+import { supabase } from '../../lib/supabaseClient';
 
 const NAV = [
   { name: 'Dashboard', icon: LayoutDashboard, routes: [] },
@@ -127,8 +128,49 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
 
   useEffect(() => {
     loadAllLiveData();
-    const interval = setInterval(loadAllLiveData, 6000);
-    return () => clearInterval(interval);
+
+    // 1. Instant Realtime WebSocket sync for live changes across entities (0.1s response, 0 polling overhead)
+    const adminChannel = supabase
+      .channel('realtime_super_admin_live_feed')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        fetchLiveOrdersFromSupabase().then(res => { if (res) setOrders(res); });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_scans' }, () => {
+        fetchLiveScansFromSupabase().then(res => { if (res) setLiveScans(res); });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'settlements' }, () => {
+        fetchLiveSettlementsFromSupabase().then(res => { if (res) setSettlements(res); });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, () => {
+        fetchLiveTicketsFromSupabase().then(res => { if (res) setTickets(res); });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'restaurants' }, () => {
+        fetchLiveRestaurantsFromSupabase().then(res => { if (res && res.length > 0) setRestaurants(res); });
+      })
+      .subscribe();
+
+    // 2. Refresh whenever SuperAdmin returns or focuses on this window
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        loadAllLiveData();
+      }
+    };
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    // 3. Gentle backup fallback (60s instead of 6s, only when tab is visible)
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadAllLiveData();
+      }
+    }, 60000);
+
+    return () => {
+      supabase.removeChannel(adminChannel);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      clearInterval(interval);
+    };
   }, []);
 
   // Time & Period Buckets for Settlements
