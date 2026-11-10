@@ -497,6 +497,19 @@ export const getMenuScans = (restaurantId = 'resto_001', ordersCount = 0) => {
 // --- Real Restaurant Followers & Loyal Diners ---
 const FOLLOWERS_STORAGE_KEY = 'dgm_followers_data';
 
+export const VAPID_PUBLIC_KEY = 'BLeOyg044EnEgMYHv1QmYzYQw3EybOMt2aehrhmSKm0ATCSUceZHUDN4LifSVnZ_8hOwHelLzQJ3G3GjcPJ3x80';
+
+export function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 export const isCustomerFollowingRestaurant = (restaurantId = 'resto_001') => {
   try {
     if (typeof window === 'undefined') return false;
@@ -504,6 +517,81 @@ export const isCustomerFollowingRestaurant = (restaurantId = 'resto_001') => {
   } catch (e) {
     return false;
   }
+};
+
+export const ensurePushSubscriptionSync = async (restaurantId = 'resto_001') => {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    return null;
+  }
+  if (Notification.permission !== 'granted') return null;
+
+  try {
+    let reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) {
+      reg = await navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' });
+    }
+    if (!reg.active) {
+      await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise(res => setTimeout(res, 2500))
+      ]);
+      reg = (await navigator.serviceWorker.getRegistration()) || reg;
+    }
+
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+
+    if (sub) {
+      const subJson = sub.toJSON ? sub.toJSON() : JSON.parse(JSON.stringify(sub));
+      let customerId = localStorage.getItem('dgm_customer_device_id') || '';
+      if (!customerId) {
+        customerId = `cust_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+        localStorage.setItem('dgm_customer_device_id', customerId);
+      }
+      localStorage.setItem(`dgm_following_${restaurantId}`, 'true');
+
+      const userAgent = typeof navigator !== 'undefined' ? (navigator.userAgent || '').slice(0, 150) : '';
+
+      // Check if existing follower row exists in Supabase
+      const { data: existingRows } = await supabase
+        .from('restaurant_followers')
+        .select('id')
+        .eq('customer_id', customerId)
+        .eq('restaurant_id', restaurantId);
+
+      if (existingRows && existingRows.length > 0) {
+        await supabase
+          .from('restaurant_followers')
+          .update({
+            subscription: subJson,
+            notification_status: 'granted',
+            device_info: userAgent
+          })
+          .eq('customer_id', customerId)
+          .eq('restaurant_id', restaurantId);
+      } else {
+        await supabase.from('restaurant_followers').insert([{
+          id: `flw_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+          restaurant_id: restaurantId,
+          customer_id: customerId,
+          device_info: userAgent,
+          notification_status: 'granted',
+          subscription: subJson,
+          followed_at: new Date().toISOString(),
+          created_at: new Date().toISOString()
+        }]);
+      }
+      return subJson;
+    }
+  } catch (e) {
+    console.warn('ensurePushSubscriptionSync warning:', e);
+  }
+  return null;
 };
 
 export const recordRestaurantFollow = async (restaurantId = 'resto_001') => {
@@ -530,8 +618,10 @@ export const recordRestaurantFollow = async (restaurantId = 'resto_001') => {
     console.warn('Local follow save warning:', e);
   }
 
-  // Request browser Notification permission
+  // Request browser Notification permission & Web Push Subscription (For closed browser / locked screen push)
   let notifStatus = 'default';
+  let pushSubscription = null;
+
   if (typeof window !== 'undefined' && 'Notification' in window) {
     try {
       if (Notification.permission === 'default') {
@@ -539,28 +629,78 @@ export const recordRestaurantFollow = async (restaurantId = 'resto_001') => {
       } else {
         notifStatus = Notification.permission;
       }
+
+      // If granted, obtain PushManager subscription for Android/FCM background notifications
+      if (notifStatus === 'granted' && 'serviceWorker' in navigator && 'PushManager' in window) {
+        try {
+          let reg = await navigator.serviceWorker.getRegistration();
+          if (!reg) {
+            reg = await navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' });
+          }
+          if (!reg.active) {
+            await Promise.race([
+              navigator.serviceWorker.ready,
+              new Promise(res => setTimeout(res, 2500))
+            ]);
+            reg = (await navigator.serviceWorker.getRegistration()) || reg;
+          }
+
+          let sub = await reg.pushManager.getSubscription();
+          if (!sub) {
+            sub = await reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+            });
+          }
+          if (sub) {
+            pushSubscription = sub.toJSON ? sub.toJSON() : JSON.parse(JSON.stringify(sub));
+          }
+        } catch (subErr) {
+          console.warn('PushManager subscribe caught:', subErr);
+        }
+      }
     } catch (err) {
       console.warn('Notification permission caught:', err);
     }
   }
 
-  // Sync to Supabase restaurant_followers table
+  // Sync to Supabase restaurant_followers table with push subscription
   try {
     const userAgent = typeof navigator !== 'undefined' ? (navigator.userAgent || '').slice(0, 150) : '';
-    await supabase.from('restaurant_followers').insert([{
-      id: `flw_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-      restaurant_id: restaurantId,
-      customer_id: customerId,
-      device_info: userAgent,
-      notification_status: notifStatus,
-      followed_at: now,
-      created_at: now
-    }]);
+    const { data: existingRows } = await supabase
+      .from('restaurant_followers')
+      .select('id')
+      .eq('customer_id', customerId)
+      .eq('restaurant_id', restaurantId);
+
+    if (existingRows && existingRows.length > 0) {
+      await supabase
+        .from('restaurant_followers')
+        .update({
+          device_info: userAgent,
+          notification_status: notifStatus,
+          subscription: pushSubscription,
+          followed_at: now
+        })
+        .eq('customer_id', customerId)
+        .eq('restaurant_id', restaurantId);
+    } else {
+      await supabase.from('restaurant_followers').insert([{
+        id: `flw_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+        restaurant_id: restaurantId,
+        customer_id: customerId,
+        device_info: userAgent,
+        notification_status: notifStatus,
+        subscription: pushSubscription,
+        followed_at: now,
+        created_at: now
+      }]);
+    }
   } catch (err) {
     console.warn('Supabase follower sync caught:', err);
   }
 
-  return { customerId, notifStatus };
+  return { customerId, notifStatus, pushSubscription };
 };
 
 export const fetchLiveFollowersFromSupabase = async (restaurantId = 'resto_001') => {
@@ -650,7 +790,38 @@ export const broadcastRestaurantNotification = async (restaurantId = 'resto_001'
     console.warn('Realtime broadcast error:', err);
   }
 
-  // 3. Save locally for instant cache
+  // 3. Dispatch real OS background Web Push via Supabase Edge Function (Wakes up phones when Chrome is closed / screen is locked)
+  try {
+    let safeImage = payload.image;
+    if (typeof safeImage === 'string' && (safeImage.startsWith('data:') || safeImage.length > 500)) {
+      safeImage = undefined;
+    }
+    let safeIcon = payload.icon;
+    if (typeof safeIcon === 'string' && (safeIcon.startsWith('data:') || safeIcon.length > 500)) {
+      safeIcon = '/monkey_bhai_logo.png';
+    }
+
+    fetch('https://rsbwehchoovcmaclssuh.supabase.co/functions/v1/send-web-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        restaurant_id: restaurantId,
+        title: payload.title,
+        body: payload.body,
+        icon: safeIcon,
+        image: safeImage,
+        url: payload.url,
+        sliderId: payload.slider_id,
+        foodId: notificationData.foodId || ''
+      })
+    }).catch(edgeErr => {
+      console.warn('send-web-push Edge Function dispatch caught:', edgeErr);
+    });
+  } catch (err) {
+    console.warn('Edge Function invoke catch:', err);
+  }
+
+  // 4. Save locally for instant cache
   try {
     const key = `dgm_notifications_${restaurantId}`;
     const raw = localStorage.getItem(key);

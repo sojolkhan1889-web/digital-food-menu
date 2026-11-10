@@ -8,7 +8,7 @@ import ErrorBoundary from './ErrorBoundary.jsx'
 // Register Service Worker for Mobile & Desktop Web Notifications
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   const registerSW = () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+    navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' })
       .then((reg) => {
         reg.update().catch(() => {});
       })

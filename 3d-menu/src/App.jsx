@@ -86,6 +86,7 @@ import {
   saveSuperAdminConfig,
   isCustomerFollowingRestaurant,
   recordRestaurantFollow,
+  ensurePushSubscriptionSync,
   broadcastRestaurantNotification,
   fetchLatestRestaurantNotifications,
   showBrowserNotification,
@@ -683,6 +684,17 @@ export default function App() {
       if (followBannerTimerRef.current) clearTimeout(followBannerTimerRef.current);
     };
   }, []);
+
+  // Automatically sync Web Push subscription with Supabase for active followers
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isFollower = isCustomerFollowingRestaurant('resto_001');
+      const hasPermission = typeof Notification !== 'undefined' && Notification.permission === 'granted';
+      if (isFollower || hasPermission) {
+        ensurePushSubscriptionSync('resto_001').catch(() => {});
+      }
+    }
+  }, [isFollowing]);
 
   // Live Follower Notification Banner State (For Customer 3D Menu)
   const [followerNotification, setFollowerNotification] = useState(null);
