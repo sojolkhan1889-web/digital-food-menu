@@ -514,6 +514,36 @@ export const isCustomerFollowingRestaurant = (restaurantId = 'resto_001') => {
   }
 };
 
+export const syncCustomerFollowStatusFromSupabase = async (restaurantId = 'resto_001') => {
+  if (typeof window === 'undefined') return false;
+  try {
+    const customerId = localStorage.getItem('dgm_customer_device_id') || '';
+    if (!customerId) {
+      return isCustomerFollowingRestaurant(restaurantId);
+    }
+
+    const { data, error } = await supabase
+      .from('restaurant_followers')
+      .select('id')
+      .eq('customer_id', customerId)
+      .eq('restaurant_id', restaurantId)
+      .limit(1);
+
+    if (!error && Array.isArray(data)) {
+      const dbFollowed = data.length > 0;
+      if (dbFollowed) {
+        localStorage.setItem(`dgm_following_${restaurantId}`, 'true');
+      } else {
+        localStorage.removeItem(`dgm_following_${restaurantId}`);
+      }
+      return dbFollowed;
+    }
+  } catch (err) {
+    console.warn('Supabase follow status sync warning:', err);
+  }
+  return isCustomerFollowingRestaurant(restaurantId);
+};
+
 export const ensurePushSubscriptionSync = async (restaurantId = 'resto_001') => {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
     return null;
@@ -598,19 +628,9 @@ export const recordRestaurantFollow = async (restaurantId = 'resto_001') => {
       customerId = `cust_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
       localStorage.setItem('dgm_customer_device_id', customerId);
     }
-    localStorage.setItem(`dgm_following_${restaurantId}`, 'true');
-
-    // Update local cache
-    const key = `${FOLLOWERS_STORAGE_KEY}_${restaurantId}`;
-    const raw = localStorage.getItem(key);
-    let list = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(list)) list = [];
-    if (!list.some(f => (typeof f === 'object' && f.customerId === customerId))) {
-      list.push({ customerId, date: now, followed_at: now });
-      localStorage.setItem(key, JSON.stringify(list));
-    }
   } catch (e) {
-    console.warn('Local follow save warning:', e);
+    console.warn('Customer device id init warning:', e);
+    customerId = `cust_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
   }
 
   // Request browser Notification permission & Web Push Subscription (For closed browser / locked screen push)
@@ -660,39 +680,62 @@ export const recordRestaurantFollow = async (restaurantId = 'resto_001') => {
   }
 
   // Sync to Supabase restaurant_followers table with push subscription
-  try {
-    const userAgent = typeof navigator !== 'undefined' ? (navigator.userAgent || '').slice(0, 150) : '';
-    const { data: existingRows } = await supabase
-      .from('restaurant_followers')
-      .select('id')
-      .eq('customer_id', customerId)
-      .eq('restaurant_id', restaurantId);
+  const userAgent = typeof navigator !== 'undefined' ? (navigator.userAgent || '').slice(0, 150) : '';
+  const { data: existingRows, error: queryError } = await supabase
+    .from('restaurant_followers')
+    .select('id')
+    .eq('customer_id', customerId)
+    .eq('restaurant_id', restaurantId);
 
-    if (existingRows && existingRows.length > 0) {
-      await supabase
-        .from('restaurant_followers')
-        .update({
-          device_info: userAgent,
-          notification_status: notifStatus,
-          subscription: pushSubscription,
-          followed_at: now
-        })
-        .eq('customer_id', customerId)
-        .eq('restaurant_id', restaurantId);
-    } else {
-      await supabase.from('restaurant_followers').insert([{
-        id: `flw_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-        restaurant_id: restaurantId,
-        customer_id: customerId,
+  if (queryError) {
+    throw queryError;
+  }
+
+  if (existingRows && existingRows.length > 0) {
+    const { error: updateError } = await supabase
+      .from('restaurant_followers')
+      .update({
         device_info: userAgent,
         notification_status: notifStatus,
         subscription: pushSubscription,
-        followed_at: now,
-        created_at: now
-      }]);
+        followed_at: now
+      })
+      .eq('customer_id', customerId)
+      .eq('restaurant_id', restaurantId);
+
+    if (updateError) {
+      throw updateError;
     }
-  } catch (err) {
-    console.warn('Supabase follower sync caught:', err);
+  } else {
+    const { error: insertError } = await supabase.from('restaurant_followers').insert([{
+      id: `flw_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      restaurant_id: restaurantId,
+      customer_id: customerId,
+      device_info: userAgent,
+      notification_status: notifStatus,
+      subscription: pushSubscription,
+      followed_at: now,
+      created_at: now
+    }]);
+
+    if (insertError) {
+      throw insertError;
+    }
+  }
+
+  // Persist local cache only after database save succeeds
+  try {
+    localStorage.setItem(`dgm_following_${restaurantId}`, 'true');
+    const key = `${FOLLOWERS_STORAGE_KEY}_${restaurantId}`;
+    const raw = localStorage.getItem(key);
+    let list = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) list = [];
+    if (!list.some(f => (typeof f === 'object' && f.customerId === customerId))) {
+      list.push({ customerId, date: now, followed_at: now });
+      localStorage.setItem(key, JSON.stringify(list));
+    }
+  } catch (e) {
+    console.warn('Local follow save warning:', e);
   }
 
   return { customerId, notifStatus, pushSubscription };

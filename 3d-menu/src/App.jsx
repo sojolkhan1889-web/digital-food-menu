@@ -16,7 +16,6 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
-  Menu as MenuIcon,
   X,
   ChevronUp,
   ChevronDown,
@@ -86,6 +85,7 @@ import {
   getSuperAdminConfig,
   saveSuperAdminConfig,
   isCustomerFollowingRestaurant,
+  syncCustomerFollowStatusFromSupabase,
   recordRestaurantFollow,
   ensurePushSubscriptionSync,
   broadcastRestaurantNotification,
@@ -94,6 +94,7 @@ import {
   fetchLiveFollowersFromSupabase
 } from './data/menuStore';
 import { supabase } from './lib/supabaseClient';
+import RestaurantHeader from './components/RestaurantHeader';
 
 const categories = [
   { name: 'All', icon: Utensils },
@@ -698,9 +699,24 @@ export default function App() {
   const [isFadingOutFollowBanner, setIsFadingOutFollowBanner] = useState(false);
   const followBannerTimerRef = useRef(null);
 
+  // Sync customer following status from Supabase DB on initial load/refresh
+  useEffect(() => {
+    let isMounted = true;
+    syncCustomerFollowStatusFromSupabase('resto_001').then((dbFollowed) => {
+      if (!isMounted) return;
+      setIsFollowing(dbFollowed);
+      if (dbFollowed) {
+        setIsFollowBannerVisible(false);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleFollowRestaurant = async () => {
-    setIsFollowing(true);
     await recordRestaurantFollow('resto_001');
+    setIsFollowing(true);
 
     // 8 seconds after following, the follow banner disappears
     if (followBannerTimerRef.current) clearTimeout(followBannerTimerRef.current);
@@ -2258,115 +2274,22 @@ export default function App() {
       </div>
 
       {/* ======================================================== */}
-      {/* 2. TOP APP HEADER (Matches reference media_1794461969150_4ed7c254.jpg) */}
+      {/* 2. TOP APP HEADER (RestaurantHeader Component)           */}
       {/* ======================================================== */}
-      <header className="relative z-40 w-full max-w-xl mx-auto px-2.5 sm:px-4 pt-3 sm:pt-3.5 shrink-0">
-        <div className="relative rounded-[22px] sm:rounded-[24px] bg-[#0B0F19]/95 backdrop-blur-xl border border-slate-800/80 shadow-[0_8px_30px_rgba(0,0,0,0.6)] pl-2.5 pr-2.5 sm:pl-4 sm:pr-3.5 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-3 overflow-hidden">
-
-          {/* Faint Decorative Culinary Watermark in Center-Right Background */}
-          <div className="absolute right-24 sm:right-32 top-1/2 -translate-y-1/2 pointer-events-none opacity-[0.04] flex items-center gap-2 select-none">
-            {/* Leaf Motif */}
-            <svg className="w-8 h-8 text-white -rotate-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
-              <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
-            </svg>
-            {/* Crossed Fork & Spoon Motif */}
-            <svg className="w-12 h-12 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M6 3c-1.66 0-3 1.34-3 3 0 2 2 3.5 3 4.5l8.5 8.5a2.12 2.12 0 1 0 3-3L9 7.5C8 6.5 7.66 3 6 3Z" />
-              <path d="m15 3 1.5 1.5M17.5 5.5 19 7M21 3l-6 6c-.5.5-1 1.5-.5 2.5l5.5 5.5a2.12 2.12 0 1 0 3-3L17.5 8.5c1 .5 2 0 2.5-.5L21 3Z" />
-            </svg>
-          </div>
-
-          {/* Brand Unit: Logo + Clean Gap + Typography */}
-          <div className="flex items-center gap-2 min-[390px]:gap-2.5 sm:gap-3 z-10 min-w-0 flex-1">
-            {/* Logo Badge */}
-            <button
-              onClick={navigateToAdmin}
-              title="Open Restaurant Panel"
-              className={`w-[52px] h-[52px] min-[390px]:w-[56px] min-[390px]:h-[56px] sm:w-[64px] sm:h-[64px] rounded-[14px] sm:rounded-2xl flex items-center justify-center p-0 transition-all cursor-pointer overflow-hidden shrink-0 group active:scale-95 ${
-                restaurantProfile?.logo 
-                  ? 'bg-white hover:bg-white/95 border-2 border-amber-500/85 shadow-[0_0_15px_rgba(245,158,11,0.25),0_4px_16px_rgba(0,0,0,0.5)]' 
-                  : 'bg-gradient-to-br from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 border-2 border-orange-400/50 text-white shadow-[0_0_15px_rgba(249,115,22,0.35),0_4px_16px_rgba(0,0,0,0.5)]'
-              }`}
-            >
-              {restaurantProfile?.logo ? (
-                <img
-                  src={restaurantProfile.logo}
-                  alt={restaurantProfile.name || 'Restaurant Logo'}
-                  className="w-full h-full object-contain scale-125 select-none transition-transform duration-300 group-hover:scale-135 filter contrast-[1.05] brightness-[1.02]"
-                />
-              ) : (
-                <Utensils className="w-7 h-7 sm:w-8 sm:h-8 text-white drop-shadow-md" />
-              )}
-            </button>
-
-            {/* Brand Typography (Compact, balanced vertical spacing) */}
-            <div className="min-w-0 flex-1 flex flex-col justify-center">
-              {/* Top: 24 DIGITAL with pulsating green dot */}
-              <div className="flex items-center gap-1.5 mb-0">
-                <span className="text-[9.5px] sm:text-[11px] font-black uppercase tracking-wider text-slate-200">
-                  24 DIGITAL
-                </span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              </div>
-
-              {/* Middle: Signature Restaurant Name in White Script Font with Quick Follow Button / Small Amber Tick Badge */}
-              <div className="flex items-center gap-1 min-[390px]:gap-1.5 sm:gap-2 min-w-0">
-                <h1
-                  className="text-white text-[18.5px] min-[375px]:text-[21px] min-[400px]:text-[23px] sm:text-[26px] leading-[1.15] pb-0.5 pr-1 select-none font-normal filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] whitespace-nowrap truncate"
-                  style={{ fontFamily: "'Kaushan Script', 'Caveat', cursive, serif" }}
-                >
-                  {restaurantProfile?.name || 'Moneky Bhai'}
-                </h1>
-
-                {/* Quick Follow Button or Crisp Small Verified Followed Tick Badge */}
-                {isFollowing ? (
-                  <div
-                    className="w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full bg-[#F59E0B] flex items-center justify-center shadow-[0_0_8px_rgba(245,158,11,0.45)] shrink-0 animate-in fade-in zoom-in duration-300"
-                    title="You are following this restaurant"
-                  >
-                    <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#0B0F19] stroke-[3.2]" />
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleFollowRestaurant();
-                    }}
-                    className="px-1.5 min-[375px]:px-2 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500 active:scale-95 border border-amber-500/60 hover:border-amber-400 text-amber-400 hover:text-black font-bold text-[9.5px] min-[375px]:text-[10px] sm:text-[10.5px] tracking-normal transition-all duration-200 cursor-pointer flex items-center gap-0.5 shrink-0 shadow-[0_0_8px_rgba(245,158,11,0.2)]"
-                    title="Follow this restaurant"
-                  >
-                    <Plus className="w-2.5 h-2.5 stroke-[3]" />
-                    <span>Follow</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Bottom: Welcome, Our Dear Guest (Guaranteed single line on all phone & responsive screens) */}
-              <p className="text-[10.5px] sm:text-xs text-slate-300 font-medium tracking-normal mt-0 whitespace-nowrap">
-                Welcome, Our Dear Guest
-              </p>
-            </div>
-          </div>
-
-          {/* Right Action: Pill MENU Button (& Optional Cart) */}
-          <div className="flex items-center gap-2 z-10 shrink-0">
-            {/* Menu Trigger - Amber Rounded Pill matching exact screenshot */}
-            <button
-              onClick={() => setIsMenuOpen(true)}
-              className="px-2.5 min-[390px]:px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full bg-[#120E09]/95 hover:bg-[#22180E] active:scale-95 border-2 border-[#F59E0B] shadow-[0_0_15px_rgba(245,158,11,0.22)] transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0"
-              aria-label="Open Food Menu"
-            >
-              <MenuIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F59E0B] stroke-[2.5]" />
-              <span className="text-[11px] sm:text-[13px] font-extrabold tracking-wider uppercase text-white">
-                MENU
-              </span>
-            </button>
-
-            {/* Shopping Cart Trigger (Premium Feature: only visible when enabled from Master Admin) */}
-            {adminConfig.premiumFeatures.enableCartPage && (
+      <div className="relative z-40 w-full max-w-xl mx-auto px-3 sm:px-4 pt-3 sm:pt-3.5 shrink-0">
+        <RestaurantHeader
+          name={restaurantProfile?.name || 'Moneky Bhai'}
+          logoUrl={restaurantProfile?.logo || null}
+          brand="24 DIGITAL"
+          welcomeText="Welcome, Our Dear Guest"
+          isFollowing={isFollowing}
+          onFollow={handleFollowRestaurant}
+          onMenuClick={() => setIsMenuOpen(true)}
+          onLogoClick={navigateToAdmin}
+          rightExtra={
+            adminConfig.premiumFeatures.enableCartPage ? (
               <button
+                type="button"
                 onClick={() => setIsCartOpen(true)}
                 className="relative p-2.5 rounded-full bg-[#120E09]/95 hover:bg-[#22180E] active:scale-95 border-2 border-slate-700/80 hover:border-[#F59E0B] text-white transition-all cursor-pointer shadow-md"
                 aria-label="View Order Cart"
@@ -2378,10 +2301,10 @@ export default function App() {
                   </span>
                 )}
               </button>
-            )}
-          </div>
-        </div>
-      </header>
+            ) : null
+          }
+        />
+      </div>
 
       {/* ======================================================== */}
       {/* 3. 3D AR FLOATING & AUTO-ROTATING FOOD STAGE             */}
@@ -3361,23 +3284,13 @@ export default function App() {
                   <h3 className="text-white font-black text-xl sm:text-2xl tracking-tight leading-tight">
                     Menu & Specials
                   </h3>
-                  {isFollowing ? (
+                  {isFollowing && (
                     <div 
                       className="w-5 h-5 sm:w-5.5 sm:h-5.5 rounded-full bg-amber-500 flex items-center justify-center shadow-[0_0_12px_rgba(245,158,11,0.7)] shrink-0 animate-in fade-in zoom-in duration-300"
                       title="You are following this restaurant"
                     >
                       <Check className="w-3.5 h-3.5 text-black stroke-[3.5]" />
                     </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleFollowRestaurant}
-                      className="px-2.5 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500 active:scale-95 border border-amber-500/60 hover:border-amber-400 text-amber-400 hover:text-black font-extrabold text-[10px] tracking-wider uppercase transition-all duration-200 cursor-pointer flex items-center gap-1 shrink-0 shadow-[0_0_8px_rgba(245,158,11,0.2)]"
-                      title="Follow this restaurant"
-                    >
-                      <Plus className="w-2.5 h-2.5 stroke-[3]" />
-                      <span>Follow</span>
-                    </button>
                   )}
                 </div>
               </div>
