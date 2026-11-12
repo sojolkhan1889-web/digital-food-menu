@@ -29,6 +29,7 @@ import {
   Star,
   ShieldCheck,
   RotateCcw,
+  RefreshCw,
   Receipt,
   ArrowLeft,
   Bell
@@ -677,9 +678,11 @@ export default function App() {
   const [menuOfferIndex, setMenuOfferIndex] = useState(0);
   const [showScrollHint, setShowScrollHint] = useState(false);
   const [showDetailScrollHint, setShowDetailScrollHint] = useState(false);
+  const [showSelectedListScrollHint, setShowSelectedListScrollHint] = useState(false);
   const [badgeMode, setBadgeMode] = useState('tag'); // 'tag' | 'rating'
   const menuScrollContainerRef = useRef(null);
   const detailScrollContainerRef = useRef(null);
+  const selectedListScrollContainerRef = useRef(null);
 
   // Dynamic Badge Toggle: Swaps between Tag ('Best Selling') and Rating every 8 seconds
   useEffect(() => {
@@ -1141,6 +1144,32 @@ export default function App() {
     };
   }, [isDetailSheetOpen]);
 
+  // Periodic subtle popup scroll indicator for Selected Food Items Modal (shows initially after 1s then every 8s if scrollable)
+  useEffect(() => {
+    if (!isSelectedListOpen) {
+      setShowSelectedListScrollHint(false);
+      return;
+    }
+
+    const checkAndShow = () => {
+      if (selectedListScrollContainerRef.current) {
+        const { scrollTop, scrollHeight, clientHeight } = selectedListScrollContainerRef.current;
+        if (scrollHeight - scrollTop - clientHeight > 35) {
+          setShowSelectedListScrollHint(true);
+          setTimeout(() => setShowSelectedListScrollHint(false), 3500);
+        }
+      }
+    };
+
+    const initialTimer = setTimeout(checkAndShow, 1000);
+    const interval = setInterval(checkAndShow, 8000);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, [isSelectedListOpen, selectedList.length]);
+
   // Reset 3D transformation and calculate adaptive aspect-ratio zoom when switching food item
   useEffect(() => {
     setRotX(0);
@@ -1496,8 +1525,23 @@ export default function App() {
   const selectedListGrandTotal = Math.round(Math.max(0, selectedListSubtotal + selectedListVat + selectedListServiceFee));
   const selectedListCount = selectedList.reduce((sum, item) => sum + (item.quantity || 1), 0);
 
-  // Add customized food item to selected list from Food Details modal
+  const isItemMatchWithFood = (item, food) => {
+    if (!item || !food) return false;
+    if (item.foodId && food.id && String(item.foodId) === String(food.id)) return true;
+    if (item.title && food.title && String(item.title).trim().toLowerCase() === String(food.title).trim().toLowerCase()) return true;
+    return false;
+  };
+
+  const existingSelectedListItem = useMemo(() => {
+    if (!activeFood) return null;
+    return selectedList.find(item => isItemMatchWithFood(item, activeFood)) || null;
+  }, [selectedList, activeFood?.id, activeFood?.title]);
+  const isItemAlreadyInList = Boolean(existingSelectedListItem);
+
+  // Add or update customized food item in selected list from Food Details modal
   const handleAddToListFromDetail = () => {
+    if (!activeFood) return;
+
     if (hasCustomPortions && selectedPortions.length === 0) {
       setAddToListToast('Please select at least one portion size!');
       setTimeout(() => setAddToListToast(null), 3000);
@@ -1544,10 +1588,37 @@ export default function App() {
       addedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    setSelectedList(prev => [...prev, newItem]);
+    let wasUpdated = false;
+    setSelectedList(prev => {
+      const exists = prev.some(item => isItemMatchWithFood(item, activeFood));
+      if (exists) {
+        wasUpdated = true;
+        return prev.map(item => {
+          if (!isItemMatchWithFood(item, activeFood)) return item;
+          return {
+            ...item,
+            foodId: activeFood.id || item.foodId,
+            title: activeFood.title,
+            image: activeFood.image,
+            isPng: activeFood.isPng,
+            tag: activeFood.tag,
+            category: activeFood.category,
+            portion: portionSummaryText,
+            portions: portionsToAdd,
+            addons: selectedAddons.map(a => ({ ...a, quantity: a.quantity || 1 })),
+            unitPrice: currentItemTotalPrice,
+            quantity: item.quantity || 1,
+            totalPrice: currentItemTotalPrice,
+            addedAt: item.addedAt || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+        });
+      }
+      return [...prev, newItem];
+    });
+
     setIsDetailSheetOpen(false);
 
-    // Cancel any pending auto confirm popup timer since item was added to list
+    // Cancel any pending auto confirm popup timer since item was added/updated
     if (autoConfirmTimerRef.current) {
       clearTimeout(autoConfirmTimerRef.current);
       autoConfirmTimerRef.current = null;
@@ -1559,11 +1630,15 @@ export default function App() {
     setSelectedPortions([]);
     setSelectedAddons([]);
     setCustomQuantity(1);
+    setVisibleQtyItems({});
 
     // Directly redirect customer into Selected Food Items modal
     setIsSelectedListOpen(true);
 
-    setAddToListToast(`"${activeFood.title}" added to your selected items!`);
+    const toastText = isItemAlreadyInList || wasUpdated
+      ? `"${activeFood.title}" updated in your list!`
+      : `"${activeFood.title}" added to your selected items!`;
+    setAddToListToast(toastText);
     setTimeout(() => setAddToListToast(null), 3000);
   };
 
@@ -1636,13 +1711,63 @@ export default function App() {
     setTimeout(() => setOrderConfirmationSuccess(false), 5000);
   };
 
-  // Open customization modal and cancel any running timers
+  // Open customization modal, hydrate previously added selections if already in list, and cancel running timers
   const handleOpenDetailSheet = () => {
     if (autoConfirmTimerRef.current) {
       clearTimeout(autoConfirmTimerRef.current);
       autoConfirmTimerRef.current = null;
     }
     setIsAutoConfirmPopupOpen(false);
+
+    if (activeFood) {
+      const existingItem = selectedList.find(item => isItemMatchWithFood(item, activeFood));
+      if (existingItem) {
+        const foodPortions = activeFood.customizable?.portions || [];
+        if (foodPortions.length > 0 && Array.isArray(existingItem.portions)) {
+          const restoredPortions = [];
+          existingItem.portions.forEach(ep => {
+            let matchIdx = -1;
+            if (typeof ep.idx === 'number' && foodPortions[ep.idx] && foodPortions[ep.idx].name === ep.name) {
+              matchIdx = ep.idx;
+            } else {
+              matchIdx = foodPortions.findIndex(fp => fp.name === ep.name);
+            }
+            if (matchIdx !== -1 && !restoredPortions.some(rp => rp.idx === matchIdx)) {
+              restoredPortions.push({ idx: matchIdx, quantity: ep.quantity || 1 });
+            }
+          });
+          setSelectedPortions(restoredPortions);
+          if (restoredPortions.length > 0) {
+            setSelectedPortion(restoredPortions[0].idx);
+          }
+        } else {
+          setSelectedPortions([]);
+        }
+
+        const foodAddons = activeFood.customizable?.addons || [];
+        if (foodAddons.length > 0 && Array.isArray(existingItem.addons)) {
+          const restoredAddons = [];
+          existingItem.addons.forEach(ea => {
+            const matchAddon = foodAddons.find(fa =>
+              (fa.id !== undefined && ea.id !== undefined && String(fa.id) === String(ea.id)) ||
+              fa.name === ea.name
+            );
+            if (matchAddon && !restoredAddons.some(ra => ra.id === matchAddon.id)) {
+              restoredAddons.push({ ...matchAddon, quantity: ea.quantity || 1 });
+            }
+          });
+          setSelectedAddons(restoredAddons);
+        } else {
+          setSelectedAddons([]);
+        }
+
+        if (foodPortions.length === 0 && existingItem.portions?.[0]?.quantity) {
+          setCustomQuantity(existingItem.portions[0].quantity);
+        }
+        setVisibleQtyItems({});
+      }
+    }
+
     setIsDetailSheetOpen(true);
   };
 
@@ -2682,7 +2807,7 @@ export default function App() {
                 </span>
               </div>
 
-              {/* Right Side: Solid Profile Color (#f59e0b) (+) ADD TO LIST Button */}
+              {/* Right Side: Solid Profile Color (#f59e0b) (+) ADD TO LIST / UPDATE YOUR LIST Button */}
               <button
                 onClick={handleAddToListFromDetail}
                 disabled={hasCustomPortions && selectedPortions.length === 0}
@@ -2691,13 +2816,19 @@ export default function App() {
                     ? 'bg-white/20 text-slate-400 cursor-not-allowed border border-white/10'
                     : 'bg-[#F59E0B] hover:bg-[#d97706] active:scale-95 text-black shadow-[0_0_20px_rgba(245,158,11,0.5)]'
                 }`}
-                aria-label="Add to List"
+                aria-label={isItemAlreadyInList ? 'Update Your List' : 'Add to List'}
               >
-                {/* Circular Plus Icon */}
+                {/* Circular Action Icon */}
                 <div className="w-5 h-5 rounded-full bg-black/20 flex items-center justify-center shrink-0">
-                  <Plus className="w-3.5 h-3.5 text-black stroke-[3]" />
+                  {isItemAlreadyInList ? (
+                    <RefreshCw className="w-3.5 h-3.5 text-black stroke-[2.8]" />
+                  ) : (
+                    <Plus className="w-3.5 h-3.5 text-black stroke-[3]" />
+                  )}
                 </div>
-                <span className="tracking-wider uppercase font-black">ADD TO LIST</span>
+                <span className="tracking-wider uppercase font-black">
+                  {isItemAlreadyInList ? 'UPDATE YOUR LIST' : 'ADD TO LIST'}
+                </span>
               </button>
             </div>
           </div>
@@ -2836,7 +2967,10 @@ export default function App() {
             </div>
 
             {/* Scrollable Container with List Cards, Live Price Summary & Order Confirmation */}
-            <div className="flex-1 overflow-y-auto py-3 space-y-3.5 pr-1 no-scrollbar [scrollbar-width:none]">
+            <div
+              ref={selectedListScrollContainerRef}
+              className="flex-1 overflow-y-auto py-3 space-y-3.5 pr-1 no-scrollbar [scrollbar-width:none]"
+            >
               {selectedList.length === 0 ? (
                 <div className="py-12 text-center space-y-3">
                   <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-slate-400">
@@ -2855,72 +2989,194 @@ export default function App() {
                 </div>
               ) : (
                 <>
-                  {/* 1. Food Cards List (Glassmorphic Card Design) */}
-                  <div className="space-y-2.5">
-                    {selectedList.map((item) => (
-                      <div
-                        key={item.cartId}
-                        className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.04] border border-white/10 hover:border-[#F59E0B]/30 transition-all flex items-center gap-3.5 relative shadow-sm"
-                      >
-                        {/* Food Thumbnail */}
-                        <img
-                          src={item.image}
-                          alt={item.title}
-                          className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-contain bg-white/5 border border-white/10 p-1 shrink-0"
-                        />
+                  {/* 1. Food Cards List (Detailed Sublist Breakdown Design) */}
+                  <div className="space-y-3">
+                    {selectedList.map((item) => {
+                      const normalizedAddons = Array.isArray(item.addons) ? item.addons : [];
+                      const hasAddons = normalizedAddons.length > 0;
+                      const addonsSum = normalizedAddons.reduce(
+                        (sum, a) => sum + (Number(a.price) || 0) * (a.quantity || 1),
+                        0
+                      );
+                      const normalizedPortions =
+                        Array.isArray(item.portions) && item.portions.length > 0
+                          ? item.portions
+                          : [
+                              {
+                                name: item.portion || 'Standard Portion',
+                                quantity: 1,
+                                totalPrice: Math.max(0, (Number(item.totalPrice) || 0) - addonsSum)
+                              }
+                            ];
 
-                        {/* Middle: Title & Subtitle with increased readable typography */}
-                        <div className="flex-1 min-w-0 pr-1">
-                          <h4 className="text-white font-black text-[16px] sm:text-[17px] truncate leading-tight">
-                            {item.title}
-                          </h4>
-                          <p className="text-xs sm:text-[13px] text-slate-300 mt-1 line-clamp-1 font-medium leading-normal">
-                            {item.portions?.map(p => p.name).join(', ') || item.portion || 'Standard'}
-                            {item.addons && item.addons.length > 0
-                              ? ` + ${item.addons.map(a => a.name).join(', ')}`
-                              : ''}
-                          </p>
-                        </div>
+                      const sublistSections = [
+                        {
+                          key: 'portion',
+                          label: 'PORTION',
+                          isFirst: true,
+                          isFinal: !hasAddons,
+                          rows: normalizedPortions.map((p, idx) => {
+                            const qty = p.quantity || 1;
+                            const price =
+                              p.totalPrice !== undefined
+                                ? Number(p.totalPrice)
+                                : Number(p.unitPrice || 0) * qty;
+                            return {
+                              rowKey: `p-${idx}`,
+                              name: p.name,
+                              qty,
+                              priceText: `${currency}${formatPrice(price)}`
+                            };
+                          })
+                        },
+                        ...(hasAddons
+                          ? [
+                              {
+                                key: 'addons',
+                                label: 'EXTRA ADD-ONS',
+                                isFirst: false,
+                                isFinal: true,
+                                rows: normalizedAddons.map((addon, idx) => {
+                                  const qty = addon.quantity || 1;
+                                  const price = (Number(addon.price) || 0) * qty;
+                                  return {
+                                    rowKey: addon.id || `a-${idx}`,
+                                    name: addon.name,
+                                    qty,
+                                    priceText: `+${currency}${formatPrice(price)}`
+                                  };
+                                })
+                              }
+                            ]
+                          : [])
+                      ];
 
-                        {/* Right: Price & Red Trash + Taller Ergonomic Quantity Pill */}
-                        <div className="flex flex-col items-end gap-2.5 shrink-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[#F59E0B] font-black text-base sm:text-lg tabular-nums">
-                              {currency}{formatPrice(item.totalPrice * (item.quantity || 1))}
-                            </span>
+                      return (
+                        <div
+                          key={item.cartId}
+                          className="p-4 sm:p-5 rounded-2xl bg-[#11131b]/95 border border-white/10 hover:border-white/20 transition-all shadow-md"
+                        >
+                          {/* Top Row: Thumbnail + Full Item Name (No Truncation) + Delete Button */}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                              <img
+                                src={item.image}
+                                alt={item.title}
+                                className="w-14 h-14 sm:w-[60px] sm:h-[60px] rounded-xl object-contain bg-[#090b10] border border-white/10 p-1 shrink-0"
+                              />
+                              <h4 className="text-white font-extrabold text-base sm:text-[17px] leading-snug whitespace-normal break-words">
+                                {item.title}
+                              </h4>
+                            </div>
+
                             <button
+                              type="button"
                               onClick={() => removeSelectedListItem(item.cartId)}
-                              className="p-1 rounded text-slate-400 hover:text-red-400 hover:bg-red-500/10 active:scale-90 transition-all cursor-pointer"
+                              className="p-1.5 -mr-1 -mt-0.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 active:scale-90 transition-all cursor-pointer shrink-0"
                               aria-label="Remove item"
                               title="Remove item"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-4 h-4 sm:w-[18px] sm:h-[18px]" />
                             </button>
                           </div>
 
-                          {/* Pill Quantity Selector (Taller height & comfortable touch target) */}
-                          <div className="flex items-center gap-2.5 bg-black/60 border border-white/15 rounded-full px-3 py-1 sm:py-1.5 min-h-[34px] sm:min-h-[36px] shadow-sm">
-                            <button
-                              onClick={() => updateSelectedListItemQuantity(item.cartId, -1)}
-                              className="w-6 h-6 rounded-full hover:bg-white/15 active:scale-90 text-white flex items-center justify-center transition-all cursor-pointer"
-                              aria-label="Decrease quantity"
-                            >
-                              <Minus className="w-3.5 h-3.5 text-slate-200 hover:text-white stroke-[2.5]" />
-                            </button>
-                            <span className="text-sm font-black text-white min-w-4 text-center tabular-nums">
-                              {item.quantity || 1}
-                            </span>
-                            <button
-                              onClick={() => updateSelectedListItemQuantity(item.cartId, 1)}
-                              className="w-6 h-6 rounded-full hover:bg-white/15 active:scale-90 text-white flex items-center justify-center transition-all cursor-pointer"
-                              aria-label="Increase quantity"
-                            >
-                              <Plus className="w-3.5 h-3.5 text-slate-200 hover:text-white stroke-[2.5]" />
-                            </button>
+                          {/* Middle Sublist: Portion & Extra Add-ons Timeline */}
+                          <div className="mt-3.5 ml-2 sm:ml-2.5">
+                            {sublistSections.map((section) => (
+                              <React.Fragment key={section.key}>
+                                <div className="flex items-stretch gap-2.5">
+                                  <div className="w-5 relative shrink-0" aria-hidden="true">
+                                    <span
+                                      className={`absolute left-1/2 -translate-x-1/2 ${
+                                        section.isFirst ? 'top-0.5' : 'top-0'
+                                      } bottom-0 border-l-[1.5px] border-dashed border-[#F59E0B]/45`}
+                                    />
+                                  </div>
+                                  <span
+                                    className={`text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 leading-none ${
+                                      section.isFirst ? 'pb-1.5' : 'pt-2.5 pb-1.5'
+                                    }`}
+                                  >
+                                    {section.label}
+                                  </span>
+                                </div>
+
+                                {section.rows.map((row, rIdx) => {
+                                  const isLastOverallDot =
+                                    section.isFinal && rIdx === section.rows.length - 1;
+
+                                  return (
+                                    <div key={row.rowKey} className="flex items-stretch gap-2.5">
+                                      <div
+                                        className="w-5 relative shrink-0 flex items-center justify-center"
+                                        aria-hidden="true"
+                                      >
+                                        <span
+                                          className={`absolute left-1/2 -translate-x-1/2 top-0 ${
+                                            isLastOverallDot ? 'h-1/2' : 'bottom-0'
+                                          } border-l-[1.5px] border-dashed border-[#F59E0B]/45`}
+                                        />
+                                        <span className="relative z-10 w-2.5 h-2.5 rounded-full bg-[#F59E0B] shadow-[0_0_8px_rgba(245,158,11,0.45)] shrink-0" />
+                                      </div>
+                                      <div className="flex-1 min-w-0 flex items-baseline justify-between gap-3 py-0.5">
+                                        <span className="text-[13.5px] sm:text-[14.5px] font-semibold text-white/95 leading-snug whitespace-normal break-words">
+                                          {row.name}
+                                          {row.qty > 1 ? (
+                                            <span className="text-[#F59E0B] font-bold text-xs ml-1.5">
+                                              ×{row.qty}
+                                            </span>
+                                          ) : null}
+                                        </span>
+                                        <span className="text-[13.5px] sm:text-[14.5px] font-bold text-white tabular-nums shrink-0">
+                                          {row.priceText}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </React.Fragment>
+                            ))}
+                          </div>
+
+                          {/* Bottom Divider + Quantity Pill & Item Total */}
+                          <div className="border-t border-white/10 mt-3.5 pt-3.5 flex items-center justify-between gap-3">
+                            <div className="inline-flex items-center bg-[#090b10]/90 border border-white/15 rounded-full px-1.5 py-1 gap-2 sm:gap-3 shadow-inner">
+                              <button
+                                type="button"
+                                onClick={() => updateSelectedListItemQuantity(item.cartId, -1)}
+                                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full hover:bg-white/10 active:scale-90 text-slate-300 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                                aria-label="Decrease quantity"
+                              >
+                                <Minus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
+                              </button>
+                              <span className="text-sm sm:text-[15px] font-extrabold text-white min-w-4 text-center tabular-nums">
+                                {item.quantity || 1}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => updateSelectedListItemQuantity(item.cartId, 1)}
+                                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full hover:bg-white/10 active:scale-90 text-slate-300 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                                aria-label="Increase quantity"
+                              >
+                                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
+                              </button>
+                            </div>
+
+                            <div className="w-[1px] h-7 bg-white/15 shrink-0" aria-hidden="true" />
+
+                            <div className="text-right shrink-0">
+                              <span className="block text-[11px] font-medium text-slate-400 leading-tight">
+                                Item total
+                              </span>
+                              <span className="block text-base sm:text-lg font-black text-[#F59E0B] tabular-nums leading-tight mt-0.5">
+                                {currency}
+                                {formatPrice((Number(item.totalPrice) || 0) * (item.quantity || 1))}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {/* 2. Live Price Summary Card with Dividers between each item */}
@@ -3018,6 +3274,24 @@ export default function App() {
                 </>
               )}
             </div>
+
+            {/* Awesome Animated Scroll Down Indicator Popup (Appears when content overflows) */}
+            {showSelectedListScrollHint && (
+              <div
+                onClick={() => {
+                  if (selectedListScrollContainerRef.current) {
+                    selectedListScrollContainerRef.current.scrollBy({ top: 240, behavior: 'smooth' });
+                  }
+                  setShowSelectedListScrollHint(false);
+                }}
+                className="absolute bottom-5 left-1/2 -translate-x-1/2 z-30 pointer-events-auto cursor-pointer animate-[bounce_1.5s_infinite]"
+              >
+                <div className="px-4 py-1.5 rounded-full bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-[0_4px_25px_rgba(234,88,12,0.7)] border border-orange-400/60 backdrop-blur-md flex items-center gap-1.5 transition-all active:scale-95 select-none">
+                  <span className="text-[11px] font-black uppercase tracking-wider">SCROLL FOR MORE</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-white animate-pulse" />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
