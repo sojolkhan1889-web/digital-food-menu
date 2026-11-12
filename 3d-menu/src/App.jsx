@@ -73,6 +73,7 @@ import {
   saveRestaurantProfile,
   saveStoredRestaurantProfile,
   syncSettingsToSupabase,
+  fetchLiveSettingsFromSupabase,
   getStoredTickets,
   recordMenuScan,
   fetchLiveOrdersFromSupabase,
@@ -366,7 +367,18 @@ export default function App() {
       }
     };
 
-    // 1. Instant Realtime WebSocket sync when customer places or updates an order
+    // 1. Instant Realtime WebSocket sync when customer places/updates an order or restaurant settings change
+    const syncSettings = async () => {
+      const liveSettings = await fetchLiveSettingsFromSupabase('resto_001');
+      if (isMounted && liveSettings) {
+        setRestaurantProfile(prev => {
+          const merged = { ...prev, ...liveSettings };
+          saveStoredRestaurantProfile(merged);
+          return merged;
+        });
+      }
+    };
+
     const ordersChannel = supabase
       .channel('realtime_orders_app_channel')
       .on(
@@ -376,12 +388,20 @@ export default function App() {
           if (isMounted) syncOrders();
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'restaurant_settings' },
+        () => {
+          if (isMounted) syncSettings();
+        }
+      )
       .subscribe();
 
     // 2. Refresh when window is focused or tab becomes active
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === 'visible') {
         syncOrders();
+        syncSettings();
       }
     };
     window.addEventListener('focus', handleVisibilityOrFocus);

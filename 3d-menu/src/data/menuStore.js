@@ -1155,22 +1155,7 @@ export const fetchRemoteData = async () => {
     }
 
     if (settingsRes.data) {
-      remoteSettings = {
-        name: settingsRes.data.name || 'Moneky Bhai',
-        tagline: settingsRes.data.tagline || 'Universal AR Digital Dining Experience',
-        logo: settingsRes.data.logo || '/monkey_bhai_logo.png',
-        loginId: settingsRes.data.login_id,
-        email: settingsRes.data.email,
-        phone: settingsRes.data.phone,
-        currency: settingsRes.data.currency,
-        tableCount: settingsRes.data.table_count,
-        vatEnabled: settingsRes.data.vat_enabled !== false,
-        vatType: settingsRes.data.vat_type || 'percentage',
-        vatRate: Number(settingsRes.data.vat_rate ?? 5.0),
-        serviceChargeEnabled: settingsRes.data.service_charge_enabled !== false,
-        serviceChargeType: settingsRes.data.service_charge_type || 'flat',
-        serviceChargeRate: Number(settingsRes.data.service_charge_rate ?? 2.0)
-      };
+      remoteSettings = mapSettingsRow(settingsRes.data);
     }
 
     if (ticketsRes.data && ticketsRes.data.length > 0) {
@@ -1457,6 +1442,40 @@ export const saveRestaurantProfile = (profile) => {
   }
 };
 
+export const mapSettingsRow = (row) => {
+  if (!row) return null;
+  return {
+    name: row.name || 'Moneky Bhai',
+    tagline: row.tagline || 'Universal AR Digital Dining Experience',
+    logo: row.logo || '/monkey_bhai_logo.png',
+    loginId: row.login_id,
+    email: row.email,
+    phone: row.phone,
+    currency: row.currency,
+    tableCount: row.table_count,
+    vatEnabled: row.vat_enabled !== false,
+    vatType: row.vat_type || 'percentage',
+    vatRate: Number(row.vat_rate ?? 5.0),
+    serviceChargeEnabled: row.service_charge_enabled !== false,
+    serviceChargeType: row.service_charge_type || 'flat',
+    serviceChargeRate: Number(row.service_charge_rate ?? 2.0)
+  };
+};
+
+export const fetchLiveSettingsFromSupabase = async (restaurantId = 'resto_001') => {
+  try {
+    const { data, error } = await supabase
+      .from('restaurant_settings')
+      .select('*')
+      .eq('id', `set_${restaurantId}`)
+      .single();
+    if (!error && data) return mapSettingsRow(data);
+  } catch (err) {
+    console.warn('Supabase live settings fetch caught:', err);
+  }
+  return null;
+};
+
 let isSyncingSettings = false;
 let pendingProfileSync = null;
 
@@ -1477,7 +1496,7 @@ export const syncSettingsToSupabase = async (profile) => {
 
       // 1. Update restaurants table first to avoid foreign-key lock conflicts
       try {
-        await supabase.from('restaurants').update({
+        const { error: restoErr } = await supabase.from('restaurants').update({
           name: current.name,
           login_id: current.loginId || 'admin',
           email: current.email || '',
@@ -1486,13 +1505,14 @@ export const syncSettingsToSupabase = async (profile) => {
           currency: current.currency || '৳',
           table_count: Number(current.tableCount || 12)
         }).eq('id', 'resto_001');
+        if (restoErr) console.warn('Supabase restaurants update warning:', restoErr);
       } catch (rErr) {
         console.warn('Supabase restaurants update caught:', rErr);
       }
 
-      // 2. Upsert restaurant_settings
+      // 2. Upsert restaurant_settings (must use exact Postgres snake_case column names)
       try {
-        await supabase.from('restaurant_settings').upsert([{
+        const { error: settingsErr } = await supabase.from('restaurant_settings').upsert([{
           id: 'set_resto_001',
           restaurant_id: 'resto_001',
           name: current.name,
@@ -1506,11 +1526,12 @@ export const syncSettingsToSupabase = async (profile) => {
           vat_enabled: current.vatEnabled !== false,
           vat_type: current.vatType || 'percentage',
           vat_rate: Number(current.vatRate ?? 5.0),
-          serviceChargeEnabled: current.serviceChargeEnabled !== false,
-          serviceChargeType: current.serviceChargeType || 'flat',
-          serviceChargeRate: Number(current.serviceChargeRate ?? 2.0),
+          service_charge_enabled: current.serviceChargeEnabled !== false,
+          service_charge_type: current.serviceChargeType || 'flat',
+          service_charge_rate: Number(current.serviceChargeRate ?? 2.0),
           updated_at: new Date().toISOString()
         }]);
+        if (settingsErr) console.warn('Supabase restaurant_settings upsert warning:', settingsErr);
       } catch (sErr) {
         console.warn('Supabase restaurant_settings upsert caught:', sErr);
       }
