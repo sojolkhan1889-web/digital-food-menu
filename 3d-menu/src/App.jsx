@@ -997,6 +997,7 @@ export default function App() {
 
   // Automated Order Confirmation Popup states (fires 2 seconds after leaving customization without adding to list)
   const [isAutoConfirmPopupOpen, setIsAutoConfirmPopupOpen] = useState(false);
+  const [autoConfirmSource, setAutoConfirmSource] = useState('customization'); // 'customization' | 'selectedList'
   const autoConfirmTimerRef = useRef(null);
   const pendingUnconfirmedItemRef = useRef(null);
 
@@ -1815,6 +1816,7 @@ export default function App() {
     }
 
     setIsDetailSheetOpen(false);
+    setAutoConfirmSource('customization');
 
     // Cancel existing timer if any
     if (autoConfirmTimerRef.current) {
@@ -1833,6 +1835,7 @@ export default function App() {
     setIsSelectedListOpen(false);
 
     if (selectedList && selectedList.length > 0) {
+      setAutoConfirmSource('selectedList');
       if (autoConfirmTimerRef.current) {
         clearTimeout(autoConfirmTimerRef.current);
       }
@@ -2255,13 +2258,13 @@ export default function App() {
       </div>
 
       {/* ======================================================== */}
-      {/* 2. TOP APP HEADER (Redesigned matching exact screenshot)  */}
+      {/* 2. TOP APP HEADER (Matches reference media_1794461969150_4ed7c254.jpg) */}
       {/* ======================================================== */}
-      <header className="relative z-40 w-full max-w-xl mx-auto px-4 pt-3.5 shrink-0">
-        <div className="relative rounded-[22px] sm:rounded-[24px] bg-[#0B0F19]/95 backdrop-blur-xl border border-slate-800/80 shadow-[0_8px_30px_rgba(0,0,0,0.6)] pl-3.5 pr-3 sm:pl-4.5 sm:pr-4 py-2.5 sm:py-3.5 flex items-center justify-between overflow-hidden">
+      <header className="relative z-40 w-full max-w-xl mx-auto px-2.5 sm:px-4 pt-3 sm:pt-3.5 shrink-0">
+        <div className="relative rounded-[22px] sm:rounded-[24px] bg-[#0B0F19]/95 backdrop-blur-xl border border-slate-800/80 shadow-[0_8px_30px_rgba(0,0,0,0.6)] pl-2.5 pr-2.5 sm:pl-4 sm:pr-3.5 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-3 overflow-hidden">
 
           {/* Faint Decorative Culinary Watermark in Center-Right Background */}
-          <div className="absolute right-28 sm:right-36 top-1/2 -translate-y-1/2 pointer-events-none opacity-[0.09] flex items-center gap-2 select-none">
+          <div className="absolute right-24 sm:right-32 top-1/2 -translate-y-1/2 pointer-events-none opacity-[0.04] flex items-center gap-2 select-none">
             {/* Leaf Motif */}
             <svg className="w-8 h-8 text-white -rotate-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
@@ -2274,13 +2277,13 @@ export default function App() {
             </svg>
           </div>
 
-          {/* Brand Unit: Logo + Hairline Divider + Text */}
-          <div className="flex items-center z-10 min-w-0 pr-1.5 sm:pr-2">
-            {/* Logo Badge (Restored to Full HD Prominent Size) */}
+          {/* Brand Unit: Logo + Clean Gap + Typography */}
+          <div className="flex items-center gap-2 min-[390px]:gap-2.5 sm:gap-3 z-10 min-w-0 flex-1">
+            {/* Logo Badge */}
             <button
               onClick={navigateToAdmin}
               title="Open Restaurant Panel"
-              className={`w-[62px] h-[62px] sm:w-[68px] sm:h-[68px] rounded-2xl flex items-center justify-center p-0 transition-all cursor-pointer overflow-hidden shrink-0 group active:scale-95 ${
+              className={`w-[52px] h-[52px] min-[390px]:w-[56px] min-[390px]:h-[56px] sm:w-[64px] sm:h-[64px] rounded-[14px] sm:rounded-2xl flex items-center justify-center p-0 transition-all cursor-pointer overflow-hidden shrink-0 group active:scale-95 ${
                 restaurantProfile?.logo 
                   ? 'bg-white hover:bg-white/95 border-2 border-amber-500/85 shadow-[0_0_15px_rgba(245,158,11,0.25),0_4px_16px_rgba(0,0,0,0.5)]' 
                   : 'bg-gradient-to-br from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 border-2 border-orange-400/50 text-white shadow-[0_0_15px_rgba(249,115,22,0.35),0_4px_16px_rgba(0,0,0,0.5)]'
@@ -2293,33 +2296,55 @@ export default function App() {
                   className="w-full h-full object-contain scale-125 select-none transition-transform duration-300 group-hover:scale-135 filter contrast-[1.05] brightness-[1.02]"
                 />
               ) : (
-                <Utensils className="w-8 h-8 sm:w-9 sm:h-9 text-white drop-shadow-md" />
+                <Utensils className="w-7 h-7 sm:w-8 sm:h-8 text-white drop-shadow-md" />
               )}
             </button>
-
-            {/* Vertical Hairline Divider */}
-            <div className="w-[1px] h-11 bg-slate-700/60 shrink-0 mx-2.5 sm:mx-3.5" />
 
             {/* Brand Typography (Compact, balanced vertical spacing) */}
             <div className="min-w-0 flex-1 flex flex-col justify-center">
               {/* Top: 24 DIGITAL with pulsating green dot */}
               <div className="flex items-center gap-1.5 mb-0">
-                <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-slate-200">
+                <span className="text-[9.5px] sm:text-[11px] font-black uppercase tracking-wider text-slate-200">
                   24 DIGITAL
                 </span>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               </div>
 
-              {/* Middle: Signature Restaurant Name in White Script Font (Tight gap, full descender protection) */}
-              <h1
-                className="text-white text-2xl sm:text-[27px] leading-[1.15] pb-1 select-none font-normal filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] truncate"
-                style={{ fontFamily: "'Kaushan Script', 'Caveat', cursive, serif" }}
-              >
-                {restaurantProfile?.name || 'Moneky Bhai'}
-              </h1>
+              {/* Middle: Signature Restaurant Name in White Script Font with Quick Follow Button / Small Amber Tick Badge */}
+              <div className="flex items-center gap-1 min-[390px]:gap-1.5 sm:gap-2 min-w-0">
+                <h1
+                  className="text-white text-[18.5px] min-[375px]:text-[21px] min-[400px]:text-[23px] sm:text-[26px] leading-[1.15] pb-0.5 pr-1 select-none font-normal filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] whitespace-nowrap truncate"
+                  style={{ fontFamily: "'Kaushan Script', 'Caveat', cursive, serif" }}
+                >
+                  {restaurantProfile?.name || 'Moneky Bhai'}
+                </h1>
+
+                {/* Quick Follow Button or Crisp Small Verified Followed Tick Badge */}
+                {isFollowing ? (
+                  <div
+                    className="w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full bg-[#F59E0B] flex items-center justify-center shadow-[0_0_8px_rgba(245,158,11,0.45)] shrink-0 animate-in fade-in zoom-in duration-300"
+                    title="You are following this restaurant"
+                  >
+                    <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#0B0F19] stroke-[3.2]" />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleFollowRestaurant();
+                    }}
+                    className="px-1.5 min-[375px]:px-2 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500 active:scale-95 border border-amber-500/60 hover:border-amber-400 text-amber-400 hover:text-black font-bold text-[9.5px] min-[375px]:text-[10px] sm:text-[10.5px] tracking-normal transition-all duration-200 cursor-pointer flex items-center gap-0.5 shrink-0 shadow-[0_0_8px_rgba(245,158,11,0.2)]"
+                    title="Follow this restaurant"
+                  >
+                    <Plus className="w-2.5 h-2.5 stroke-[3]" />
+                    <span>Follow</span>
+                  </button>
+                )}
+              </div>
 
               {/* Bottom: Welcome, Our Dear Guest (Guaranteed single line on all phone & responsive screens) */}
-              <p className="text-[11px] sm:text-xs text-slate-300 font-medium tracking-normal mt-0 whitespace-nowrap">
+              <p className="text-[10.5px] sm:text-xs text-slate-300 font-medium tracking-normal mt-0 whitespace-nowrap">
                 Welcome, Our Dear Guest
               </p>
             </div>
@@ -2327,14 +2352,14 @@ export default function App() {
 
           {/* Right Action: Pill MENU Button (& Optional Cart) */}
           <div className="flex items-center gap-2 z-10 shrink-0">
-            {/* Menu Trigger - Amber Rounded Pill matching exact screenshot & shifted rightwards */}
+            {/* Menu Trigger - Amber Rounded Pill matching exact screenshot */}
             <button
               onClick={() => setIsMenuOpen(true)}
-              className="px-3.5 py-1.5 sm:px-4.5 sm:py-2 rounded-full bg-[#120E09]/95 hover:bg-[#22180E] active:scale-95 border-2 border-[#F59E0B] shadow-[0_0_15px_rgba(245,158,11,0.22)] transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0"
+              className="px-2.5 min-[390px]:px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full bg-[#120E09]/95 hover:bg-[#22180E] active:scale-95 border-2 border-[#F59E0B] shadow-[0_0_15px_rgba(245,158,11,0.22)] transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0"
               aria-label="Open Food Menu"
             >
               <MenuIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F59E0B] stroke-[2.5]" />
-              <span className="text-xs sm:text-[13px] font-extrabold tracking-wider uppercase text-white">
+              <span className="text-[11px] sm:text-[13px] font-extrabold tracking-wider uppercase text-white">
                 MENU
               </span>
             </button>
@@ -2870,7 +2895,7 @@ export default function App() {
 
       {/* ======================================================== */}
       {/* 4.15 MANDATORY ORDER CONFIRMATION POPUP (CANNOT BE DISMISSED OUTSIDE) */}
-      {/* Matches reference screenshot media_1794056729743_26d19dda.png */}
+      {/* Matches reference screenshot media_1794458766645_e708b220.jpg */}
       {/* ======================================================== */}
       {isAutoConfirmPopupOpen && (
         <div
@@ -2878,12 +2903,12 @@ export default function App() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm sm:max-w-md bg-[#121826]/95 border border-[#F59E0B]/35 rounded-[28px] sm:rounded-[32px] p-5 sm:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.85),0_0_30px_rgba(245,158,11,0.15)] animate-[scaleUp_0.25s_cubic-bezier(0.16,1,0.3,1)] space-y-5 relative"
+            className="w-full max-w-sm sm:max-w-md bg-[#121826]/95 border border-white/10 rounded-[28px] sm:rounded-[32px] p-5 sm:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.85)] animate-[scaleUp_0.25s_cubic-bezier(0.16,1,0.3,1)] space-y-4 relative"
           >
             {/* Header: Cloche Plate Icon + Text */}
             <div className="flex items-start gap-3.5">
-              <div className="w-11 h-11 rounded-xl bg-[#F59E0B]/15 border border-[#F59E0B]/30 flex items-center justify-center text-[#F59E0B] shrink-0 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
-                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                <svg className="w-6 h-6 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 4v2" />
                   <path d="M4 18h16" />
                   <path d="M4 18c0-4.418 3.582-8 8-8s8 3.582 8 8" />
@@ -2891,31 +2916,35 @@ export default function App() {
                 </svg>
               </div>
               <div className="space-y-1">
-                <h3 className="text-white font-extrabold text-base sm:text-lg tracking-tight leading-snug">
-                  Have you ordered with the waiter?
+                <h3 className="text-white font-bold text-lg sm:text-xl tracking-tight leading-snug">
+                  {autoConfirmSource === 'customization'
+                    ? 'Have you ordered this item with the waiter?'
+                    : (selectedList.length > 1
+                        ? 'Have you ordered these items with the waiter?'
+                        : 'Have you ordered this item with the waiter?')}
                 </h3>
-                <p className="text-xs sm:text-[13px] text-slate-300 font-normal leading-relaxed">
-                  Please confirm after telling the waiter your food choices.
+                <p className="text-xs sm:text-[13px] text-slate-300/80 font-normal leading-relaxed">
+                  Please tap an answer below. Your response helps us improve PhoneMenu for everyone! 😊
                 </p>
               </div>
             </div>
 
-            {/* Buttons: YES, I ORDERED (White) & Not yet (Glass Dark) */}
+            {/* Buttons: Yes, I ordered (White) & Not yet — Keep browsing (Glass Dark) */}
             <div className="space-y-2.5 pt-1">
               <button
                 onClick={handleConfirmOrderFromAutoPopup}
-                className="w-full py-3.5 px-6 rounded-full bg-white hover:bg-slate-100 active:scale-[0.98] text-black font-black text-sm sm:text-base tracking-wide flex items-center justify-center gap-2.5 shadow-[0_4px_25px_rgba(255,255,255,0.25)] cursor-pointer transition-all"
+                className="w-full py-3.5 px-6 rounded-full bg-white hover:bg-slate-100 active:scale-[0.98] text-black font-bold text-sm sm:text-base tracking-normal flex items-center justify-center gap-2.5 shadow-[0_4px_25px_rgba(255,255,255,0.2)] cursor-pointer transition-all"
               >
-                <CheckCircle2 className="w-5 h-5 text-black stroke-[2.8]" />
-                <span>YES, I ORDERED</span>
+                <CheckCircle2 className="w-5 h-5 text-black stroke-[2.5]" />
+                <span>Yes, I ordered</span>
               </button>
 
               <button
                 onClick={handleDismissAutoPopup}
-                className="w-full py-3 px-6 rounded-full bg-white/[0.05] hover:bg-white/10 active:scale-[0.98] border border-white/20 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
+                className="w-full py-3 px-6 rounded-full bg-white/[0.05] hover:bg-white/10 active:scale-[0.98] border border-white/15 text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
               >
-                <RotateCcw className="w-3.5 h-3.5 text-slate-300" />
-                <span>Not yet — Keep Browsing</span>
+                <RotateCcw className="w-4 h-4 text-white" />
+                <span>Not yet — Keep browsing</span>
               </button>
             </div>
           </div>
@@ -3230,11 +3259,11 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* 3. Order Confirmation with Waiter Card (with white YES, I ORDERED button) */}
-                  <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.04] border border-white/10 space-y-3.5 shadow-md">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-[#F59E0B]/15 border border-[#F59E0B]/30 flex items-center justify-center text-[#F59E0B] shrink-0">
-                        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {/* 3. Order Confirmation with Waiter Card (Matches media_1794458766645_e708b220.jpg) */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-[#121826]/95 border border-white/10 space-y-3.5 shadow-md">
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                        <svg className="w-6 h-6 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M12 4v2" />
                           <path d="M4 18h16" />
                           <path d="M4 18c0-4.418 3.582-8 8-8s8 3.582 8 8" />
@@ -3242,32 +3271,34 @@ export default function App() {
                         </svg>
                       </div>
                       <div className="space-y-1">
-                        <h3 className="text-white font-extrabold text-base tracking-tight leading-snug">
-                          Have you ordered with the waiter?
+                        <h3 className="text-white font-bold text-base sm:text-lg tracking-tight leading-snug">
+                          {selectedList.length > 1
+                            ? 'Have you ordered these items with the waiter?'
+                            : 'Have you ordered this item with the waiter?'}
                         </h3>
-                        <p className="text-xs text-slate-400 font-normal leading-relaxed">
-                          Please confirm after telling the waiter your food choices.
+                        <p className="text-xs sm:text-[13px] text-slate-300/80 font-normal leading-relaxed">
+                          Please tap an answer below. Your response helps us improve PhoneMenu for everyone! 😊
                         </p>
                       </div>
                     </div>
 
                     <div className="space-y-2.5 pt-1">
-                      {/* Primary White Button with Increased Font Size and larger Check Icon */}
+                      {/* Primary White Button */}
                       <button
                         onClick={handleConfirmOrderWithWaiter}
-                        className="w-full py-3.5 px-6 rounded-full bg-white hover:bg-slate-100 active:scale-[0.98] text-black font-black text-sm sm:text-base tracking-wide flex items-center justify-center gap-2.5 shadow-[0_4px_25px_rgba(255,255,255,0.25)] cursor-pointer transition-all"
+                        className="w-full py-3.5 px-6 rounded-full bg-white hover:bg-slate-100 active:scale-[0.98] text-black font-bold text-sm sm:text-base tracking-normal flex items-center justify-center gap-2.5 shadow-[0_4px_25px_rgba(255,255,255,0.2)] cursor-pointer transition-all"
                       >
-                        <CheckCircle2 className="w-5 h-5 text-black stroke-[2.8]" />
-                        <span>YES, I ORDERED</span>
+                        <CheckCircle2 className="w-5 h-5 text-black stroke-[2.5]" />
+                        <span>Yes, I ordered</span>
                       </button>
 
                       {/* Secondary Glass Dark Button */}
                       <button
                         onClick={handleDismissSelectedListWithoutPopup}
-                        className="w-full py-3 px-6 rounded-full bg-white/[0.05] hover:bg-white/10 active:scale-[0.98] border border-white/20 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
+                        className="w-full py-3 px-6 rounded-full bg-white/[0.05] hover:bg-white/10 active:scale-[0.98] border border-white/15 text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
                       >
-                        <RotateCcw className="w-3.5 h-3.5 text-slate-300" />
-                        <span>Not yet — Keep Browsing</span>
+                        <RotateCcw className="w-4 h-4 text-white" />
+                        <span>Not yet — Keep browsing</span>
                       </button>
                     </div>
                   </div>
@@ -3330,13 +3361,23 @@ export default function App() {
                   <h3 className="text-white font-black text-xl sm:text-2xl tracking-tight leading-tight">
                     Menu & Specials
                   </h3>
-                  {isFollowing && (
+                  {isFollowing ? (
                     <div 
                       className="w-5 h-5 sm:w-5.5 sm:h-5.5 rounded-full bg-amber-500 flex items-center justify-center shadow-[0_0_12px_rgba(245,158,11,0.7)] shrink-0 animate-in fade-in zoom-in duration-300"
                       title="You are following this restaurant"
                     >
                       <Check className="w-3.5 h-3.5 text-black stroke-[3.5]" />
                     </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleFollowRestaurant}
+                      className="px-2.5 py-0.5 rounded-full bg-amber-500/15 hover:bg-amber-500 active:scale-95 border border-amber-500/60 hover:border-amber-400 text-amber-400 hover:text-black font-extrabold text-[10px] tracking-wider uppercase transition-all duration-200 cursor-pointer flex items-center gap-1 shrink-0 shadow-[0_0_8px_rgba(245,158,11,0.2)]"
+                      title="Follow this restaurant"
+                    >
+                      <Plus className="w-2.5 h-2.5 stroke-[3]" />
+                      <span>Follow</span>
+                    </button>
                   )}
                 </div>
               </div>
