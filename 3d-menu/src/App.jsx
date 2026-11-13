@@ -43,7 +43,7 @@ import RestaurantPanel from './admin/RestaurantPanel';
 import RestaurantLogin from './admin/RestaurantLogin';
 import SuperAdminPanel from './admin/super/SuperAdminPanel';
 import SuperAdminLogin from './admin/super/SuperAdminLogin';
-import { getSuperAdminAuthSession, setSuperAdminAuthSession } from './admin/super/superAdminStore';
+import { getSuperAdminAuthSession, setSuperAdminAuthSession, initialSuperAdminRestaurants } from './admin/super/superAdminStore';
 import {
   getStoredFoods,
   saveStoredFoods,
@@ -168,6 +168,13 @@ export const formatReviewCount = (count) => {
   return num.toLocaleString();
 };
 
+import {
+  getRestaurantAdminSlug,
+  normalizeSlug,
+  findRestaurantBySlug,
+  parseAppRoute
+} from './utils/routeUtils';
+
 export default function App() {
   // Master Admin Dynamic Configuration State
   const [adminConfig, setAdminConfig] = useState(defaultRestaurantConfig);
@@ -175,43 +182,45 @@ export default function App() {
   // Helper to determine if current URL targets superadmin route
   const checkIsSuperAdminRoute = () => {
     if (typeof window === 'undefined') return false;
-    const path = (window.location.pathname || '').toLowerCase();
-    const hash = (window.location.hash || '').toLowerCase();
-    const search = (window.location.search || '').toLowerCase();
-    return (
-      path.includes('/super-admin') ||
-      path.includes('/superadmin') ||
-      path.includes('super-admin') ||
-      path.includes('superadmin') ||
-      hash.includes('super-admin') ||
-      hash.includes('superadmin') ||
-      search.includes('super-admin') ||
-      search.includes('superadmin')
-    );
+    return parseAppRoute(window.location.pathname).view === 'superadmin';
   };
 
   // Helper to determine if current URL targets admin route
   const checkIsAdminRoute = () => {
     if (typeof window === 'undefined') return false;
-    if (checkIsSuperAdminRoute()) return false;
-    const path = (window.location.pathname || '').toLowerCase();
-    const hash = (window.location.hash || '').toLowerCase();
-    const search = (window.location.search || '').toLowerCase();
-    return (
-      path.includes('/admin') ||
-      path.includes('/restaurant') ||
-      hash.includes('admin') ||
-      hash.includes('restaurant') ||
-      search.includes('admin') ||
-      search.includes('restaurant')
-    );
+    return parseAppRoute(window.location.pathname).view === 'admin';
   };
+
+  // Restaurant Multi-Tenant Context Resolution
+  const resolveInitialRestaurant = () => {
+    if (typeof window === 'undefined') return initialSuperAdminRestaurants[0];
+    try {
+      const { restaurantSlug } = parseAppRoute(window.location.pathname);
+      if (restaurantSlug) {
+        const found = findRestaurantBySlug(restaurantSlug, initialSuperAdminRestaurants);
+        if (found) return found;
+      }
+      const imp = sessionStorage.getItem('superadmin_impersonating_resto');
+      if (imp) {
+        const parsed = JSON.parse(imp);
+        if (parsed && parsed.id) return parsed;
+      }
+      const sess = sessionStorage.getItem('active_resto_session');
+      if (sess) {
+        const parsed = JSON.parse(sess);
+        if (parsed && parsed.id) return parsed;
+      }
+    } catch (e) {}
+    return initialSuperAdminRestaurants[0];
+  };
+
+  const [activeRestaurant, setActiveRestaurant] = useState(resolveInitialRestaurant);
+  const currentRestoId = activeRestaurant?.id || 'resto_001';
 
   // View Mode: 'menu' (Customer 3D View), 'admin' (Restaurant Portal), or 'superadmin' (Master SaaS Platform)
   const [currentView, setCurrentView] = useState(() => {
-    if (checkIsSuperAdminRoute()) return 'superadmin';
-    if (checkIsAdminRoute()) return 'admin';
-    return 'menu';
+    if (typeof window === 'undefined') return 'menu';
+    return parseAppRoute(window.location.pathname).view;
   });
 
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(getAdminAuthSession);
@@ -240,27 +249,107 @@ export default function App() {
     }
     return 'Table 04';
   });
-  const currency = restaurantProfile?.currency || '$';
+  const currency = restaurantProfile?.currency || '৳';
   const [isCarouselHovered, setIsCarouselHovered] = useState(false);
 
-  // Navigation helpers for Clean Browser URLs
-  const navigateToMenu = () => {
-    if (typeof window !== 'undefined' && window.history.pushState) {
-      if (
-        window.location.pathname.includes('/admin') ||
-        window.location.pathname.includes('/super-admin') ||
-        window.location.pathname.includes('/superadmin')
-      ) {
-        window.history.pushState({}, '', '/');
+  // Loader function for switching restaurant tenants safely
+  const loadRestaurantData = async (targetId, targetMeta = null) => {
+    const restoId = targetId || 'resto_001';
+    try {
+      const data = await fetchRemoteData(restoId);
+      if (data) {
+        if (data.remoteFoods && data.remoteFoods.length > 0) {
+          setFoodsList(data.remoteFoods);
+          if (restoId === 'resto_001') saveStoredFoods(data.remoteFoods);
+        } else if (restoId !== 'resto_001') {
+          setFoodsList([]);
+        }
+
+        if (data.remoteCategories && data.remoteCategories.length > 0) {
+          setCategoriesList(data.remoteCategories);
+          if (restoId === 'resto_001') saveStoredCategories(data.remoteCategories);
+        } else if (restoId !== 'resto_001') {
+          setCategoriesList([]);
+        }
+
+        if (data.remoteSubcategories) {
+          setSubcategoriesList(data.remoteSubcategories);
+          if (restoId === 'resto_001') saveStoredSubcategories(data.remoteSubcategories);
+        } else if (restoId !== 'resto_001') {
+          setSubcategoriesList([]);
+        }
+
+        if (data.remoteSliders) {
+          setFeaturedSliders(data.remoteSliders);
+          if (restoId === 'resto_001') saveStoredFeaturedSliders(data.remoteSliders);
+        } else if (restoId !== 'resto_001') {
+          setFeaturedSliders([]);
+        }
+
+        if (data.remoteSettings) {
+          setRestaurantProfile(data.remoteSettings);
+          if (restoId === 'resto_001') saveStoredRestaurantProfile(data.remoteSettings);
+        } else if (targetMeta) {
+          setRestaurantProfile(prev => ({
+            ...prev,
+            restaurant_id: restoId,
+            id: `set_${restoId}`,
+            name: targetMeta.name || prev.name,
+            phone: targetMeta.phone || targetMeta.owner_phone || prev.phone,
+            address: targetMeta.address || targetMeta.location || prev.address,
+            currency: targetMeta.currency || prev.currency || '৳'
+          }));
+        }
+
+        if (data.remoteOrders) {
+          setOrdersList(data.remoteOrders);
+          if (restoId === 'resto_001') saveStoredOrders(data.remoteOrders);
+        } else {
+          setOrdersList([]);
+        }
+
+        if (data.remoteTickets) {
+          setTicketsList(data.remoteTickets);
+        }
+        if (data.remoteChat) {
+          setChatMessagesList(data.remoteChat);
+        }
       }
+    } catch (err) {
+      console.warn('loadRestaurantData failed for', restoId, err);
+    }
+  };
+
+  // Navigation helpers for Clean Browser URLs
+  const navigateToMenu = async (targetResto = null) => {
+    const resto = targetResto || activeRestaurant || initialSuperAdminRestaurants[0];
+    const slug = resto?.slug || '3d-dine';
+    if (typeof window !== 'undefined' && window.history.pushState) {
+      window.history.pushState({}, '', `/${slug}`);
       window.location.hash = '';
     }
+    setActiveRestaurant(resto);
+    await loadRestaurantData(resto.id, resto);
     setCurrentView('menu');
   };
 
-  const navigateToAdmin = () => {
+  const navigateToAdmin = async (targetRestaurant) => {
+    const resto = targetRestaurant || activeRestaurant || initialSuperAdminRestaurants[0];
+    if (resto) {
+      try {
+        sessionStorage.setItem('superadmin_impersonating_resto', JSON.stringify(resto));
+        sessionStorage.setItem('active_resto_session', JSON.stringify(resto));
+        setActiveRestaurant(resto);
+        await loadRestaurantData(resto.id, resto);
+      } catch (e) {
+        console.warn('Superadmin handoff warning:', e);
+      }
+    }
+    setIsAdminAuthenticated(true);
+    setAdminAuthSession(true);
+    const adminSlug = getRestaurantAdminSlug(resto);
     if (typeof window !== 'undefined' && window.history.pushState) {
-      window.history.pushState({}, '', '/admin');
+      window.history.pushState({}, '', `/${adminSlug}/admin`);
     }
     setCurrentView('admin');
   };
@@ -272,12 +361,62 @@ export default function App() {
     setCurrentView('superadmin');
   };
 
-  // Listen for hash & popstate changes to navigate directly to /superadmin, /admin or #admin
+  // Listen for hash & popstate changes to navigate directly to /superadmin, /admin or restaurant slug
   useEffect(() => {
-    const handleLocationChange = () => {
-      if (checkIsSuperAdminRoute()) {
+    const handleLocationChange = async () => {
+      const { view, restaurantSlug } = parseAppRoute(window.location.pathname);
+
+      if (view === 'superadmin') {
         setCurrentView('superadmin');
-      } else if (checkIsAdminRoute()) {
+        return;
+      }
+
+      let target = null;
+      if (restaurantSlug) {
+        target = findRestaurantBySlug(restaurantSlug, initialSuperAdminRestaurants);
+        if (!target) {
+          try {
+            const { data } = await supabase.from('restaurants').select('*');
+            if (data && data.length > 0) {
+              target = findRestaurantBySlug(restaurantSlug, data);
+            }
+          } catch (e) {}
+        }
+      }
+
+      if (!target) {
+        try {
+          const imp = sessionStorage.getItem('superadmin_impersonating_resto');
+          if (imp) {
+            const parsed = JSON.parse(imp);
+            if (parsed?.id) target = parsed;
+          }
+          if (!target) {
+            const sess = sessionStorage.getItem('active_resto_session');
+            if (sess) {
+              const parsed = JSON.parse(sess);
+              if (parsed?.id) target = parsed;
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (!target) {
+        target = initialSuperAdminRestaurants[0];
+      }
+
+      if (target && target.id !== activeRestaurant?.id) {
+        setActiveRestaurant(target);
+        await loadRestaurantData(target.id, target);
+      }
+
+      if (view === 'admin') {
+        if (!restaurantSlug && target) {
+          const adminSlug = getRestaurantAdminSlug(target);
+          if (typeof window !== 'undefined' && window.history.replaceState) {
+            window.history.replaceState({}, '', `/${adminSlug}/admin`);
+          }
+        }
         setCurrentView('admin');
       } else {
         setCurrentView('menu');
@@ -290,114 +429,68 @@ export default function App() {
       window.removeEventListener('hashchange', handleLocationChange);
       window.removeEventListener('popstate', handleLocationChange);
     };
-  }, []);
+  }, [activeRestaurant?.id]);
 
-  // Fast hydration of high-res cached foods from IndexedDB on startup (runs in 1-5ms)
+  // Fast hydration of high-res cached foods from IndexedDB on startup (runs in 1-5ms, only for resto_001)
   useEffect(() => {
-    loadFoodsFromIndexedDB().then(idbFoods => {
-      if (idbFoods && idbFoods.length >= 8) {
-        setFoodsList(idbFoods);
-      }
-    });
-  }, []);
+    if (currentRestoId === 'resto_001') {
+      loadFoodsFromIndexedDB().then(idbFoods => {
+        if (idbFoods && idbFoods.length >= 8) {
+          setFoodsList(idbFoods);
+        }
+      });
+    }
+  }, [currentRestoId]);
 
-  // Fetch latest cloud data from Supabase on mount
+  // Fetch latest cloud data from Supabase whenever activeRestaurant changes
   useEffect(() => {
-    fetchRemoteData().then(({
-      remoteFoods,
-      remoteCategories,
-      remoteSubcategories,
-      remoteSliders,
-      remoteSettings,
-      remoteTickets,
-      remoteChat,
-      remoteOrders
-    }) => {
-      if (remoteFoods && remoteFoods.length > 0) {
-        setFoodsList(remoteFoods);
-        saveStoredFoods(remoteFoods);
-      }
-      if (remoteCategories && remoteCategories.length > 0) {
-        setCategoriesList(prev => {
-          const merged = Array.from(new Set([...prev, ...remoteCategories].filter(c => Boolean(c) && String(c).toLowerCase() !== 'all')));
-          saveStoredCategories(merged);
-          return merged;
-        });
-      }
-      if (remoteSubcategories && remoteSubcategories.length > 0) {
-        setSubcategoriesList(remoteSubcategories);
-        saveStoredSubcategories(remoteSubcategories);
-      }
-      if (remoteSliders && remoteSliders.length > 0) {
-        setFeaturedSliders(prev => {
-          const remoteIds = new Set(remoteSliders.map(s => String(s.id)));
-          const uncommitted = prev.filter(s => !remoteIds.has(String(s.id)));
-          const merged = [...uncommitted, ...remoteSliders];
-          saveStoredFeaturedSliders(merged);
-          return merged;
-        });
-      }
-      if (remoteSettings) {
-        setRestaurantProfile(prev => ({ ...prev, ...remoteSettings }));
-        saveStoredRestaurantProfile(remoteSettings);
-      }
-      if (remoteTickets && remoteTickets.length > 0) {
-        setTicketsList(remoteTickets);
-        saveStoredTickets(remoteTickets);
-      }
-      if (remoteChat && remoteChat.length > 0) {
-        setChatMessagesList(remoteChat);
-        saveStoredChatMessages(remoteChat);
-      }
-      if (remoteOrders && remoteOrders.length > 0) {
-        setOrdersList(remoteOrders);
-        saveStoredOrders(remoteOrders);
-      }
-    });
-  }, []);
+    loadRestaurantData(currentRestoId, activeRestaurant);
+  }, [currentRestoId]);
 
-  // Realtime subscription for live orders (Instant sub-second sync across panels with ZERO constant polling overhead)
+  // Realtime subscription for live orders and settings scoped to active restaurant
   useEffect(() => {
     let isMounted = true;
     const syncOrders = async () => {
-      const live = await fetchLiveOrdersFromSupabase('resto_001');
-      if (isMounted && live && live.length > 0) {
+      const live = await fetchLiveOrdersFromSupabase(currentRestoId);
+      if (isMounted && live) {
         setOrdersList(live);
-        saveStoredOrders(live);
+        if (currentRestoId === 'resto_001') saveStoredOrders(live);
       }
     };
 
-    // 1. Instant Realtime WebSocket sync when customer places/updates an order or restaurant settings change
     const syncSettings = async () => {
-      const liveSettings = await fetchLiveSettingsFromSupabase('resto_001');
+      const liveSettings = await fetchLiveSettingsFromSupabase(currentRestoId);
       if (isMounted && liveSettings) {
         setRestaurantProfile(prev => {
           const merged = { ...prev, ...liveSettings };
-          saveStoredRestaurantProfile(merged);
+          if (currentRestoId === 'resto_001') saveStoredRestaurantProfile(merged);
           return merged;
         });
       }
     };
 
     const ordersChannel = supabase
-      .channel('realtime_orders_app_channel')
+      .channel(`realtime_orders_app_channel_${currentRestoId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
-        () => {
-          if (isMounted) syncOrders();
+        (payload) => {
+          if (isMounted && (!payload?.new?.restaurant_id || payload.new.restaurant_id === currentRestoId)) {
+            syncOrders();
+          }
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'restaurant_settings' },
-        () => {
-          if (isMounted) syncSettings();
+        (payload) => {
+          if (isMounted && (!payload?.new?.restaurant_id || payload.new.restaurant_id === currentRestoId)) {
+            syncSettings();
+          }
         }
       )
       .subscribe();
 
-    // 2. Refresh when window is focused or tab becomes active
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === 'visible') {
         syncOrders();
@@ -407,7 +500,6 @@ export default function App() {
     window.addEventListener('focus', handleVisibilityOrFocus);
     document.addEventListener('visibilitychange', handleVisibilityOrFocus);
 
-    // 3. Gentle backup fallback (60s instead of 6s, only when tab is visible)
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         syncOrders();
@@ -421,18 +513,17 @@ export default function App() {
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       clearInterval(interval);
     };
-  }, []);
+  }, [currentRestoId]);
 
   // Record real menu scan in Supabase menu_scans when customer accesses the digital menu view
-  // Uses ref lock so customer exploring food cards, opening modals, closing sheets or browsing never triggers extra scans
   const hasRecordedScanRef = useRef(false);
 
   useEffect(() => {
     if (currentView === 'menu' && !hasRecordedScanRef.current) {
       hasRecordedScanRef.current = true;
-      recordMenuScan('resto_001', tableNumber || 'Table 04');
+      recordMenuScan(currentRestoId, tableNumber || 'Table 04');
     }
-  }, [currentView, tableNumber]);
+  }, [currentView, tableNumber, currentRestoId]);
 
   // Active Featured Sliders or fallback to foodsList for Digital Menu (declared early before any useEffect)
   const activeFeaturedSliders = useMemo(() => {
@@ -491,17 +582,17 @@ export default function App() {
       updated = [savedFood, ...foodsList];
     }
     setFoodsList(updated);
-    saveStoredFoods(updated);
+    if (currentRestoId === 'resto_001') saveStoredFoods(updated);
 
-    // Sync to Supabase
-    syncFoodToSupabase(savedFood);
+    // Sync to Supabase scoped to current restaurant
+    syncFoodToSupabase(savedFood, currentRestoId);
 
     // If new category, add to categories list and sync
     if (savedFood.category && !categoriesList.includes(savedFood.category)) {
       const updatedCats = Array.from(new Set([...categoriesList, savedFood.category]));
       setCategoriesList(updatedCats);
-      saveStoredCategories(updatedCats);
-      syncCategoryToSupabase(savedFood.category);
+      if (currentRestoId === 'resto_001') saveStoredCategories(updatedCats);
+      syncCategoryToSupabase(savedFood.category, currentRestoId);
     }
 
     if (!exists) {
@@ -514,7 +605,7 @@ export default function App() {
     const cleanId = String(foodId);
     const updated = foodsList.filter(f => String(f.id) !== cleanId);
     setFoodsList(updated);
-    saveStoredFoods(updated);
+    if (currentRestoId === 'resto_001') saveStoredFoods(updated);
     deleteFoodFromSupabase(cleanId);
     setCurrentIndex(0);
   };
@@ -529,21 +620,21 @@ export default function App() {
           is_published: !isCurrentlyPub,
           status: !isCurrentlyPub ? 'published' : 'unpublished'
         };
-        syncFoodToSupabase(changed);
+        syncFoodToSupabase(changed, currentRestoId);
         return changed;
       }
       return f;
     });
     setFoodsList(updated);
-    saveStoredFoods(updated);
+    if (currentRestoId === 'resto_001') saveStoredFoods(updated);
   };
 
   const handleAddCategory = (catName) => {
     if (!categoriesList.includes(catName)) {
       const updatedCats = Array.from(new Set([...categoriesList, catName]));
       setCategoriesList(updatedCats);
-      saveStoredCategories(updatedCats);
-      syncCategoryToSupabase(catName);
+      if (currentRestoId === 'resto_001') saveStoredCategories(updatedCats);
+      syncCategoryToSupabase(catName, currentRestoId);
     }
   };
 
@@ -552,66 +643,66 @@ export default function App() {
     const cleanNew = newName.trim();
     const updatedCats = categoriesList.map(c => c === oldName ? cleanNew : c);
     setCategoriesList(updatedCats);
-    saveStoredCategories(updatedCats);
+    if (currentRestoId === 'resto_001') saveStoredCategories(updatedCats);
 
     const updatedFoods = foodsList.map(f => f.category === oldName ? { ...f, category: cleanNew } : f);
     setFoodsList(updatedFoods);
-    saveStoredFoods(updatedFoods);
-    updatedFoods.filter(f => f.category === cleanNew).forEach(f => syncFoodToSupabase(f));
+    if (currentRestoId === 'resto_001') saveStoredFoods(updatedFoods);
+    updatedFoods.filter(f => f.category === cleanNew).forEach(f => syncFoodToSupabase(f, currentRestoId));
 
     const updatedSubs = subcategoriesList.map(s => s.category === oldName ? { ...s, category: cleanNew } : s);
     setSubcategoriesList(updatedSubs);
-    saveStoredSubcategories(updatedSubs);
+    if (currentRestoId === 'resto_001') saveStoredSubcategories(updatedSubs);
 
-    deleteCategoryFromSupabase(oldName);
-    syncCategoryToSupabase(cleanNew);
+    deleteCategoryFromSupabase(oldName, currentRestoId);
+    syncCategoryToSupabase(cleanNew, currentRestoId);
   };
 
   const handleUpdateSubcategory = (updatedSub) => {
     const updated = subcategoriesList.map(s => s.id === updatedSub.id ? updatedSub : s);
     setSubcategoriesList(updated);
-    saveStoredSubcategories(updated);
-    syncSubcategoryToSupabase(updatedSub);
+    if (currentRestoId === 'resto_001') saveStoredSubcategories(updated);
+    syncSubcategoryToSupabase(updatedSub, currentRestoId);
   };
 
   const handleDeleteCategory = (catName) => {
     const updatedCats = categoriesList.filter(c => c !== catName);
     setCategoriesList(updatedCats);
-    saveStoredCategories(updatedCats);
-    deleteCategoryFromSupabase(catName);
+    if (currentRestoId === 'resto_001') saveStoredCategories(updatedCats);
+    deleteCategoryFromSupabase(catName, currentRestoId);
   };
 
   const handleUpdateOrderStatus = (orderId, newStatus) => {
     const updated = ordersList.map(o => o.id === orderId ? { ...o, orderStatus: newStatus } : o);
     setOrdersList(updated);
-    saveStoredOrders(updated);
+    if (currentRestoId === 'resto_001') saveStoredOrders(updated);
   };
 
   const handleAddSubcategory = (newSub) => {
     const updated = [newSub, ...subcategoriesList];
     setSubcategoriesList(updated);
-    saveStoredSubcategories(updated);
-    syncSubcategoryToSupabase(newSub);
+    if (currentRestoId === 'resto_001') saveStoredSubcategories(updated);
+    syncSubcategoryToSupabase(newSub, currentRestoId);
   };
 
   const handleDeleteSubcategory = (subId) => {
     const updated = subcategoriesList.filter(s => s.id !== subId);
     setSubcategoriesList(updated);
-    saveStoredSubcategories(updated);
-    deleteSubcategoryFromSupabase(subId);
+    if (currentRestoId === 'resto_001') saveStoredSubcategories(updated);
+    deleteSubcategoryFromSupabase(subId, currentRestoId);
   };
 
   const handleBroadcastSliderNotification = async (slide) => {
     if (!slide) return;
     try {
-      const followersData = await fetchLiveFollowersFromSupabase('resto_001');
+      const followersData = await fetchLiveFollowersFromSupabase(currentRestoId);
       const recipientsCount = followersData?.totalFollowers || 1;
       const currencySymbol = restaurantProfile?.currency || '৳';
       const priceStr = slide.price ? ` (${currencySymbol}${slide.price})` : '';
       const bodyText = `${slide.badge ? `[${slide.badge}] ` : ''}${slide.subtitle || 'Special offer now live on our 3D menu!'}${priceStr}`;
-      const targetUrl = `/?openSlide=${encodeURIComponent(slide.id || '')}${slide.foodId ? `&foodId=${encodeURIComponent(slide.foodId)}` : ''}`;
+      const targetUrl = `/${activeRestaurant?.slug || '3d-dine'}?openSlide=${encodeURIComponent(slide.id || '')}${slide.foodId ? `&foodId=${encodeURIComponent(slide.foodId)}` : ''}`;
 
-      await broadcastRestaurantNotification('resto_001', {
+      await broadcastRestaurantNotification(currentRestoId, {
         sliderId: slide.id,
         foodId: slide.foodId || '',
         title: `🔥 New Special Offer: ${slide.title}!`,
@@ -635,8 +726,8 @@ export default function App() {
       updated = [newSlide, ...featuredSliders];
     }
     setFeaturedSliders(updated);
-    saveStoredFeaturedSliders(updated);
-    await syncSliderToSupabase(newSlide);
+    if (currentRestoId === 'resto_001') saveStoredFeaturedSliders(updated);
+    await syncSliderToSupabase(newSlide, currentRestoId);
 
     // If published and active, broadcast push notification to all followers
     if (newSlide.isActive !== false) {
@@ -647,45 +738,46 @@ export default function App() {
   const handleDeleteFeaturedSlider = (slideId) => {
     const updated = featuredSliders.filter(s => s.id !== slideId);
     setFeaturedSliders(updated);
-    saveStoredFeaturedSliders(updated);
-    deleteSliderFromSupabase(slideId);
+    if (currentRestoId === 'resto_001') saveStoredFeaturedSliders(updated);
+    deleteSliderFromSupabase(slideId, currentRestoId);
   };
 
   const handleToggleFeaturedSlider = (slideId) => {
     const updated = featuredSliders.map(s => {
       if (s.id === slideId) {
         const toggled = { ...s, isActive: !s.isActive };
-        syncSliderToSupabase(toggled);
+        syncSliderToSupabase(toggled, currentRestoId);
         return toggled;
       }
       return s;
     });
     setFeaturedSliders(updated);
-    saveStoredFeaturedSliders(updated);
+    if (currentRestoId === 'resto_001') saveStoredFeaturedSliders(updated);
   };
 
   const handleSaveRestaurantProfile = (updatedProfile) => {
     setRestaurantProfile(updatedProfile);
-    saveRestaurantProfile(updatedProfile);
+    if (currentRestoId === 'resto_001') saveRestaurantProfile(updatedProfile);
+    syncSettingsToSupabase(updatedProfile, currentRestoId);
   };
 
   const handleAddTicket = (newTicket) => {
     const updated = [newTicket, ...ticketsList];
     setTicketsList(updated);
-    saveStoredTickets(updated);
-    syncTicketToSupabase(newTicket);
+    if (currentRestoId === 'resto_001') saveStoredTickets(updated);
+    syncTicketToSupabase(newTicket, currentRestoId);
   };
 
   const handleSendMessage = (newMsg) => {
-    if (newMsg._clearAll) {
+    if (newMsg?._clearAll) {
       setChatMessagesList([]);
-      saveStoredChatMessages([]);
+      if (currentRestoId === 'resto_001') saveStoredChatMessages([]);
       return;
     }
     const updated = [...chatMessagesList, newMsg];
     setChatMessagesList(updated);
-    saveStoredChatMessages(updated);
-    syncChatMessageToSupabase(newMsg);
+    if (currentRestoId === 'resto_001') saveStoredChatMessages(updated);
+    syncChatMessageToSupabase(newMsg, currentRestoId);
   };
 
   const handleUpdateSuperAdminConfig = (updatedCfg) => {
@@ -714,15 +806,19 @@ export default function App() {
   }, []);
 
   // Restaurant Follow State (Customer Connection & Marketing Notifications)
-  const [isFollowing, setIsFollowing] = useState(() => isCustomerFollowingRestaurant('resto_001'));
-  const [isFollowBannerVisible, setIsFollowBannerVisible] = useState(() => !isCustomerFollowingRestaurant('resto_001'));
+  const [isFollowing, setIsFollowing] = useState(() => isCustomerFollowingRestaurant(currentRestoId));
+  const [isFollowBannerVisible, setIsFollowBannerVisible] = useState(() => !isCustomerFollowingRestaurant(currentRestoId));
   const [isFadingOutFollowBanner, setIsFadingOutFollowBanner] = useState(false);
   const followBannerTimerRef = useRef(null);
 
-  // Sync customer following status from Supabase DB on initial load/refresh
+  // Sync customer following status from Supabase DB on initial load/refresh or tenant switch
   useEffect(() => {
     let isMounted = true;
-    syncCustomerFollowStatusFromSupabase('resto_001').then((dbFollowed) => {
+    const followed = isCustomerFollowingRestaurant(currentRestoId);
+    setIsFollowing(followed);
+    setIsFollowBannerVisible(!followed);
+
+    syncCustomerFollowStatusFromSupabase(currentRestoId).then((dbFollowed) => {
       if (!isMounted) return;
       setIsFollowing(dbFollowed);
       if (dbFollowed) {
@@ -732,10 +828,10 @@ export default function App() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [currentRestoId]);
 
   const handleFollowRestaurant = async () => {
-    await recordRestaurantFollow('resto_001');
+    await recordRestaurantFollow(currentRestoId);
     setIsFollowing(true);
 
     // 8 seconds after following, the follow banner disappears
@@ -758,13 +854,13 @@ export default function App() {
   // Automatically sync Web Push subscription with Supabase for active followers
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const isFollower = isCustomerFollowingRestaurant('resto_001');
+      const isFollower = isCustomerFollowingRestaurant(currentRestoId);
       const hasPermission = typeof Notification !== 'undefined' && Notification.permission === 'granted';
       if (isFollower || hasPermission) {
-        ensurePushSubscriptionSync('resto_001').catch(() => {});
+        ensurePushSubscriptionSync(currentRestoId).catch(() => {});
       }
     }
-  }, [isFollowing]);
+  }, [isFollowing, currentRestoId]);
 
   // Live Follower Notification Banner State (For Customer 3D Menu)
   const [followerNotification, setFollowerNotification] = useState(null);
@@ -774,7 +870,7 @@ export default function App() {
   const handleActivateOfferDish = (sliderId, foodId) => {
     // 1. Ensure view is Customer Menu
     if (currentView !== 'menu') {
-      navigateToMenu();
+      navigateToMenu(activeRestaurant);
     }
 
     // 2. Close all open overlays and modals so the customer directly sees the home screen
@@ -829,7 +925,7 @@ export default function App() {
       if (!notif || !notif.id) return;
 
       // Check if user has followed this restaurant
-      const isUserFollower = isCustomerFollowingRestaurant('resto_001');
+      const isUserFollower = isCustomerFollowingRestaurant(currentRestoId);
       if (!isUserFollower) return;
 
       // Deduplication: only alert once per notification ID
@@ -856,8 +952,8 @@ export default function App() {
       }, 14000);
 
       // 2. Native System / Browser Notification (Phone screen / Desktop OS) - non-blocking
-      const notifTargetUrl = notif.url || `/?openSlide=${encodeURIComponent(notif.slider_id || '')}`;
-      showBrowserNotification(notif.title || '🔥 New Special Offer from Moneky Bhai!', {
+      const notifTargetUrl = notif.url || `/${activeRestaurant?.slug || '3d-dine'}?openSlide=${encodeURIComponent(notif.slider_id || '')}`;
+      showBrowserNotification(notif.title || `🔥 New Special Offer from ${restaurantProfile?.name || 'Restaurant'}!`, {
         body: notif.body || 'Check out our newly published special dish on the 3D menu!',
         icon: notif.icon || restaurantProfile?.logo || '/monkey_bhai_logo.png',
         image: notif.image || undefined,
@@ -876,7 +972,7 @@ export default function App() {
     let broadcastChannel = null;
     try {
       broadcastChannel = supabase
-        .channel('dgm_restaurant_realtime_broadcast')
+        .channel(`dgm_restaurant_realtime_broadcast_${currentRestoId}`)
         .on('broadcast', { event: 'new_slider_notif' }, (data) => {
           if (data?.payload) {
             handleIncomingNotification(data.payload);
@@ -891,7 +987,7 @@ export default function App() {
     let dbChannel = null;
     try {
       dbChannel = supabase
-        .channel('realtime_restaurant_notifications_db')
+        .channel(`realtime_restaurant_notifications_db_${currentRestoId}`)
         .on(
           'postgres_changes',
           {
@@ -900,7 +996,7 @@ export default function App() {
             table: 'restaurant_notifications'
           },
           (payload) => {
-            if (payload?.new && (payload.new.restaurant_id === 'resto_001' || !payload.new.restaurant_id)) {
+            if (payload?.new && (payload.new.restaurant_id === currentRestoId || !payload.new.restaurant_id)) {
               handleIncomingNotification(payload.new);
             }
           }
@@ -913,7 +1009,7 @@ export default function App() {
     // Layer 3: Gentle Visibility-Aware Fallback (60s instead of 3s; Layers 1 & 2 handle instant delivery via WebSocket)
     const checkLatestNotifs = () => {
       if (document.visibilityState === 'visible') {
-        fetchLatestRestaurantNotifications('resto_001', 3).then((latest) => {
+        fetchLatestRestaurantNotifications(currentRestoId, 3).then((latest) => {
           if (Array.isArray(latest)) {
             latest.forEach(notif => {
               handleIncomingNotification(notif);
@@ -1017,15 +1113,39 @@ export default function App() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [placedOrderDetails, setPlacedOrderDetails] = useState(null);
 
-  // Customer Selected Items List (Add to List Flow)
+  // Customer Selected Items List (Add to List Flow) - Scoped per restaurant tenant
   const [selectedList, setSelectedList] = useState(() => {
     try {
-      const raw = localStorage.getItem('dgm_customer_selected_items');
-      return raw ? JSON.parse(raw) : [];
+      const key = `dgm_customer_selected_items_${currentRestoId}`;
+      const raw = localStorage.getItem(key);
+      if (raw) return JSON.parse(raw);
+      if (currentRestoId === 'resto_001') {
+        const legacy = localStorage.getItem('dgm_customer_selected_items');
+        if (legacy) return JSON.parse(legacy);
+      }
+      return [];
     } catch (e) {
       return [];
     }
   });
+
+  // Re-sync selectedList whenever active restaurant changes
+  useEffect(() => {
+    try {
+      const key = `dgm_customer_selected_items_${currentRestoId}`;
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        setSelectedList(JSON.parse(raw));
+      } else if (currentRestoId === 'resto_001') {
+        const legacy = localStorage.getItem('dgm_customer_selected_items');
+        setSelectedList(legacy ? JSON.parse(legacy) : []);
+      } else {
+        setSelectedList([]);
+      }
+    } catch (e) {
+      setSelectedList([]);
+    }
+  }, [currentRestoId]);
   const [isSelectedListOpen, setIsSelectedListOpen] = useState(false);
   const [isConfirmOrderModalOpen, setIsConfirmOrderModalOpen] = useState(false);
   const [orderConfirmationSuccess, setOrderConfirmationSuccess] = useState(false);
@@ -1047,9 +1167,11 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('dgm_customer_selected_items', JSON.stringify(selectedList));
+      if (currentRestoId) {
+        localStorage.setItem(`dgm_customer_selected_items_${currentRestoId}`, JSON.stringify(selectedList));
+      }
     } catch (e) {}
-  }, [selectedList]);
+  }, [selectedList, currentRestoId]);
 
   // 3D Holographic Touch & Mouse Drag Rotation Controls
   const [rotX, setRotX] = useState(0);
@@ -1564,6 +1686,7 @@ export default function App() {
 
   const isItemMatchWithFood = (item, food) => {
     if (!item || !food) return false;
+    if (item.restaurantId && currentRestoId && item.restaurantId !== currentRestoId) return false;
     if (item.foodId && food.id && String(item.foodId) === String(food.id)) return true;
     if (item.title && food.title && String(item.title).trim().toLowerCase() === String(food.title).trim().toLowerCase()) return true;
     return false;
@@ -1572,7 +1695,7 @@ export default function App() {
   const existingSelectedListItem = useMemo(() => {
     if (!activeFood) return null;
     return selectedList.find(item => isItemMatchWithFood(item, activeFood)) || null;
-  }, [selectedList, activeFood?.id, activeFood?.title]);
+  }, [selectedList, activeFood?.id, activeFood?.title, currentRestoId]);
   const isItemAlreadyInList = Boolean(existingSelectedListItem);
 
   // Add or update customized food item in selected list from Food Details modal
@@ -1611,6 +1734,7 @@ export default function App() {
     const newItem = {
       cartId: `${activeFood.id}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       foodId: activeFood.id,
+      restaurantId: currentRestoId,
       title: activeFood.title,
       image: activeFood.image,
       isPng: activeFood.isPng,
@@ -1701,10 +1825,10 @@ export default function App() {
     const newOrder = {
       id: `ord_${Date.now()}`,
       orderNumber: `DGM-${Math.floor(1000 + Math.random() * 9000)}`,
-      restaurantId: 'resto_001',
-      restaurantName: restaurantProfile?.name || 'Moneky Bhai',
+      restaurantId: currentRestoId,
+      restaurantName: restaurantProfile?.name || activeRestaurant?.name || 'Monkey Bhai',
       tableNumber: tableNumber || 'Table 04',
-      customerName: 'Customer (Table 04)',
+      customerName: tableNumber ? `Customer (${tableNumber})` : 'Customer (Table 04)',
       diningMode: 'dine-in',
       items: selectedList.map(item => ({
         name: item.title,
@@ -1917,10 +2041,10 @@ export default function App() {
     const newOrder = {
       id: `ord_${Date.now()}`,
       orderNumber: `DGM-${Math.floor(1000 + Math.random() * 9000)}`,
-      restaurantId: 'resto_001',
-      restaurantName: restaurantProfile?.name || 'Moneky Bhai',
+      restaurantId: currentRestoId,
+      restaurantName: restaurantProfile?.name || activeRestaurant?.name || 'Monkey Bhai',
       tableNumber: tableNumber || 'Table 04',
-      customerName: 'Customer (Table 04)',
+      customerName: tableNumber ? `Customer (${tableNumber})` : 'Customer (Table 04)',
       diningMode: 'dine-in',
       items: itemsToOrder.map(item => ({
         name: item.title || item.name,
@@ -2118,6 +2242,8 @@ export default function App() {
     const newOrderRecord = {
       id: `ord_${Date.now()}`,
       orderNumber: orderIdNum,
+      restaurantId: currentRestoId,
+      restaurantName: restaurantProfile?.name || activeRestaurant?.name || 'Monkey Bhai',
       tableNumber,
       customerName: customerName.trim() || 'Guest Customer',
       customerPhone: customerPhone.trim() || '',
@@ -2218,52 +2344,127 @@ export default function App() {
     if (!isAdminAuthenticated) {
       return (
         <RestaurantLogin
-          onLoginSuccess={() => {
+          targetRestaurant={activeRestaurant}
+          onLoginSuccess={(loggedResto) => {
+            const resto = loggedResto || activeRestaurant || initialSuperAdminRestaurants[0];
+            sessionStorage.setItem('active_resto_session', JSON.stringify(resto));
+            setActiveRestaurant(resto);
+            loadRestaurantData(resto.id, resto);
             setIsAdminAuthenticated(true);
             setAdminAuthSession(true);
+            const adminSlug = getRestaurantAdminSlug(resto);
+            if (typeof window !== 'undefined' && window.history.pushState) {
+              window.history.pushState({}, '', `/${adminSlug}/admin`);
+            }
           }}
-          onBackToMenu={navigateToMenu}
+          onBackToMenu={() => navigateToMenu(activeRestaurant)}
         />
       );
     }
 
+    const superAdminHandoffRaw = typeof window !== 'undefined' ? sessionStorage.getItem('superadmin_impersonating_resto') : null;
+    let superAdminHandoff = null;
+    try {
+      if (superAdminHandoffRaw) superAdminHandoff = JSON.parse(superAdminHandoffRaw);
+    } catch {}
+
     return (
-      <RestaurantPanel
-        foods={foodsList}
-        categories={categoriesList}
-        subcategories={subcategoriesList}
-        featuredSliders={featuredSliders}
-        orders={ordersList}
-        payments={paymentsList}
-        restaurantProfile={restaurantProfile}
-        tickets={ticketsList}
-        chatMessages={chatMessagesList}
-        superAdminConfig={superAdminConfig}
-        onAddFood={handleAddFoodFromPanel}
-        onDeleteFood={handleDeleteFoodFromPanel}
-        onToggleFoodStatus={handleToggleFoodStatus}
-        onAddCategory={handleAddCategory}
-        onDeleteCategory={handleDeleteCategory}
-        onUpdateCategory={handleUpdateCategory}
-        onAddSubcategory={handleAddSubcategory}
-        onUpdateSubcategory={handleUpdateSubcategory}
-        onDeleteSubcategory={handleDeleteSubcategory}
-        onAddFeaturedSlider={handleAddFeaturedSlider}
-        onDeleteFeaturedSlider={handleDeleteFeaturedSlider}
-        onToggleFeaturedSlider={handleToggleFeaturedSlider}
-        onBroadcastSliderNotification={handleBroadcastSliderNotification}
-        onSaveRestaurantProfile={handleSaveRestaurantProfile}
-        onAddTicket={handleAddTicket}
-        onSendMessage={handleSendMessage}
-        onUpdateSuperAdminConfig={handleUpdateSuperAdminConfig}
-        onUpdateOrderStatus={handleUpdateOrderStatus}
-        onBackToMenu={navigateToMenu}
-        onLogout={() => {
-          setIsAdminAuthenticated(false);
-          setAdminAuthSession(false);
-          setCurrentView('admin');
-        }}
-      />
+      <div className="flex flex-col w-full min-h-screen">
+        {superAdminHandoff && (
+          <div style={{
+            background: 'linear-gradient(90deg, #101d33, #1e293b)',
+            color: '#f8fafc',
+            padding: '10px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '12px',
+            borderBottom: '2px solid #ff7800',
+            zIndex: 99999,
+            position: 'sticky',
+            top: 0
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{
+                background: 'linear-gradient(120deg, #f74f00, #ff7400)',
+                color: '#fff',
+                padding: '3px 8px',
+                borderRadius: '5px',
+                fontWeight: 800,
+                fontSize: '10px',
+                letterSpacing: '0.5px'
+              }}>
+                SUPER ADMIN
+              </span>
+              <span>
+                Authorized Session • Viewing Restaurant Panel for <strong>{superAdminHandoff.name || 'Restaurant'}</strong>
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                sessionStorage.removeItem('superadmin_impersonating_resto');
+                navigateToSuperAdmin();
+              }}
+              style={{
+                background: '#ff7800',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '5px 12px',
+                fontWeight: 700,
+                fontSize: '11px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(255, 120, 0, 0.3)'
+              }}
+            >
+              Exit to Super Admin
+            </button>
+          </div>
+        )}
+        <RestaurantPanel
+          activeRestaurant={activeRestaurant}
+          foods={foodsList}
+          categories={categoriesList}
+          subcategories={subcategoriesList}
+          featuredSliders={featuredSliders}
+          orders={ordersList}
+          payments={paymentsList}
+          restaurantProfile={restaurantProfile}
+          tickets={ticketsList}
+          chatMessages={chatMessagesList}
+          superAdminConfig={superAdminConfig}
+          onAddFood={handleAddFoodFromPanel}
+          onDeleteFood={handleDeleteFoodFromPanel}
+          onToggleFoodStatus={handleToggleFoodStatus}
+          onAddCategory={handleAddCategory}
+          onDeleteCategory={handleDeleteCategory}
+          onUpdateCategory={handleUpdateCategory}
+          onAddSubcategory={handleAddSubcategory}
+          onUpdateSubcategory={handleUpdateSubcategory}
+          onDeleteSubcategory={handleDeleteSubcategory}
+          onAddFeaturedSlider={handleAddFeaturedSlider}
+          onDeleteFeaturedSlider={handleDeleteFeaturedSlider}
+          onToggleFeaturedSlider={handleToggleFeaturedSlider}
+          onBroadcastSliderNotification={handleBroadcastSliderNotification}
+          onSaveRestaurantProfile={handleSaveRestaurantProfile}
+          onAddTicket={handleAddTicket}
+          onSendMessage={handleSendMessage}
+          onUpdateSuperAdminConfig={handleUpdateSuperAdminConfig}
+          onUpdateOrderStatus={handleUpdateOrderStatus}
+          onBackToMenu={() => navigateToMenu(activeRestaurant)}
+          onLogout={() => {
+            sessionStorage.removeItem('superadmin_impersonating_resto');
+            sessionStorage.removeItem('active_resto_session');
+            setIsAdminAuthenticated(false);
+            setAdminAuthSession(false);
+            const adminSlug = getRestaurantAdminSlug(activeRestaurant);
+            if (typeof window !== 'undefined' && window.history.pushState) {
+              window.history.pushState({}, '', `/${adminSlug}/admin`);
+            }
+            setCurrentView('admin');
+          }}
+        />
+      </div>
     );
   }
 
@@ -2298,14 +2499,14 @@ export default function App() {
       {/* ======================================================== */}
       <div className="relative z-40 w-full max-w-xl mx-auto px-3 sm:px-4 pt-3 sm:pt-3.5 shrink-0">
         <RestaurantHeader
-          name={restaurantProfile?.name || 'Moneky Bhai'}
-          logoUrl={restaurantProfile?.logo || null}
+          name={restaurantProfile?.name || activeRestaurant?.name || 'Monkey Bhai'}
+          logoUrl={restaurantProfile?.logo || activeRestaurant?.logo || null}
           brand="24 DIGITAL"
           welcomeText="Welcome, Our Dear Guest"
           isFollowing={isFollowing}
           onFollow={handleFollowRestaurant}
           onMenuClick={() => setIsMenuOpen(true)}
-          onLogoClick={navigateToAdmin}
+          onLogoClick={() => navigateToAdmin(activeRestaurant)}
           rightExtra={
             adminConfig.premiumFeatures.enableCartPage ? (
               <button

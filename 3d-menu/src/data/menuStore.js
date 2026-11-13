@@ -190,7 +190,12 @@ export const resolveFoodImage = (image, fallback) => {
       return fallback.image;
     }
   }
-  return image || (fallback ? fallback.image : null);
+  if (!image) return fallback?.image || '/burger_hd.png';
+  const clean = String(image).trim();
+  if (clean.startsWith('/src/assets/')) {
+    return clean.replace('/src/assets/', '/');
+  }
+  return clean;
 };
 
 const mapFoodItem = (item) => {
@@ -960,7 +965,7 @@ export const showBrowserNotification = async (title, options = {}) => {
   return false;
 };
 
-export const syncFoodToSupabase = async (food) => {
+export const syncFoodToSupabase = async (food, restaurantId) => {
   try {
     const isPub = food.is_published !== false && food.status !== 'unpublished' && food.status !== 'draft';
     let imageToSync = food.image || null;
@@ -972,7 +977,7 @@ export const syncFoodToSupabase = async (food) => {
     }
     const payload = {
       id: String(food.id),
-      restaurant_id: 'resto_001',
+      restaurant_id: restaurantId || food.restaurant_id || food.restaurantId || 'resto_001',
       category_name: food.category || 'Main Course',
       subcategory: food.subcategory || null,
       title: food.title,
@@ -1028,12 +1033,12 @@ export const saveStoredCategories = (categories) => {
   }
 };
 
-export const syncCategoryToSupabase = async (catName) => {
+export const syncCategoryToSupabase = async (catName, restaurantId = 'resto_001') => {
   try {
     const slug = catName.toLowerCase().replace(/[^a-z0-9]/g, '_');
     const { error } = await supabase.from('categories').upsert([{
-      id: `cat_${slug}`,
-      restaurant_id: 'resto_001',
+      id: `cat_${restaurantId}_${slug}`,
+      restaurant_id: restaurantId,
       name: catName,
       is_published: true,
       display_order: 10
@@ -1044,9 +1049,9 @@ export const syncCategoryToSupabase = async (catName) => {
   }
 };
 
-export const deleteCategoryFromSupabase = async (catName) => {
+export const deleteCategoryFromSupabase = async (catName, restaurantId = 'resto_001') => {
   try {
-    await supabase.from('categories').delete().eq('name', catName);
+    await supabase.from('categories').delete().eq('name', catName).eq('restaurant_id', restaurantId);
   } catch (err) {
     console.warn('Supabase category delete caught:', err);
   }
@@ -1067,18 +1072,19 @@ const safeQuery = async (promise) => {
   }
 };
 
-// --- Remote Fetch on Mount to ensure Cloud State matches Local State ---
-export const fetchRemoteData = async () => {
+// --- Remote Fetch Scoped to Restaurant Tenant ---
+export const fetchRemoteData = async (restaurantId = 'resto_001') => {
   try {
+    const targetId = restaurantId || 'resto_001';
     const [foodsRes, catsRes, subsRes, slidersRes, settingsRes, ticketsRes, chatRes, ordersRes] = await Promise.all([
-      safeQuery(supabase.from('food_items').select('*')),
-      safeQuery(supabase.from('categories').select('*')),
-      safeQuery(supabase.from('subcategories').select('*').order('display_order', { ascending: true })),
-      safeQuery(supabase.from('featured_sliders').select('*').order('display_order', { ascending: true })),
-      safeQuery(supabase.from('restaurant_settings').select('*').eq('id', 'set_resto_001').single()),
-      safeQuery(supabase.from('support_tickets').select('*').order('created_at', { ascending: false })),
-      safeQuery(supabase.from('support_chat_messages').select('*').order('created_at', { ascending: true })),
-      safeQuery(supabase.from('orders').select('*').eq('restaurant_id', 'resto_001').order('created_at', { ascending: false }))
+      safeQuery(supabase.from('food_items').select('*').eq('restaurant_id', targetId)),
+      safeQuery(supabase.from('categories').select('*').eq('restaurant_id', targetId).order('display_order', { ascending: true })),
+      safeQuery(supabase.from('subcategories').select('*').eq('restaurant_id', targetId).order('display_order', { ascending: true })),
+      safeQuery(supabase.from('featured_sliders').select('*').eq('restaurant_id', targetId).order('display_order', { ascending: true })),
+      safeQuery(supabase.from('restaurant_settings').select('*').or(`id.eq.set_${targetId},restaurant_id.eq.${targetId}`).single()),
+      safeQuery(supabase.from('support_tickets').select('*').eq('restaurant_id', targetId).order('created_at', { ascending: false })),
+      safeQuery(supabase.from('support_chat_messages').select('*').eq('restaurant_id', targetId).order('created_at', { ascending: true })),
+      safeQuery(supabase.from('orders').select('*').eq('restaurant_id', targetId).order('created_at', { ascending: false }))
     ]);
 
     let remoteFoods = null;
@@ -1467,7 +1473,7 @@ export const fetchLiveSettingsFromSupabase = async (restaurantId = 'resto_001') 
     const { data, error } = await supabase
       .from('restaurant_settings')
       .select('*')
-      .eq('id', `set_${restaurantId}`)
+      .or(`id.eq.set_${restaurantId},restaurant_id.eq.${restaurantId}`)
       .single();
     if (!error && data) return mapSettingsRow(data);
   } catch (err) {
@@ -1479,15 +1485,17 @@ export const fetchLiveSettingsFromSupabase = async (restaurantId = 'resto_001') 
 let isSyncingSettings = false;
 let pendingProfileSync = null;
 
-export const syncSettingsToSupabase = async (profile) => {
+export const syncSettingsToSupabase = async (profile, restaurantId) => {
   if (!profile) return;
-  pendingProfileSync = profile;
+  pendingProfileSync = { profile, restaurantId };
   if (isSyncingSettings) return;
 
   isSyncingSettings = true;
   try {
     while (pendingProfileSync) {
-      const current = pendingProfileSync;
+      const item = pendingProfileSync;
+      const current = item.profile;
+      const targetRestoId = item.restaurantId || current.restaurant_id || current.restaurantId || 'resto_001';
       pendingProfileSync = null;
 
       const safeLogo = (current.logo && typeof current.logo === 'string' && current.logo.length > 200000)
@@ -1504,7 +1512,7 @@ export const syncSettingsToSupabase = async (profile) => {
           logo: safeLogo,
           currency: current.currency || '৳',
           table_count: Number(current.tableCount || 12)
-        }).eq('id', 'resto_001');
+        }).eq('id', targetRestoId);
         if (restoErr) console.warn('Supabase restaurants update warning:', restoErr);
       } catch (rErr) {
         console.warn('Supabase restaurants update caught:', rErr);
@@ -1513,8 +1521,8 @@ export const syncSettingsToSupabase = async (profile) => {
       // 2. Upsert restaurant_settings (must use exact Postgres snake_case column names)
       try {
         const { error: settingsErr } = await supabase.from('restaurant_settings').upsert([{
-          id: 'set_resto_001',
-          restaurant_id: 'resto_001',
+          id: `set_${targetRestoId}`,
+          restaurant_id: targetRestoId,
           name: current.name,
           tagline: current.tagline || '',
           logo: safeLogo,
@@ -1580,11 +1588,11 @@ export const saveStoredSubcategories = (subcategories) => {
   }
 };
 
-export const syncSubcategoryToSupabase = async (sub) => {
+export const syncSubcategoryToSupabase = async (sub, restaurantId = 'resto_001') => {
   try {
     await supabase.from('subcategories').upsert([{
       id: String(sub.id),
-      restaurant_id: 'resto_001',
+      restaurant_id: sub.restaurant_id || sub.restaurantId || restaurantId || 'resto_001',
       category_name: sub.category,
       name: sub.name,
       display_order: sub.displayOrder || 1
@@ -1670,7 +1678,7 @@ export const saveStoredFeaturedSliders = (sliders) => {
   }
 };
 
-export const syncSliderToSupabase = async (slider) => {
+export const syncSliderToSupabase = async (slider, restaurantId = 'resto_001') => {
   try {
     let sliderImg = slider.image || null;
     if (typeof sliderImg === 'string' && sliderImg.startsWith('data:') && sliderImg.length > 250000) {
@@ -1682,7 +1690,7 @@ export const syncSliderToSupabase = async (slider) => {
 
     const { data, error } = await supabase.from('featured_sliders').upsert([{
       id: String(slider.id),
-      restaurant_id: 'resto_001',
+      restaurant_id: slider.restaurant_id || slider.restaurantId || restaurantId || 'resto_001',
       badge: slider.badge,
       title: slider.title,
       subtitle: slider.subtitle || null,
@@ -1757,11 +1765,11 @@ export const saveStoredTickets = (tickets) => {
   }
 };
 
-export const syncTicketToSupabase = async (ticket) => {
+export const syncTicketToSupabase = async (ticket, restaurantId = 'resto_001') => {
   try {
     await supabase.from('support_tickets').upsert([{
       id: String(ticket.id),
-      restaurant_id: 'resto_001',
+      restaurant_id: ticket.restaurant_id || ticket.restaurantId || restaurantId || 'resto_001',
       subject: ticket.subject,
       category: ticket.category,
       priority: ticket.priority,
@@ -1816,11 +1824,11 @@ export const saveStoredChatMessages = (messages) => {
   }
 };
 
-export const syncChatMessageToSupabase = async (msg) => {
+export const syncChatMessageToSupabase = async (msg, restaurantId = 'resto_001') => {
   try {
     await supabase.from('support_chat_messages').upsert([{
       id: String(msg.id),
-      restaurant_id: 'resto_001',
+      restaurant_id: msg.restaurant_id || msg.restaurantId || restaurantId || 'resto_001',
       sender: msg.sender,
       name: msg.name,
       text: msg.text,

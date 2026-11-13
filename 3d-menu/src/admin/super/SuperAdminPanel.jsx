@@ -23,6 +23,7 @@ import {
   updatePlatformSettingsInSupabase,
   syncNewRestaurantToSupabase,
   updateRestaurantStatusInSupabase,
+  updateRestaurantInSupabase,
   deleteRestaurantFromSupabase,
   updateTicketInSupabase,
   fetchLiveSettlementsFromSupabase,
@@ -31,6 +32,7 @@ import {
   getPlatformSettings,
   savePlatformSettings
 } from './superAdminStore';
+import AllRestaurantsView from './AllRestaurantsView';
 import { isSameCalendarDay } from '../../data/menuStore';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -495,6 +497,26 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
     showToast(`Restaurant "${name}" deleted from Supabase.`);
   };
 
+  const handleUpdateRestaurant = async (id, data) => {
+    const updated = restaurants.map(r => r.id === id ? { ...r, ...data } : r);
+    setRestaurants(updated);
+    saveSuperAdminRestaurants(updated);
+    await updateRestaurantInSupabase(id, data);
+    showToast(`Updated "${data.name || 'Restaurant'}" in PostgreSQL!`);
+  };
+
+  const handleAddRestaurantFromPage = async (data) => {
+    const created = {
+      ...data,
+      created_at: new Date().toISOString()
+    };
+    const updated = [created, ...restaurants];
+    setRestaurants(updated);
+    saveSuperAdminRestaurants(updated);
+    await syncNewRestaurantToSupabase(created);
+    showToast(`Restaurant "${created.name}" registered in Supabase PostgreSQL!`);
+  };
+
   const handleResolveTicket = async (ticketId) => {
     const updated = tickets.map(t => t.id === ticketId ? { ...t, status: 'Resolved' } : t);
     setTickets(updated);
@@ -620,16 +642,18 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
               />
             ) : current === 'All Restaurants' || current === 'Restaurants' ? (
               <AllRestaurantsView
-                restaurants={filteredRestaurants}
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                statusFilter={statusFilter}
-                setStatusFilter={setStatusFilter}
+                restaurants={restaurants}
                 onOpenAddModal={() => setIsAddRestoModalOpen(true)}
                 onToggleStatus={handleToggleStatus}
                 onDeleteRestaurant={handleDeleteRestaurant}
-                onGoToCustomerMenu={onGoToCustomerMenu}
-                onBack={() => setCurrent('Dashboard')}
+                onUpdateRestaurant={handleUpdateRestaurant}
+                onAddRestaurant={handleAddRestaurantFromPage}
+                onOpenRestaurantPanel={(r) => {
+                  if (onGoToRestaurantPortal) {
+                    onGoToRestaurantPortal(r);
+                  }
+                }}
+                showToast={showToast}
               />
             ) : current === 'New Registrations' ? (
               <NewRegistrationsView
@@ -1538,219 +1562,7 @@ function Dashboard({ onNavigate, stats, restaurants, pending, orders, feePerBill
 // REAL FUNCTIONAL SUBPAGES CONNECTED TO BACKEND
 // -------------------------------------------------------------
 
-function AllRestaurantsView({
-  restaurants,
-  searchQuery,
-  setSearchQuery,
-  statusFilter,
-  setStatusFilter,
-  onOpenAddModal,
-  onToggleStatus,
-  onDeleteRestaurant,
-  onGoToCustomerMenu,
-  onBack
-}) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{
-        background: 'var(--panel)',
-        border: '1px solid var(--border)',
-        borderRadius: 12,
-        padding: '18px 22px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 12
-      }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 750 }}>All Registered Restaurants</h2>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted)' }}>
-            Live Supabase database connection • Total {restaurants.length} restaurant(s) in PostgreSQL
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            onClick={onOpenAddModal}
-            style={{
-              background: '#f45100',
-              color: '#fff',
-              border: 0,
-              padding: '9px 16px',
-              borderRadius: 8,
-              fontWeight: 700,
-              fontSize: 13,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-          >
-            <Plus size={16} /> Add Restaurant
-          </button>
-        </div>
-      </div>
-
-      {/* Search and Filters */}
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 240, position: 'relative' }}>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search restaurant by name, slug or location..."
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              borderRadius: 8,
-              border: '1px solid var(--border)',
-              background: 'var(--panel)',
-              color: 'var(--foreground)',
-              fontSize: 13
-            }}
-          />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          style={{
-            padding: '10px 14px',
-            borderRadius: 8,
-            border: '1px solid var(--border)',
-            background: 'var(--panel)',
-            color: 'var(--foreground)',
-            fontSize: 13,
-            fontWeight: 600
-          }}
-        >
-          <option value="all">All Statuses</option>
-          <option value="active">Active Only</option>
-          <option value="pending">Pending Approval</option>
-          <option value="suspended">Suspended</option>
-        </select>
-      </div>
-
-      {/* Table */}
-      <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-        <table className="recent-table" style={{ margin: 0 }}>
-          <thead>
-            <tr>
-              <th>Restaurant</th>
-              <th>Digital Menu Slug</th>
-              <th>Location</th>
-              <th>Plan & Tables</th>
-              <th>Status</th>
-              <th style={{ textAlign: 'right' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {restaurants.length === 0 ? (
-              <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: 'var(--muted)' }}>
-                  No restaurants found matching your query.
-                </td>
-              </tr>
-            ) : (
-              restaurants.map(r => (
-                <tr key={r.id}>
-                  <td>
-                    <span className="restaurant-logo orange">{r.name.substring(0, 2).toUpperCase()}</span>
-                    <div>
-                      <strong>{r.name}</strong>
-                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{r.phone || 'No phone'}</div>
-                    </div>
-                  </td>
-                  <td style={{ fontFamily: 'monospace', color: '#f15b00', fontWeight: 600 }}>
-                    /{r.slug}
-                  </td>
-                  <td>{r.address || 'Dhaka, Bangladesh'}</td>
-                  <td>
-                    <strong>{r.plan || 'Enterprise 3D'}</strong>
-                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>{r.table_count || 12} Tables</div>
-                  </td>
-                  <td>
-                    <span className={'restaurant-status ' + (r.status || 'active').toLowerCase()}>
-                      {r.status || 'Active'}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: 6 }}>
-                      <button
-                        onClick={onGoToCustomerMenu}
-                        style={{
-                          padding: '6px 10px',
-                          borderRadius: 6,
-                          border: '1px solid var(--border)',
-                          background: 'none',
-                          color: 'var(--foreground)',
-                          fontSize: 11,
-                          fontWeight: 600,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4
-                        }}
-                      >
-                        <ExternalLink size={12} color="#f15b00" /> Menu
-                      </button>
-                      {r.status === 'active' ? (
-                        <button
-                          onClick={() => onToggleStatus(r.id, 'suspended')}
-                          style={{
-                            padding: '6px 10px',
-                            borderRadius: 6,
-                            border: '1px solid #fca5a5',
-                            background: '#fee2e2',
-                            color: '#b91c1c',
-                            fontSize: 11,
-                            fontWeight: 600
-                          }}
-                        >
-                          Suspend
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => onToggleStatus(r.id, 'active')}
-                          style={{
-                            padding: '6px 10px',
-                            borderRadius: 6,
-                            border: '1px solid #86efac',
-                            background: '#dcfce7',
-                            color: '#15803d',
-                            fontSize: 11,
-                            fontWeight: 600
-                          }}
-                        >
-                          Activate
-                        </button>
-                      )}
-                      <button
-                        onClick={() => onDeleteRestaurant(r.id, r.name)}
-                        title="Delete restaurant from Supabase"
-                        style={{
-                          padding: '6px 8px',
-                          borderRadius: 6,
-                          border: '1px solid #fecaca',
-                          background: '#fff1f2',
-                          color: '#e11d48',
-                          fontSize: 11
-                        }}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <button className="placeholder-button" onClick={onBack} style={{ alignSelf: 'flex-start' }}>
-        <ChevronLeft size={16} /> Back to Dashboard
-      </button>
-    </div>
-  );
-}
+// AllRestaurantsView is imported from ./AllRestaurantsView.jsx
 
 function NewRegistrationsView({ restaurants, onApprove, onBack }) {
   return (
@@ -1876,7 +1688,7 @@ function DigitalMenusView({ restaurants, onGoToCustomerMenu, onBack }) {
                 color: '#f15b00',
                 wordBreak: 'break-all'
               }}>
-                http://localhost:5173/?resto={r.slug}
+                http://localhost:5173/{r.slug || r.menuSlug || '3d-dine'}
               </div>
               <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                 {r.table_count || 12} Active Table QR Stands • Plan: <strong>{r.plan || 'Enterprise 3D'}</strong>
@@ -1885,7 +1697,7 @@ function DigitalMenusView({ restaurants, onGoToCustomerMenu, onBack }) {
 
             <div style={{ display: 'flex', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
               <button
-                onClick={onGoToCustomerMenu}
+                onClick={() => onGoToCustomerMenu?.(r)}
                 style={{
                   flex: 1,
                   padding: '8px',

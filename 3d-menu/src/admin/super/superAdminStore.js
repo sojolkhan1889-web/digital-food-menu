@@ -4,23 +4,121 @@ import { isSameCalendarDay } from '../../data/menuStore';
 
 const SUPER_ADMIN_STORAGE_PREFIX = 'dgm_superadmin_live_v2_';
 
-// Initial fallback restaurant (Matches live Supabase data: Moneky Bhai resto_001)
+// Initial fallback restaurants (Matches live Supabase data: 3 genuine tenant accounts)
 export const initialSuperAdminRestaurants = [
   {
     id: 'resto_001',
-    name: 'Moneky Bhai',
+    displayId: '#001',
+    display_id: '#001',
+    name: 'Monkey Bhai',
     slug: '3d-dine',
-    login_id: 'admin',
-    password: 'admin123',
-    phone: '+880 1711-234567',
+    menuSlug: '3d-dine',
+    login_id: 'monkeybhai',
+    password: 'password123',
+    phone: '+8801700000000',
+    ownerName: 'Arif Hossain',
+    owner_name: 'Arif Hossain',
+    ownerPhone: '+8801700000000',
+    owner_phone: '+8801700000000',
+    type: 'fine',
+    restaurant_type: 'fine',
+    location: 'Dhaka, Banani',
     address: 'Dhaka, Banani',
+    plan: 'Pro Holographic',
+    tableCount: 12,
     table_count: 12,
     status: 'active',
-    plan: 'Enterprise 3D',
     theme: 'Warm Amber Glass',
     created_at: '2026-10-31T19:25:00Z',
+    joinedAt: '2026-10-31T19:25:00Z',
     currency: '৳',
     logo: '/monkey_bhai_logo.png',
+    avatar: 'MB',
+    settlementStatus: 'settled',
+    settlement_status: 'settled',
+    email: 'owner@3ddine.com',
+    features: {
+      enable3D: true,
+      enableOrderManagement: true,
+      enablePayments: true,
+      enableCartPage: true,
+      enableKitchenNotes: true,
+      enablePortions: true,
+      enableAddons: true
+    }
+  },
+  {
+    id: 'resto_002',
+    displayId: '#002',
+    display_id: '#002',
+    name: 'Hungry Bite Café',
+    slug: 'hungry-bite',
+    menuSlug: 'hungry-bite',
+    login_id: 'hungrybite',
+    password: 'password123',
+    phone: '+8801712345678',
+    ownerName: 'Tania Rahman',
+    owner_name: 'Tania Rahman',
+    ownerPhone: '+8801712345678',
+    owner_phone: '+8801712345678',
+    type: 'non-fine',
+    restaurant_type: 'non-fine',
+    location: 'Dhaka, Uttara',
+    address: 'Dhaka, Uttara',
+    plan: 'Starter',
+    tableCount: 8,
+    table_count: 8,
+    status: 'active',
+    theme: 'Classic Clean',
+    created_at: '2026-11-04T12:00:00Z',
+    joinedAt: '2026-11-04T12:00:00Z',
+    currency: '৳',
+    logo: '/monkey_bhai_logo.png',
+    avatar: 'HB',
+    settlementStatus: 'pending',
+    settlement_status: 'pending',
+    email: 'contact@hungrybite.com',
+    features: {
+      enable3D: false,
+      enableOrderManagement: true,
+      enablePayments: true,
+      enableCartPage: true,
+      enableKitchenNotes: false,
+      enablePortions: true,
+      enableAddons: true
+    }
+  },
+  {
+    id: 'resto_003',
+    displayId: '#003',
+    display_id: '#003',
+    name: 'Spice Lounge',
+    slug: 'spice-lounge',
+    menuSlug: 'spice-lounge',
+    login_id: 'spicelounge',
+    password: 'password123',
+    phone: '+8801987654321',
+    ownerName: 'Imran Kabir',
+    owner_name: 'Imran Kabir',
+    ownerPhone: '+8801987654321',
+    owner_phone: '+8801987654321',
+    type: 'fine',
+    restaurant_type: 'fine',
+    location: 'Chattogram, GEC',
+    address: 'Chattogram, GEC',
+    plan: 'Business',
+    tableCount: 20,
+    table_count: 20,
+    status: 'active',
+    theme: 'Warm Amber Glass',
+    created_at: '2026-11-01T10:00:00Z',
+    joinedAt: '2026-11-01T10:00:00Z',
+    currency: '৳',
+    logo: '/monkey_bhai_logo.png',
+    avatar: 'SL',
+    settlementStatus: 'settled',
+    settlement_status: 'settled',
+    email: 'info@spicelounge.com',
     features: {
       enable3D: true,
       enableOrderManagement: true,
@@ -39,21 +137,37 @@ export const fetchLiveRestaurantsFromSupabase = async () => {
     const { data, error } = await supabase
       .from('restaurants')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('display_id', { ascending: true, nullsFirst: false });
 
     if (!error && data && data.length > 0) {
       const clean = data.map(remote => ({
         id: String(remote.id),
+        displayId: remote.display_id || (remote.id.startsWith('resto_') ? `#${remote.id.slice(6)}` : remote.id),
+        display_id: remote.display_id || (remote.id.startsWith('resto_') ? `#${remote.id.slice(6)}` : remote.id),
         name: remote.name || 'Restaurant',
         slug: remote.slug || 'menu',
+        menuSlug: remote.slug || 'menu',
         login_id: remote.login_id || 'admin',
         password: remote.password || 'resto123',
-        phone: remote.phone || '',
-        email: remote.email || '',
+        phone: remote.phone || remote.owner_phone || '',
+        ownerName: remote.owner_name || 'Owner',
+        owner_name: remote.owner_name || 'Owner',
+        ownerPhone: remote.owner_phone || remote.phone || '',
+        owner_phone: remote.owner_phone || remote.phone || '',
+        type: remote.restaurant_type || 'fine',
+        restaurant_type: remote.restaurant_type || 'fine',
+        location: remote.address || 'Dhaka, Bangladesh',
         address: remote.address || 'Dhaka, Bangladesh',
+        plan: remote.plan || 'Starter',
+        tableCount: Number(remote.table_count || 12),
         table_count: Number(remote.table_count || 12),
+        settlementStatus: remote.settlement_status || 'settled',
+        settlement_status: remote.settlement_status || 'settled',
+        joinedAt: remote.created_at || new Date().toISOString(),
+        created_at: remote.created_at || new Date().toISOString(),
         status: remote.status || 'active',
-        plan: remote.plan || 'Enterprise 3D',
+        avatar: remote.avatar || remote.name?.slice(0, 2)?.toUpperCase() || '🍽️',
+        email: remote.email || '',
         theme: remote.theme || 'Warm Amber Glass',
         currency: remote.currency || '৳',
         logo: remote.logo || '/monkey_bhai_logo.png',
@@ -65,8 +179,7 @@ export const fetchLiveRestaurantsFromSupabase = async () => {
           enableKitchenNotes: true,
           enablePortions: true,
           enableAddons: true
-        },
-        created_at: remote.created_at || new Date().toISOString()
+        }
       }));
       saveSuperAdminRestaurants(clean);
       return clean;
@@ -235,18 +348,24 @@ export const syncNewRestaurantToSupabase = async (resto) => {
     const restoId = String(resto.id);
     const { error } = await supabase.from('restaurants').upsert([{
       id: restoId,
+      display_id: resto.display_id || resto.displayId || `#${restoId.slice(-3)}`,
       name: resto.name,
       slug: resto.slug,
-      login_id: resto.login_id,
-      password: resto.password,
-      phone: resto.phone || '',
+      login_id: resto.login_id || `admin_${resto.slug}`,
+      password: resto.password || 'password123',
+      phone: resto.phone || resto.ownerPhone || '',
+      owner_name: resto.owner_name || resto.ownerName || 'Owner',
+      owner_phone: resto.owner_phone || resto.ownerPhone || resto.phone || '',
+      restaurant_type: resto.restaurant_type || resto.type || 'fine',
+      settlement_status: resto.settlement_status || resto.settlementStatus || 'settled',
       email: resto.email || '',
-      address: resto.address || 'Dhaka, Bangladesh',
-      table_count: Number(resto.table_count || 12),
+      address: resto.address || resto.location || 'Dhaka, Bangladesh',
+      table_count: Number(resto.table_count || resto.tableCount || 12),
       status: resto.status || 'active',
-      plan: resto.plan || 'Enterprise 3D',
+      plan: resto.plan || 'Starter',
       theme: resto.theme || 'Warm Amber Glass',
       currency: resto.currency || '৳',
+      avatar: resto.avatar || resto.name?.slice(0, 2)?.toUpperCase() || '🍽️',
       logo: resto.logo || '/monkey_bhai_logo.png',
       features: resto.features || {
         enable3D: true,
@@ -257,7 +376,7 @@ export const syncNewRestaurantToSupabase = async (resto) => {
         enablePortions: true,
         enableAddons: true
       },
-      created_at: resto.created_at || new Date().toISOString()
+      created_at: resto.created_at || resto.joinedAt || new Date().toISOString()
     }]);
 
     if (!error) {
@@ -268,11 +387,11 @@ export const syncNewRestaurantToSupabase = async (resto) => {
         name: resto.name,
         tagline: 'Universal AR Digital Dining Experience',
         logo: resto.logo || '/monkey_bhai_logo.png',
-        login_id: resto.login_id,
+        login_id: resto.login_id || `admin_${resto.slug}`,
         email: resto.email || '',
-        phone: resto.phone || '',
+        phone: resto.phone || resto.ownerPhone || '',
         currency: resto.currency || '৳',
-        table_count: Number(resto.table_count || 12),
+        table_count: Number(resto.table_count || resto.tableCount || 12),
         vat_enabled: true,
         vat_type: 'percentage',
         vat_rate: 5.0,
@@ -286,6 +405,50 @@ export const syncNewRestaurantToSupabase = async (resto) => {
     }
   } catch (err) {
     console.warn('Supabase sync restaurant caught:', err);
+  }
+};
+
+// 7.1 Update restaurant details in Supabase
+export const updateRestaurantInSupabase = async (id, updates = {}) => {
+  try {
+    const payload = {};
+    if (updates.name !== undefined) payload.name = updates.name;
+    if (updates.slug !== undefined) payload.slug = updates.slug;
+    if (updates.ownerName !== undefined || updates.owner_name !== undefined) {
+      payload.owner_name = updates.ownerName || updates.owner_name;
+    }
+    if (updates.ownerPhone !== undefined || updates.owner_phone !== undefined) {
+      payload.owner_phone = updates.ownerPhone || updates.owner_phone;
+      payload.phone = updates.ownerPhone || updates.owner_phone;
+    }
+    if (updates.type !== undefined || updates.restaurant_type !== undefined) {
+      payload.restaurant_type = updates.type || updates.restaurant_type;
+    }
+    if (updates.settlementStatus !== undefined || updates.settlement_status !== undefined) {
+      payload.settlement_status = updates.settlementStatus || updates.settlement_status;
+    }
+    if (updates.location !== undefined || updates.address !== undefined) {
+      payload.address = updates.location || updates.address;
+    }
+    if (updates.plan !== undefined) payload.plan = updates.plan;
+    if (updates.tableCount !== undefined || updates.table_count !== undefined) {
+      payload.table_count = Number(updates.tableCount || updates.table_count);
+    }
+    if (updates.status !== undefined) payload.status = updates.status;
+    if (updates.avatar !== undefined) payload.avatar = updates.avatar;
+
+    const { error } = await supabase.from('restaurants').update(payload).eq('id', String(id));
+    if (error) console.warn('Supabase update restaurant error:', error);
+
+    // If name or phone was updated, keep restaurant_settings in sync
+    if (updates.name || updates.ownerPhone || updates.phone) {
+      const setPayload = {};
+      if (updates.name) setPayload.name = updates.name;
+      if (updates.ownerPhone || updates.phone) setPayload.phone = updates.ownerPhone || updates.phone;
+      await supabase.from('restaurant_settings').update(setPayload).eq('restaurant_id', String(id));
+    }
+  } catch (err) {
+    console.warn('Supabase update restaurant caught:', err);
   }
 };
 
@@ -384,7 +547,10 @@ export const getSuperAdminRestaurants = () => {
     const raw = localStorage.getItem(`${SUPER_ADMIN_STORAGE_PREFIX}restaurants`);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      // Auto-purge any stale mock cache of 280+ demo restaurants
+      if (Array.isArray(parsed) && parsed.length > 0 && parsed.length <= 15) {
+        return parsed;
+      }
     }
   } catch (e) {
     console.error('Failed reading super admin restaurants:', e);

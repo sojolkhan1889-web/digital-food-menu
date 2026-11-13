@@ -163,6 +163,7 @@ export default function RestaurantPanel({
   tickets = [],
   chatMessages = [],
   superAdminConfig = {},
+  activeRestaurant = null,
   onAddFood,
   onUpdateFood,
   onDeleteFood,
@@ -439,13 +440,15 @@ export default function RestaurantPanel({
     };
   }, [foods, orders]);
 
+  const panelRestoId = activeRestaurant?.id || restaurantProfile?.restaurant_id || (restaurantProfile?.id ? String(restaurantProfile.id).replace(/^set_/, '') : 'resto_001');
+
   // Dynamic Real Cloud Scans (fetched live from Supabase menu_scans via Instant Realtime WebSocket)
-  const [scansData, setScansData] = useState(() => getMenuScans('resto_001', orders.length));
+  const [scansData, setScansData] = useState(() => getMenuScans(panelRestoId, orders.length));
 
   useEffect(() => {
     let isMounted = true;
     const loadScans = async () => {
-      const live = await fetchLiveMenuScansFromSupabase('resto_001');
+      const live = await fetchLiveMenuScansFromSupabase(panelRestoId);
       if (isMounted && live) {
         setScansData(live);
       }
@@ -454,12 +457,14 @@ export default function RestaurantPanel({
 
     // 1. Instant Realtime WebSocket sync when any QR code is scanned (0.1s response, 0 polling bandwidth)
     const scansChannel = supabase
-      .channel('realtime_menu_scans_resto_panel')
+      .channel(`realtime_menu_scans_resto_panel_${panelRestoId}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'menu_scans' },
-        () => {
-          if (isMounted) loadScans();
+        (payload) => {
+          if (isMounted && (!payload?.new?.restaurant_id || payload.new.restaurant_id === panelRestoId)) {
+            loadScans();
+          }
         }
       )
       .subscribe();
@@ -487,15 +492,15 @@ export default function RestaurantPanel({
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       clearInterval(interval);
     };
-  }, []);
+  }, [panelRestoId]);
 
   // Dynamic Real Followers (fetched live from Supabase restaurant_followers via Instant Realtime WebSocket)
-  const [followersData, setFollowersData] = useState(() => getRestaurantFollowers('resto_001', orders));
+  const [followersData, setFollowersData] = useState(() => getRestaurantFollowers(panelRestoId, orders));
 
   useEffect(() => {
     let isMounted = true;
     const loadFollowers = async () => {
-      const live = await fetchLiveFollowersFromSupabase('resto_001');
+      const live = await fetchLiveFollowersFromSupabase(panelRestoId);
       if (isMounted && live) {
         setFollowersData(live);
       }
@@ -504,12 +509,14 @@ export default function RestaurantPanel({
 
     // 1. Instant Realtime WebSocket sync when customer follows or updates push subscription
     const followersChannel = supabase
-      .channel('realtime_followers_resto_panel')
+      .channel(`realtime_followers_resto_panel_${panelRestoId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'restaurant_followers' },
-        () => {
-          if (isMounted) loadFollowers();
+        (payload) => {
+          if (isMounted && (!payload?.new?.restaurant_id || payload.new.restaurant_id === panelRestoId)) {
+            loadFollowers();
+          }
         }
       )
       .subscribe();
@@ -545,7 +552,7 @@ export default function RestaurantPanel({
   useEffect(() => {
     let isMounted = true;
     const syncSettlements = async () => {
-      const live = await fetchRestaurantSettlementsFromSupabase('resto_001');
+      const live = await fetchRestaurantSettlementsFromSupabase(panelRestoId);
       if (isMounted && Array.isArray(live)) {
         setSettlements(live);
       }
@@ -554,12 +561,14 @@ export default function RestaurantPanel({
 
     // 1. Instant Realtime WebSocket sync when settlement is recorded or cleared
     const settlementsChannel = supabase
-      .channel('realtime_settlements_resto_panel')
+      .channel(`realtime_settlements_resto_panel_${panelRestoId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'settlements' },
-        () => {
-          if (isMounted) syncSettlements();
+        (payload) => {
+          if (isMounted && (!payload?.new?.restaurant_id || payload.new.restaurant_id === panelRestoId)) {
+            syncSettlements();
+          }
         }
       )
       .subscribe();
@@ -587,7 +596,7 @@ export default function RestaurantPanel({
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       clearInterval(interval);
     };
-  }, []);
+  }, [panelRestoId]);
 
   // Platform Fees & Due Settlement Calculation: Real ৳5 fee per confirmed order
   const todayFeesAmount = (metrics.todayOrders || 0) * 5;
@@ -609,8 +618,8 @@ export default function RestaurantPanel({
   const handleSettleDue = async () => {
     const settleAmt = dueSettlementAmount;
     if (settleAmt > 0) {
-      await recordRestaurantSettlementInSupabase('resto_001', settleAmt, 'Settled from Moneky Bhai Restaurant Portal');
-      const live = await fetchRestaurantSettlementsFromSupabase('resto_001');
+      await recordRestaurantSettlementInSupabase(panelRestoId, settleAmt, `Settled from ${restaurantProfile?.name || 'Restaurant'} Portal`);
+      const live = await fetchRestaurantSettlementsFromSupabase(panelRestoId);
       if (live) setSettlements(live);
     }
     settlePlatformDues();
