@@ -1648,6 +1648,14 @@ function NewRegistrationsView({ restaurants, onApprove, onBack }) {
 function DigitalMenusView({ restaurants, onGoToCustomerMenu, onBack }) {
   const [copiedId, setCopiedId] = React.useState(null);
 
+  const origin = typeof window !== 'undefined' && window.location.origin
+    ? window.location.origin
+    : 'http://localhost:5173';
+
+  const host = typeof window !== 'undefined' && window.location.host
+    ? window.location.host
+    : 'localhost:5173';
+
   const handleCopyLink = (url, id) => {
     navigator.clipboard.writeText(url).then(() => {
       setCopiedId(id);
@@ -1671,8 +1679,9 @@ function DigitalMenusView({ restaurants, onGoToCustomerMenu, onBack }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(480px, 1fr))', gap: 20 }}>
         {restaurants.map(r => {
-          const menuUrl = `http://localhost:5173/${r.slug || r.menuSlug || '3d-dine'}`;
-          const menuUrlShort = `localhost:5173/${r.slug || r.menuSlug || '3d-dine'}`;
+          const slug = r.slug || r.menuSlug || '3d-dine';
+          const menuUrl = `${origin}/${slug}`;
+          const menuUrlShort = `${host}/${slug}`;
           const isCopied = copiedId === r.id;
 
           return (
