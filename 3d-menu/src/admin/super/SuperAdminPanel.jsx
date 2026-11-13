@@ -9,8 +9,9 @@ import {
   ShoppingBag, AlertCircle, Clock3, ChevronLeft, Search, X, Download,
   Plus, LogOut, ShieldCheck, ClipboardCheck, PackageOpen, RefreshCw,
   ExternalLink, QrCode, CheckCircle2, TrendingUp, Check, Trash2, Box,
-  CreditCard, CheckSquare, DollarSign
+  CreditCard, CheckSquare, DollarSign, Layers, Copy
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import './superAdminStyles.css';
 import {
   getSuperAdminRestaurants,
@@ -1645,79 +1646,207 @@ function NewRegistrationsView({ restaurants, onApprove, onBack }) {
 }
 
 function DigitalMenusView({ restaurants, onGoToCustomerMenu, onBack }) {
+  const [copiedId, setCopiedId] = React.useState(null);
+
+  const handleCopyLink = (url, id) => {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{
         background: 'var(--panel)',
         border: '1px solid var(--border)',
-        borderRadius: 12,
-        padding: '18px 22px'
+        borderRadius: 14,
+        padding: '20px 24px'
       }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 750 }}>Multi-Restaurant Digital Menus & QR Stands</h2>
-        <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted)' }}>
-          Each restaurant operates an independent 3D Holographic digital menu URL synced to Supabase.
+        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 750 }}>Multi-Restaurant Digital Menus &amp; QR Stands</h2>
+        <p style={{ margin: '5px 0 0', fontSize: 13, color: 'var(--muted)' }}>
+          Each restaurant operates an independent 3D Holographic digital menu with unique QR code synced to Supabase.
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-        {restaurants.map(r => (
-          <div key={r.id} style={{
-            background: 'var(--panel)',
-            border: '1px solid var(--border)',
-            borderRadius: 12,
-            padding: 20,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            gap: 14
-          }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <strong style={{ fontSize: 15 }}>{r.name}</strong>
-                <span className={'restaurant-status ' + (r.status || 'active').toLowerCase()} style={{ padding: '3px 10px', fontSize: 10 }}>
-                  {r.status || 'Active'}
-                </span>
-              </div>
-              <div style={{
-                margin: '10px 0',
-                padding: '8px 10px',
-                borderRadius: 8,
-                background: 'var(--bg)',
-                fontFamily: 'monospace',
-                fontSize: 12,
-                color: '#f15b00',
-                wordBreak: 'break-all'
-              }}>
-                http://localhost:5173/{r.slug || r.menuSlug || '3d-dine'}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                {r.table_count || 12} Active Table QR Stands • Plan: <strong>{r.plan || 'Enterprise 3D'}</strong>
-              </div>
-            </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(480px, 1fr))', gap: 20 }}>
+        {restaurants.map(r => {
+          const menuUrl = `http://localhost:5173/${r.slug || r.menuSlug || '3d-dine'}`;
+          const menuUrlShort = `localhost:5173/${r.slug || r.menuSlug || '3d-dine'}`;
+          const isCopied = copiedId === r.id;
 
-            <div style={{ display: 'flex', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-              <button
-                onClick={() => onGoToCustomerMenu?.(r)}
-                style={{
-                  flex: 1,
-                  padding: '8px',
-                  borderRadius: 6,
-                  background: '#f45100',
-                  color: '#fff',
-                  border: 0,
-                  fontSize: 12,
-                  fontWeight: 700,
+          return (
+            <div key={r.id} className="qr-menu-card" style={{
+              background: 'var(--panel)',
+              border: '1px solid var(--border)',
+              borderRadius: 16,
+              padding: 24,
+              display: 'flex',
+              gap: 24,
+              alignItems: 'flex-start',
+              transition: 'box-shadow 0.3s ease, transform 0.2s ease',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              {/* Left: QR Code */}
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 8,
+                flexShrink: 0
+              }}>
+                <div style={{
+                  background: 'rgba(244, 81, 0, 0.06)',
+                  borderRadius: 14,
+                  padding: 12,
+                  border: '1px solid rgba(244, 81, 0, 0.12)'
+                }}>
+                  <QRCodeSVG
+                    value={menuUrl}
+                    size={130}
+                    fgColor="#c44000"
+                    bgColor="transparent"
+                    level="M"
+                    includeMargin={false}
+                    style={{ display: 'block' }}
+                  />
+                </div>
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: '#888',
+                  letterSpacing: '0.3px'
+                }}>Scan menu</span>
+              </div>
+
+              {/* Right: Info */}
+              <div style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                minWidth: 0
+              }}>
+                {/* Name + Status */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                  <strong style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {r.name}
+                  </strong>
+                  <span style={{
+                    padding: '4px 14px',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    borderRadius: 20,
+                    background: (r.status || 'active').toLowerCase() === 'active' ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.1)',
+                    color: (r.status || 'active').toLowerCase() === 'active' ? '#16a34a' : '#dc2626',
+                    whiteSpace: 'nowrap',
+                    letterSpacing: '0.2px'
+                  }}>
+                    {r.status || 'Active'}
+                  </span>
+                </div>
+
+                {/* Menu Link Label */}
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  Menu Link
+                </span>
+
+                {/* URL + Integrated Copy */}
+                <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6
-                }}
-              >
-                <ExternalLink size={14} /> Open 3D Menu
-              </button>
+                  justifyContent: 'space-between',
+                  padding: '7px 12px',
+                  borderRadius: 8,
+                  background: 'var(--bg)',
+                  border: '1px solid var(--border)',
+                  gap: 8
+                }}>
+                  <div style={{
+                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                    fontSize: 13,
+                    color: '#d34500',
+                    fontWeight: 500,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>
+                    {menuUrlShort}
+                  </div>
+                  <button
+                    onClick={() => handleCopyLink(menuUrl, r.id)}
+                    title={isCopied ? "Copied to clipboard!" : "Copy menu link"}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      padding: '4px',
+                      borderRadius: 6,
+                      color: isCopied ? '#16a34a' : '#64748b',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s ease',
+                      flexShrink: 0
+                    }}
+                  >
+                    {isCopied ? <Check size={16} /> : <Copy size={16} />}
+                  </button>
+                </div>
+
+                {/* QR Stands + Plan */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 2 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Store size={18} style={{ color: '#ea580c', flexShrink: 0 }} />
+                    <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>
+                      {r.table_count || 12} Active QR Stands
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Layers size={18} style={{ color: '#ea580c', flexShrink: 0 }} />
+                    <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>
+                      {r.plan || 'Pro Holographic'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Open 3D Menu Button */}
+                <button
+                  onClick={() => onGoToCustomerMenu?.(r)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: 10,
+                    background: '#f45100',
+                    color: '#fff',
+                    border: 0,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    marginTop: 4,
+                    boxShadow: '0 2px 8px rgba(244, 81, 0, 0.25)'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.backgroundColor = '#ff6014';
+                    e.currentTarget.style.boxShadow = '0 4px 14px rgba(244, 81, 0, 0.35)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.backgroundColor = '#f45100';
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(244, 81, 0, 0.25)';
+                  }}
+                >
+                  <ExternalLink size={16} /> Open 3D Menu
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <button className="placeholder-button" onClick={onBack} style={{ alignSelf: 'flex-start' }}>

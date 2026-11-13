@@ -59,9 +59,12 @@ import {
   Wallet,
   Users,
   UserPlus,
-  Bell
+  Bell,
+  Share2,
+  Copy
 } from 'lucide-react';
 
+import { QRCodeSVG } from 'qrcode.react';
 import AddFoodWizard from './AddFoodWizard';
 import FeaturedSliderWizard from './FeaturedSliderWizard';
 import { supabase } from '../lib/supabaseClient';
@@ -441,6 +444,53 @@ export default function RestaurantPanel({
   }, [foods, orders]);
 
   const panelRestoId = activeRestaurant?.id || restaurantProfile?.restaurant_id || (restaurantProfile?.id ? String(restaurantProfile.id).replace(/^set_/, '') : 'resto_001');
+
+  // QR Code State & Dynamic Link for Active Restaurant
+  const [copiedQr, setCopiedQr] = useState(false);
+
+  const currentRestoSlug = useMemo(() => {
+    if (activeRestaurant?.slug) return activeRestaurant.slug;
+    if (activeRestaurant?.menuSlug) return activeRestaurant.menuSlug;
+    if (restaurantProfile?.slug) return restaurantProfile.slug;
+    if (panelRestoId === 'resto_002') return 'hungry-bite';
+    if (panelRestoId === 'resto_003') return 'spice-lounge';
+    return '3d-dine';
+  }, [activeRestaurant, restaurantProfile, panelRestoId]);
+
+  const currentMenuUrl = useMemo(() => {
+    const origin = typeof window !== 'undefined' && window.location.origin
+      ? window.location.origin
+      : 'http://localhost:5173';
+    return `${origin}/${currentRestoSlug}`;
+  }, [currentRestoSlug]);
+
+  const handleCopyQrLink = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(currentMenuUrl).then(() => {
+        setCopiedQr(true);
+        setTimeout(() => setCopiedQr(false), 2200);
+      });
+    }
+  };
+
+  const handleShareQrCode = async () => {
+    const shareData = {
+      title: `${profileForm.name || 'Digital Menu'} — 3D Menu`,
+      text: `Scan or visit our 3D digital menu:`,
+      url: currentMenuUrl,
+    };
+
+    if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+      }
+    }
+
+    handleCopyQrLink();
+  };
 
   // Dynamic Real Cloud Scans (fetched live from Supabase menu_scans via Instant Realtime WebSocket)
   const [scansData, setScansData] = useState(() => getMenuScans(panelRestoId, orders.length));
@@ -897,6 +947,65 @@ export default function RestaurantPanel({
               );
             })}
           </nav>
+
+          {/* Restaurant Unique 3D Digital Menu QR Code Card */}
+          {!isSidebarCollapsed && (
+            <div className="px-2.5 mb-2.5 shrink-0">
+              <div className={`p-3 rounded-[14px] border transition-all ${
+                isDark 
+                  ? 'bg-[#15100B] border-orange-950/60 shadow-[0_2px_10px_rgba(0,0,0,0.3)]' 
+                  : 'bg-[#FFF8F5] border-orange-100 shadow-[0_2px_8px_rgba(244,81,0,0.04)]'
+              }`}>
+                {/* QR Code Container */}
+                <div className="bg-white rounded-[10px] p-2 border border-slate-100 dark:border-slate-800 shadow-[0_1px_4px_rgba(0,0,0,0.04)] flex items-center justify-center max-w-[155px] mx-auto">
+                  <QRCodeSVG
+                    value={currentMenuUrl}
+                    size={135}
+                    fgColor="#c44000"
+                    bgColor="transparent"
+                    level="M"
+                    includeMargin={false}
+                    className="block"
+                  />
+                </div>
+
+                {/* Scan menu label */}
+                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 text-center mt-2 mb-2.5 tracking-wide">
+                  Scan menu
+                </p>
+
+                {/* Action Buttons: Share QR Code & Copy */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleShareQrCode}
+                    className="flex-1 py-1.5 px-2.5 rounded-[8px] bg-[#FFEFE5] hover:bg-orange-100 dark:bg-orange-950/50 dark:hover:bg-orange-900/60 border border-orange-200/80 dark:border-orange-800/40 text-orange-700 dark:text-orange-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                    title="Share digital menu QR code"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400 shrink-0" />
+                    <span>{copiedQr ? 'Copied Link!' : 'Share QR Code'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyQrLink}
+                    className={`p-1.5 rounded-[8px] border transition-colors cursor-pointer shrink-0 flex items-center justify-center ${
+                      copiedQr 
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-600 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-400' 
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                    title="Copy menu URL to clipboard"
+                  >
+                    {copiedQr ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Plan Status & Super Admin Simulator CTA */}
           {!isSidebarCollapsed && (
