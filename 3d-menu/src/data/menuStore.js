@@ -1712,6 +1712,154 @@ export const syncSliderToSupabase = async (slider, restaurantId = 'resto_001') =
   }
 };
 
+// --- Restaurant Tables Management & Supabase Sync ---
+export const generateInitialTables = (restaurantId = 'resto_001', count = 24) => {
+  const now = Date.now();
+  return Array.from({ length: count }, (_, i) => {
+    const num = i + 1;
+    const padNum = String(num).padStart(2, '0');
+    const tableId = `TBL-${String(num).padStart(3, '0')}`;
+    const daysAgo = Math.floor(i / 2);
+    const date = new Date(now - daysAgo * 86400000 - (i % 4) * 3600000 * 2.5);
+    return {
+      id: `tbl_${restaurantId}_${padNum}`,
+      restaurantId,
+      tableId,
+      tableNumber: `Table ${padNum}`,
+      status: num === 4 || num === 17 ? 'inactive' : 'active',
+      createdAt: date.toISOString(),
+      updatedAt: date.toISOString()
+    };
+  });
+};
+
+export const getStoredRestaurantTables = (restaurantId = 'resto_001') => {
+  try {
+    const key = `dgm_restaurant_tables_${restaurantId}`;
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.warn('Error reading stored tables:', e);
+  }
+  return null;
+};
+
+export const saveStoredRestaurantTables = (tables, restaurantId = 'resto_001') => {
+  try {
+    const key = `dgm_restaurant_tables_${restaurantId}`;
+    localStorage.setItem(key, JSON.stringify(tables));
+  } catch (e) {
+    console.warn('Error saving stored tables:', e);
+  }
+};
+
+export const fetchRestaurantTablesFromSupabase = async (restaurantId = 'resto_001') => {
+  const targetId = restaurantId || 'resto_001';
+  try {
+    const { data, error } = await safeQuery(
+      supabase
+        .from('restaurant_tables')
+        .select('*')
+        .eq('restaurant_id', targetId)
+        .order('table_id', { ascending: true })
+    );
+
+    if (data && data.length > 0) {
+      const mapped = data.map(r => ({
+        id: r.id,
+        restaurantId: r.restaurant_id,
+        tableId: r.table_id,
+        tableNumber: r.table_number,
+        status: r.status || 'active',
+        createdAt: r.created_at,
+        updatedAt: r.updated_at
+      }));
+      saveStoredRestaurantTables(mapped, targetId);
+      return mapped;
+    }
+  } catch (err) {
+    console.warn('Supabase fetch tables exception:', err);
+  }
+
+  // Fallback to localStorage
+  const cached = getStoredRestaurantTables(targetId);
+  if (cached && cached.length > 0) {
+    return cached;
+  }
+
+  // Default seed: 24 tables matching screenshot
+  const initial = generateInitialTables(targetId, 24);
+  saveStoredRestaurantTables(initial, targetId);
+
+  // Sync initial seed to Supabase in background
+  try {
+    const rows = initial.map(t => ({
+      id: t.id,
+      restaurant_id: targetId,
+      table_id: t.tableId,
+      table_number: t.tableNumber,
+      status: t.status,
+      created_at: t.createdAt,
+      updated_at: t.updatedAt
+    }));
+    supabase.from('restaurant_tables').upsert(rows).then(({ error }) => {
+      if (error) console.warn('Seeding restaurant tables warning:', error);
+    });
+  } catch (seedErr) {
+    console.warn('Seeding tables caught:', seedErr);
+  }
+
+  return initial;
+};
+
+export const saveRestaurantTableToSupabase = async (table, restaurantId = 'resto_001') => {
+  const targetId = restaurantId || table.restaurantId || 'resto_001';
+  const row = {
+    id: table.id || `tbl_${targetId}_${Date.now()}`,
+    restaurant_id: targetId,
+    table_id: table.tableId,
+    table_number: table.tableNumber,
+    status: table.status || 'active',
+    created_at: table.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  try {
+    const { error } = await supabase.from('restaurant_tables').upsert([row]);
+    if (error) console.warn('Supabase save table warning:', error);
+  } catch (err) {
+    console.warn('Supabase save table exception:', err);
+  }
+
+  return {
+    id: row.id,
+    restaurantId: row.restaurant_id,
+    tableId: row.table_id,
+    tableNumber: row.table_number,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+};
+
+export const deleteRestaurantTableFromSupabase = async (id, restaurantId = 'resto_001') => {
+  const targetId = restaurantId || 'resto_001';
+  try {
+    const { error } = await supabase
+      .from('restaurant_tables')
+      .delete()
+      .eq('id', id)
+      .eq('restaurant_id', targetId);
+    if (error) console.warn('Supabase delete table warning:', error);
+  } catch (err) {
+    console.warn('Supabase delete table exception:', err);
+  }
+};
+
+
 export const deleteSliderFromSupabase = async (sliderId) => {
   try {
     await supabase.from('featured_sliders').delete().eq('id', String(sliderId));

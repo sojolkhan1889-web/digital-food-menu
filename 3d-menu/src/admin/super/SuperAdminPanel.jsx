@@ -9,7 +9,7 @@ import {
   ShoppingBag, AlertCircle, Clock3, ChevronLeft, Search, X, Download,
   Plus, LogOut, ShieldCheck, ClipboardCheck, PackageOpen, RefreshCw,
   ExternalLink, QrCode, CheckCircle2, TrendingUp, Check, Trash2, Box,
-  CreditCard, CheckSquare, DollarSign, Layers, Copy
+  CreditCard, CheckSquare, DollarSign, Layers, Copy, LayoutGrid, PauseCircle
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import './superAdminStyles.css';
@@ -1645,8 +1645,11 @@ function NewRegistrationsView({ restaurants, onApprove, onBack }) {
   );
 }
 
-function DigitalMenusView({ restaurants, onGoToCustomerMenu, onBack }) {
-  const [copiedId, setCopiedId] = React.useState(null);
+function DigitalMenusView({ restaurants = [], onGoToCustomerMenu, onBack }) {
+  const [copiedId, setCopiedId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 6;
 
   const origin = typeof window !== 'undefined' && window.location.origin
     ? window.location.origin
@@ -1656,211 +1659,465 @@ function DigitalMenusView({ restaurants, onGoToCustomerMenu, onBack }) {
     ? window.location.host
     : 'localhost:5173';
 
-  const handleCopyLink = (url, id) => {
-    navigator.clipboard.writeText(url).then(() => {
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
+  // Live KPI Calculations from restaurants state
+  const totalMenus = restaurants.length;
+  const activeMenus = useMemo(() => {
+    return restaurants.filter(r => (r.status || 'active').toLowerCase() === 'active').length;
+  }, [restaurants]);
+  const deactivatedMenus = useMemo(() => {
+    return restaurants.filter(r => (r.status || '').toLowerCase() !== 'active').length;
+  }, [restaurants]);
+
+  // Client-side search filtering by restaurant name, owner, or slug
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return restaurants;
+    return restaurants.filter(r => {
+      const name = (r.name || '').toLowerCase();
+      const slug = (r.slug || r.menuSlug || '').toLowerCase();
+      const owner = (r.ownerName || r.owner_name || '').toLowerCase();
+      return name.includes(q) || slug.includes(q) || owner.includes(q);
     });
+  }, [restaurants, searchQuery]);
+
+  // Reset page when search query changes
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery]);
+
+  // Total pages
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+
+  // Current paginated slice
+  const paginatedRestaurants = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
+  const handleCopyLink = (url, id) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => {
+        setCopiedId(id);
+        setTimeout(() => setCopiedId(null), 2000);
+      });
+    }
   };
 
+  // Pagination page buttons generator matching screenshot: < 1 2 3 4 5 ... 12 >
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    const pages = [];
+    if (page <= 4) {
+      pages.push(1, 2, 3, 4, 5, '...', totalPages);
+    } else if (page >= totalPages - 3) {
+      pages.push(1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+    } else {
+      pages.push(1, '...', page - 1, page, page + 1, '...', totalPages);
+    }
+    return pages;
+  }, [page, totalPages]);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{
-        background: 'var(--panel)',
-        border: '1px solid var(--border)',
-        borderRadius: 14,
-        padding: '20px 24px'
-      }}>
-        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 750 }}>Multi-Restaurant Digital Menus &amp; QR Stands</h2>
-        <p style={{ margin: '5px 0 0', fontSize: 13, color: 'var(--muted)' }}>
-          Each restaurant operates an independent 3D Holographic digital menu with unique QR code synced to Supabase.
-        </p>
-      </div>
+    <div className="all-menus-wrapper">
+      {/* 1. Header Banner: Multi-Restaurant Digital Menus & QR Stands (10px below top bar) */}
+      <section className="all-menus-banner">
+        {/* Subtle decorative background art on right */}
+        <div style={{
+          position: 'absolute',
+          right: '250px',
+          top: '-20px',
+          bottom: '-20px',
+          width: '260px',
+          pointerEvents: 'none',
+          opacity: 0.12,
+          background: 'radial-gradient(ellipse at center, #f97316 10%, transparent 75%)'
+        }} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(480px, 1fr))', gap: 20 }}>
-        {restaurants.map(r => {
-          const slug = r.slug || r.menuSlug || '3d-dine';
-          const menuUrl = `${origin}/${slug}`;
-          const menuUrlShort = `${host}/${slug}`;
-          const isCopied = copiedId === r.id;
+        <div className="banner-left">
+          <div className="banner-icon">
+            <LayoutGrid size={26} strokeWidth={2.2} />
+          </div>
+          <div className="banner-text">
+            <h2>Multi-Restaurant Digital Menus &amp; QR Stands</h2>
+            <p>
+              Each restaurant operates an independent 3D holographic digital menu with a unique QR code synced to Supabase.
+            </p>
+          </div>
+        </div>
 
-          return (
-            <div key={r.id} className="qr-menu-card" style={{
-              background: 'var(--panel)',
-              border: '1px solid var(--border)',
-              borderRadius: 16,
-              padding: 24,
-              display: 'flex',
-              gap: 24,
-              alignItems: 'flex-start',
-              transition: 'box-shadow 0.3s ease, transform 0.2s ease',
-              position: 'relative',
-              overflow: 'hidden'
-            }}>
-              {/* Left: QR Code */}
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 8,
-                flexShrink: 0
-              }}>
-                <div style={{
-                  background: 'rgba(244, 81, 0, 0.06)',
-                  borderRadius: 14,
-                  padding: 12,
-                  border: '1px solid rgba(244, 81, 0, 0.12)'
-                }}>
-                  <QRCodeSVG
-                    value={menuUrl}
-                    size={130}
-                    fgColor="#c44000"
-                    bgColor="transparent"
-                    level="M"
-                    includeMargin={false}
-                    style={{ display: 'block' }}
-                  />
-                </div>
-                <span style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: '#888',
-                  letterSpacing: '0.3px'
-                }}>Scan menu</span>
-              </div>
+        {/* Search Bar on the Right */}
+        <div className="banner-search-wrap">
+          <Search size={16} className="banner-search-icon" />
+          <input
+            type="text"
+            className="banner-search-input"
+            placeholder="Search by restaurant name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="banner-search-clear"
+              onClick={() => setSearchQuery('')}
+              title="Clear search"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </section>
 
-              {/* Right: Info */}
-              <div style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
-                minWidth: 0
-              }}>
-                {/* Name + Status */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                  <strong style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {r.name}
-                  </strong>
-                  <span style={{
-                    padding: '4px 14px',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    borderRadius: 20,
-                    background: (r.status || 'active').toLowerCase() === 'active' ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.1)',
-                    color: (r.status || 'active').toLowerCase() === 'active' ? '#16a34a' : '#dc2626',
-                    whiteSpace: 'nowrap',
-                    letterSpacing: '0.2px'
-                  }}>
-                    {r.status || 'Active'}
-                  </span>
-                </div>
-
-                {/* Menu Link Label */}
-                <span style={{ fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                  Menu Link
+      {/* 2. Three Live KPI Cards with Hover Animation */}
+      <section className="kpi-grid-3">
+        {/* Card 1: Total Digital Menus */}
+        <div className="menu-kpi-card">
+          <div className="menu-kpi-left">
+            <div className="menu-kpi-icon orange">
+              <Layers size={24} strokeWidth={2} />
+            </div>
+            <div>
+              <div className="menu-kpi-label">Total Digital Menus</div>
+              <div className="menu-kpi-value">{totalMenus.toLocaleString()}</div>
+              <div className="menu-kpi-trend">
+                <span className="trend-green">
+                  <ArrowUpRight size={14} />
+                  +{totalMenus > 10 ? '12 (4.4%)' : `${totalMenus} (100%)`}
                 </span>
+                <span className="trend-muted">from last 30 days</span>
+              </div>
+            </div>
+          </div>
+          {/* Sparkline wave orange */}
+          <svg viewBox="0 0 100 40" className="menu-kpi-sparkline" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="spark-menu-orange" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#ff7900" stopOpacity="0.32" />
+                <stop offset="100%" stopColor="#ff7900" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d="M 0 35 Q 25 32, 45 22 T 80 14 T 100 8 L 100 40 L 0 40 Z" fill="url(#spark-menu-orange)" />
+            <path d="M 0 35 Q 25 32, 45 22 T 80 14 T 100 8" fill="none" stroke="#ff7900" strokeWidth="2.5" strokeLinecap="round" />
+          </svg>
+        </div>
 
-                {/* URL + Integrated Copy */}
+        {/* Card 2: Total Active Menus */}
+        <div className="menu-kpi-card">
+          <div className="menu-kpi-left">
+            <div className="menu-kpi-icon green">
+              <LayoutGrid size={24} strokeWidth={2} />
+            </div>
+            <div>
+              <div className="menu-kpi-label">Total Active Menus</div>
+              <div className="menu-kpi-value">{activeMenus.toLocaleString()}</div>
+              <div className="menu-kpi-trend">
+                <span className="trend-green">
+                  <ArrowUpRight size={14} />
+                  +{activeMenus > 10 ? '9 (3.5%)' : `${activeMenus} (100%)`}
+                </span>
+                <span className="trend-muted">from last 30 days</span>
+              </div>
+            </div>
+          </div>
+          {/* Sparkline wave green */}
+          <svg viewBox="0 0 100 40" className="menu-kpi-sparkline" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="spark-menu-green" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#00ac4d" stopOpacity="0.32" />
+                <stop offset="100%" stopColor="#00ac4d" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d="M 0 34 Q 25 30, 48 20 T 82 12 T 100 6 L 100 40 L 0 40 Z" fill="url(#spark-menu-green)" />
+            <path d="M 0 34 Q 25 30, 48 20 T 82 12 T 100 6" fill="none" stroke="#00ac4d" strokeWidth="2.5" strokeLinecap="round" />
+          </svg>
+        </div>
+
+        {/* Card 3: Total Deactivated Menus */}
+        <div className="menu-kpi-card">
+          <div className="menu-kpi-left">
+            <div className="menu-kpi-icon red">
+              <PauseCircle size={24} strokeWidth={2} />
+            </div>
+            <div>
+              <div className="menu-kpi-label">Total Deactivated Menus</div>
+              <div className="menu-kpi-value">{deactivatedMenus.toLocaleString()}</div>
+              <div className="menu-kpi-trend">
+                <span className={deactivatedMenus > 0 ? "trend-red" : "trend-green"}>
+                  <ArrowUpRight size={14} />
+                  +{deactivatedMenus > 0 ? `${deactivatedMenus} (${Math.round((deactivatedMenus / Math.max(1, totalMenus)) * 100)}%)` : '0 (0.0%)'}
+                </span>
+                <span className="trend-muted">from last 30 days</span>
+              </div>
+            </div>
+          </div>
+          {/* Sparkline wave red */}
+          <svg viewBox="0 0 100 40" className="menu-kpi-sparkline" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="spark-menu-red" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#fb2e35" stopOpacity="0.32" />
+                <stop offset="100%" stopColor="#fb2e35" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d="M 0 35 Q 28 32, 52 24 T 82 16 T 100 10 L 100 40 L 0 40 Z" fill="url(#spark-menu-red)" />
+            <path d="M 0 35 Q 28 32, 52 24 T 82 16 T 100 10" fill="none" stroke="#fb2e35" strokeWidth="2.5" strokeLinecap="round" />
+          </svg>
+        </div>
+      </section>
+
+      {/* 3. Digital Menu Cards Grid (20px below KPI cards) */}
+      {filtered.length === 0 ? (
+        <div style={{
+          textAlign: 'center',
+          padding: '60px 20px',
+          background: 'var(--panel)',
+          border: '1px solid var(--border)',
+          borderRadius: 14,
+          marginTop: '20px'
+        }}>
+          <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>
+            No restaurants found matching "{searchQuery}"
+          </p>
+          <button
+            onClick={() => setSearchQuery('')}
+            style={{
+              marginTop: '12px',
+              padding: '8px 16px',
+              borderRadius: 8,
+              background: '#f45100',
+              color: '#fff',
+              border: 0,
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            Clear Search Filter
+          </button>
+        </div>
+      ) : (
+        <section className="menus-grid">
+          {paginatedRestaurants.map(r => {
+            const slug = r.slug || r.menuSlug || '3d-dine';
+            const menuUrl = `${origin}/${slug}`;
+            const menuUrlShort = `${host}/${slug}`;
+            const isCopied = copiedId === r.id;
+
+            return (
+              <div key={r.id} className="qr-menu-card" style={{
+                background: 'var(--panel)',
+                border: '1px solid var(--border)',
+                borderRadius: 16,
+                padding: '20px',
+                display: 'flex',
+                gap: 18,
+                alignItems: 'flex-start',
+                transition: 'box-shadow 0.3s ease, transform 0.2s ease',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                {/* Left: QR Code */}
                 <div style={{
                   display: 'flex',
+                  flexDirection: 'column',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '7px 12px',
-                  borderRadius: 8,
-                  background: 'var(--bg)',
-                  border: '1px solid var(--border)',
-                  gap: 8
+                  gap: 8,
+                  flexShrink: 0
                 }}>
                   <div style={{
-                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                    fontSize: 13,
-                    color: '#d34500',
-                    fontWeight: 500,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
+                    background: 'rgba(244, 81, 0, 0.06)',
+                    borderRadius: 14,
+                    padding: 10,
+                    border: '1px solid rgba(244, 81, 0, 0.12)'
                   }}>
-                    {menuUrlShort}
+                    <QRCodeSVG
+                      value={menuUrl}
+                      size={120}
+                      fgColor="#c44000"
+                      bgColor="transparent"
+                      level="M"
+                      includeMargin={false}
+                      style={{ display: 'block' }}
+                    />
                   </div>
+                  <span style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#888',
+                    letterSpacing: '0.3px'
+                  }}>Scan menu</span>
+                </div>
+
+                {/* Right: Info */}
+                <div style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  minWidth: 0
+                }}>
+                  {/* Name + Status */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <strong style={{ fontSize: 16.5, fontWeight: 800, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {r.name}
+                    </strong>
+                    <span style={{
+                      padding: '3px 12px',
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      borderRadius: 20,
+                      background: (r.status || 'active').toLowerCase() === 'active' ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.1)',
+                      color: (r.status || 'active').toLowerCase() === 'active' ? '#16a34a' : '#dc2626',
+                      whiteSpace: 'nowrap',
+                      letterSpacing: '0.2px'
+                    }}>
+                      {r.status || 'active'}
+                    </span>
+                  </div>
+
+                  {/* Menu Link Label */}
+                  <span style={{ fontSize: 9.5, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                    Menu Link
+                  </span>
+
+                  {/* URL + Integrated Copy */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '6px 10px',
+                    borderRadius: 8,
+                    background: 'var(--bg)',
+                    border: '1px solid var(--border)',
+                    gap: 6
+                  }}>
+                    <div style={{
+                      fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                      fontSize: 12,
+                      color: '#d34500',
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}>
+                      {menuUrlShort}
+                    </div>
+                    <button
+                      onClick={() => handleCopyLink(menuUrl, r.id)}
+                      title={isCopied ? "Copied to clipboard!" : "Copy menu link"}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        padding: '3px',
+                        borderRadius: 6,
+                        color: isCopied ? '#16a34a' : '#64748b',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s ease',
+                        flexShrink: 0
+                      }}
+                    >
+                      {isCopied ? <Check size={15} /> : <Copy size={15} />}
+                    </button>
+                  </div>
+
+                  {/* QR Stands + Plan */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Store size={16} style={{ color: '#ea580c', flexShrink: 0 }} />
+                      <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text)' }}>
+                        {r.table_count || 12} Active QR Stands
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Layers size={16} style={{ color: '#ea580c', flexShrink: 0 }} />
+                      <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text)' }}>
+                        {r.plan || 'Pro Holographic'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Open 3D Menu Button */}
                   <button
-                    onClick={() => handleCopyLink(menuUrl, r.id)}
-                    title={isCopied ? "Copied to clipboard!" : "Copy menu link"}
+                    onClick={() => onGoToCustomerMenu?.(r)}
                     style={{
-                      border: 'none',
-                      background: 'transparent',
-                      padding: '4px',
-                      borderRadius: 6,
-                      color: isCopied ? '#16a34a' : '#64748b',
-                      cursor: 'pointer',
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: 9,
+                      background: '#f45100',
+                      color: '#fff',
+                      border: 0,
+                      fontSize: 13,
+                      fontWeight: 700,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
+                      gap: 6,
+                      cursor: 'pointer',
                       transition: 'all 0.2s ease',
-                      flexShrink: 0
+                      marginTop: 3,
+                      boxShadow: '0 2px 8px rgba(244, 81, 0, 0.22)'
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.backgroundColor = '#ff6014';
+                      e.currentTarget.style.boxShadow = '0 4px 14px rgba(244, 81, 0, 0.32)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.backgroundColor = '#f45100';
+                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(244, 81, 0, 0.22)';
                     }}
                   >
-                    {isCopied ? <Check size={16} /> : <Copy size={16} />}
+                    <ExternalLink size={15} /> Open 3D Menu
                   </button>
                 </div>
-
-                {/* QR Stands + Plan */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 2 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Store size={18} style={{ color: '#ea580c', flexShrink: 0 }} />
-                    <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>
-                      {r.table_count || 12} Active QR Stands
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Layers size={18} style={{ color: '#ea580c', flexShrink: 0 }} />
-                    <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>
-                      {r.plan || 'Pro Holographic'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Open 3D Menu Button */}
-                <button
-                  onClick={() => onGoToCustomerMenu?.(r)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: 10,
-                    background: '#f45100',
-                    color: '#fff',
-                    border: 0,
-                    fontSize: 14,
-                    fontWeight: 700,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    marginTop: 4,
-                    boxShadow: '0 2px 8px rgba(244, 81, 0, 0.25)'
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.backgroundColor = '#ff6014';
-                    e.currentTarget.style.boxShadow = '0 4px 14px rgba(244, 81, 0, 0.35)';
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.backgroundColor = '#f45100';
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(244, 81, 0, 0.25)';
-                  }}
-                >
-                  <ExternalLink size={16} /> Open 3D Menu
-                </button>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </section>
+      )}
 
-      <button className="placeholder-button" onClick={onBack} style={{ alignSelf: 'flex-start' }}>
-        <ChevronLeft size={16} /> Back to Dashboard
-      </button>
+      {/* 4. Professional Pagination (Matching project orange profile) */}
+      {filtered.length > 0 && (
+        <div className="menus-pagination">
+          <button
+            type="button"
+            className="page-btn"
+            disabled={page <= 1}
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            title="Previous Page"
+          >
+            <ChevronLeft size={16} />
+          </button>
+
+          {pageNumbers.map((p, idx) => {
+            if (p === '...') {
+              return <span key={`dots-${idx}`} className="page-dots">…</span>;
+            }
+            return (
+              <button
+                key={`page-${p}`}
+                type="button"
+                className={`page-btn ${page === p ? 'active' : ''}`}
+                onClick={() => setPage(p)}
+              >
+                {p}
+              </button>
+            );
+          })}
+
+          <button
+            type="button"
+            className="page-btn"
+            disabled={page >= totalPages}
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            title="Next Page"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

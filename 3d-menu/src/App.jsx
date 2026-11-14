@@ -249,6 +249,93 @@ export default function App() {
     }
     return 'Table 04';
   });
+
+  // Keep tableNumber synchronized with URL query params across customer sessions
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const t = params.get('table') || params.get('tableNumber');
+        if (t) {
+          setTableNumber(decodeURIComponent(t));
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [currentView]);
+
+  const [tableStatusState, setTableStatusState] = useState({
+    isValid: true,
+    isActive: true,
+    errorMessage: null,
+    tableRecord: null
+  });
+
+  // Server-side tenant table resolution and validation
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const rawParam = params.get('table') || params.get('tableNumber');
+      if (!rawParam) return;
+
+      const needle = decodeURIComponent(rawParam).trim();
+      const restoId = activeRestaurant?.id || currentRestoId || 'resto_001';
+
+      supabase
+        .from('restaurant_tables')
+        .select('*')
+        .eq('restaurant_id', restoId)
+        .is('deleted_at', null)
+        .then(({ data, error }) => {
+          if (error) {
+            console.warn('Table validation query warning:', error);
+            return;
+          }
+
+          if (data && data.length > 0) {
+            const matched = data.find(
+              (t) =>
+                t.public_id === needle ||
+                t.id === needle ||
+                String(t.table_no) === needle ||
+                (t.table_number && t.table_number.toLowerCase() === needle.toLowerCase()) ||
+                (t.table_id && t.table_id.toLowerCase() === needle.toLowerCase())
+            );
+
+            if (!matched) {
+              setTableStatusState({
+                isValid: false,
+                isActive: false,
+                errorMessage: 'This table QR code does not belong to this restaurant. Please scan the QR stand at your table.',
+                tableRecord: null
+              });
+            } else if (matched.is_active === false || matched.status === 'inactive') {
+              const displayNum = matched.table_number || `Table ${String(matched.table_no).padStart(2, '0')}`;
+              setTableNumber(displayNum);
+              setTableStatusState({
+                isValid: true,
+                isActive: false,
+                errorMessage: `${displayNum} QR is currently deactivated by the restaurant. Ordering is unavailable.`,
+                tableRecord: matched
+              });
+            } else {
+              const displayNum = matched.table_number || `Table ${String(matched.table_no).padStart(2, '0')}`;
+              setTableNumber(displayNum);
+              setTableStatusState({
+                isValid: true,
+                isActive: true,
+                errorMessage: null,
+                tableRecord: matched
+              });
+            }
+          }
+        });
+    } catch (e) {
+      console.warn('Table validation exception:', e);
+    }
+  }, [currentView, activeRestaurant?.id, currentRestoId]);
   const currency = restaurantProfile?.currency || '৳';
   const [isCarouselHovered, setIsCarouselHovered] = useState(false);
 
@@ -1822,6 +1909,10 @@ export default function App() {
   };
 
   const handleConfirmOrderWithWaiter = () => {
+    if (!tableStatusState.isValid || !tableStatusState.isActive) {
+      alert(tableStatusState.errorMessage || 'Orders cannot be placed from an inactive or invalid table QR.');
+      return;
+    }
     const newOrder = {
       id: `ord_${Date.now()}`,
       orderNumber: `DGM-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -2017,6 +2108,10 @@ export default function App() {
 
   // Confirm order from the 2-second automated home screen popup
   const handleConfirmOrderFromAutoPopup = () => {
+    if (!tableStatusState.isValid || !tableStatusState.isActive) {
+      alert(tableStatusState.errorMessage || 'Orders cannot be placed from an inactive or invalid table QR.');
+      return;
+    }
     let itemsToOrder = [];
     if (selectedList && selectedList.length > 0) {
       itemsToOrder = selectedList;
@@ -2236,6 +2331,10 @@ export default function App() {
 
   // Confirm Order Execution
   const handleConfirmOrder = () => {
+    if (!tableStatusState.isValid || !tableStatusState.isActive) {
+      alert(tableStatusState.errorMessage || 'Orders cannot be placed from an inactive or invalid table QR.');
+      return;
+    }
     setCheckoutStep('processing');
     const orderIdNum = `#ORD-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -2498,6 +2597,16 @@ export default function App() {
       {/* 2. TOP APP HEADER (RestaurantHeader Component)           */}
       {/* ======================================================== */}
       <div className="relative z-40 w-full max-w-xl mx-auto px-3 sm:px-4 pt-3 sm:pt-3.5 shrink-0">
+        {tableStatusState.errorMessage && (
+          <div className={`mb-2 px-3 py-2 rounded-[8px] text-xs font-semibold flex items-center gap-2 border shadow-lg ${
+            tableStatusState.isValid
+              ? 'bg-amber-950/90 border-amber-500/80 text-amber-200'
+              : 'bg-rose-950/90 border-rose-500/80 text-rose-200'
+          }`}>
+            <span className="text-sm">{tableStatusState.isValid ? '⏸️' : '⚠️'}</span>
+            <span className="flex-1">{tableStatusState.errorMessage}</span>
+          </div>
+        )}
         <RestaurantHeader
           name={restaurantProfile?.name || activeRestaurant?.name || 'Monkey Bhai'}
           logoUrl={restaurantProfile?.logo || activeRestaurant?.logo || null}

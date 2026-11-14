@@ -67,6 +67,8 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import AddFoodWizard from './AddFoodWizard';
 import FeaturedSliderWizard from './FeaturedSliderWizard';
+import TableQRManagement from './TableQRManagement';
+import { supabaseTableRepository } from '../data/supabaseTableRepository';
 import { supabase } from '../lib/supabaseClient';
 import {
   getAdminTheme,
@@ -205,10 +207,10 @@ export default function RestaurantPanel({
         console.error('Error parsing initial tab from URL:', e);
       }
     }
-    return isPremiumActive ? 'dashboard' : 'foods';
+    return isPremiumActive ? 'dashboard' : 'table-qr';
   };
 
-  // Navigation: Default is 'foods' (Food Items & Publish) when premium is disabled
+  // Navigation: Default is 'table-qr' (Table QR Management) or 'foods'
   const [activeTab, setActiveTab] = useState(getInitialActiveTab);
 
   // Sync active tab with URL query parameter for browser history & bookmarking
@@ -808,6 +810,7 @@ export default function RestaurantPanel({
   const navigationItems = useMemo(() => {
     const defaultTabs = [
       { id: 'foods', label: 'Food Items & Publish', icon: Utensils, badge: foods.length },
+      { id: 'table-qr', label: 'Table QR Management', icon: LayoutGrid },
       { id: 'categories', label: 'Create Category', icon: Layers, badge: uniqueCategories.length },
       { id: 'subcategories', label: 'Create Sub-Category', icon: Tag, badge: subcategories.length },
       { id: 'sliders', label: 'Featured Sliders', icon: Sparkles, badge: featuredSliders.filter(s => s.isActive).length },
@@ -1103,26 +1106,39 @@ export default function RestaurantPanel({
             </button>
 
             <div>
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <span className="text-[11px] font-bold tracking-wider uppercase text-orange-600 dark:text-orange-400">
-                  RESTAURANT PORTAL
-                </span>
-                <span className="text-slate-400 text-xs">/</span>
-                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                  {activeTab}
-                </span>
-              </div>
-              <h1 className={`text-base sm:text-lg font-bold capitalize leading-none tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                {activeTab === 'dashboard' && 'Dashboard Overview'}
-                {activeTab === 'foods' && 'Food Items & Universal Menu Engine'}
-                {activeTab === 'categories' && 'Category Management'}
-                {activeTab === 'subcategories' && 'Sub-Category / Food Type Management'}
-                {activeTab === 'sliders' && 'Featured Specials Slider Management'}
-                {activeTab === 'settings' && 'Restaurant Profile & Credentials Settings'}
-                {activeTab === 'support' && 'Support Tickets & 24/7 Live Care'}
-                {activeTab === 'orders' && 'Order Management'}
-                {activeTab === 'payments' && 'Customer Payments & Transactions'}
-              </h1>
+              {activeTab === 'table-qr' ? (
+                <div>
+                  <h1 className={`text-base sm:text-lg font-bold leading-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    Table QR Management
+                  </h1>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                    Manage table-wise QR codes for your restaurant menu
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="text-[11px] font-bold tracking-wider uppercase text-orange-600 dark:text-orange-400">
+                      RESTAURANT PORTAL
+                    </span>
+                    <span className="text-slate-400 text-xs">/</span>
+                    <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      {activeTab}
+                    </span>
+                  </div>
+                  <h1 className={`text-base sm:text-lg font-bold capitalize leading-none tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    {activeTab === 'dashboard' && 'Dashboard Overview'}
+                    {activeTab === 'foods' && 'Food Items & Universal Menu Engine'}
+                    {activeTab === 'categories' && 'Category Management'}
+                    {activeTab === 'subcategories' && 'Sub-Category / Food Type Management'}
+                    {activeTab === 'sliders' && 'Featured Specials Slider Management'}
+                    {activeTab === 'settings' && 'Restaurant Profile & Credentials Settings'}
+                    {activeTab === 'support' && 'Support Tickets & 24/7 Live Care'}
+                    {activeTab === 'orders' && 'Order Management'}
+                    {activeTab === 'payments' && 'Customer Payments & Transactions'}
+                  </h1>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1176,7 +1192,7 @@ export default function RestaurantPanel({
                 <span className="hidden sm:inline">Create Featured Slider</span>
                 <span className="sm:hidden">Create</span>
               </button>
-            ) : (
+            ) : activeTab === 'foods' ? (
               <button
                 onClick={() => { setEditingFood(null); setIsWizardOpen(true); }}
                 className="px-3.5 py-2 rounded-[5px] bg-orange-600 hover:bg-orange-500 text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shrink-0"
@@ -1185,7 +1201,7 @@ export default function RestaurantPanel({
                 <span className="hidden sm:inline">Add New Food</span>
                 <span className="sm:hidden">Add</span>
               </button>
-            )}
+            ) : null}
           </div>
         </header>
 
@@ -1207,6 +1223,20 @@ export default function RestaurantPanel({
 
         {/* Dynamic Section Content with Full Native Scrolling */}
         <main className="p-4 sm:p-6 flex-1 space-y-6 max-w-7xl w-full mx-auto pb-16">
+
+          {/* ====================================================== */}
+          {/* SECTION: TABLE QR MANAGEMENT                           */}
+          {/* ====================================================== */}
+          {activeTab === 'table-qr' && (
+            <TableQRManagement
+              restaurant={{
+                id: panelRestoId,
+                name: profileForm.name || 'Monkey Bhai',
+                slug: currentRestoSlug
+              }}
+              repository={supabaseTableRepository}
+            />
+          )}
 
           {/* ====================================================== */}
           {/* SECTION 1: FOOD ITEMS & PUBLISH (DEFAULT LANDING TAB)  */}
