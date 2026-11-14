@@ -95,6 +95,7 @@ import {
   fetchLiveFollowersFromSupabase
 } from './data/menuStore';
 import { supabase } from './lib/supabaseClient';
+import { supabaseTableRepository } from './data/supabaseTableRepository';
 import RestaurantHeader from './components/RestaurantHeader';
 
 const categories = [
@@ -247,7 +248,7 @@ export default function App() {
         // fallback
       }
     }
-    return 'Table 04';
+    return '';
   });
 
   // Keep tableNumber synchronized with URL query params across customer sessions
@@ -258,6 +259,8 @@ export default function App() {
         const t = params.get('table') || params.get('tableNumber');
         if (t) {
           setTableNumber(decodeURIComponent(t));
+        } else {
+          setTableNumber('');
         }
       } catch (e) {
         // ignore
@@ -272,13 +275,30 @@ export default function App() {
     tableRecord: null
   });
 
+  // Mode check: Table QR Dine-In vs Primary QR Generic Browse
+  const isTableMode = Boolean(
+    tableStatusState.isValid &&
+    tableStatusState.isActive &&
+    tableStatusState.tableRecord &&
+    tableNumber
+  );
+
   // Server-side tenant table resolution and validation
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
       const params = new URLSearchParams(window.location.search);
       const rawParam = params.get('table') || params.get('tableNumber');
-      if (!rawParam) return;
+      if (!rawParam) {
+        setTableNumber('');
+        setTableStatusState({
+          isValid: true,
+          isActive: true,
+          errorMessage: null,
+          tableRecord: null
+        });
+        return;
+      }
 
       const needle = decodeURIComponent(rawParam).trim();
       const restoId = activeRestaurant?.id || currentRestoId || 'resto_001';
@@ -288,23 +308,39 @@ export default function App() {
         .select('*')
         .eq('restaurant_id', restoId)
         .is('deleted_at', null)
-        .then(({ data, error }) => {
-          if (error) {
-            console.warn('Table validation query warning:', error);
-            return;
+        .then(async ({ data, error }) => {
+          let tables = data;
+          if ((!tables || tables.length === 0) && !error) {
+            try {
+              const seeded = await supabaseTableRepository.list({ restaurantId: restoId });
+              tables = seeded.map(s => ({
+                id: s.id,
+                restaurant_id: s.restaurantId,
+                table_no: s.tableNo,
+                public_id: s.publicId,
+                is_active: s.active,
+                table_number: `Table ${String(s.tableNo).padStart(2, '0')}`,
+                table_id: `TBL-${String(s.tableNo).padStart(3, '0')}`
+              }));
+            } catch (e) {
+              console.warn('Seeding fallback error:', e);
+            }
           }
 
-          if (data && data.length > 0) {
-            const matched = data.find(
+          if (tables && tables.length > 0) {
+            const needleLower = needle.toLowerCase();
+            const matched = tables.find(
               (t) =>
                 t.public_id === needle ||
                 t.id === needle ||
                 String(t.table_no) === needle ||
-                (t.table_number && t.table_number.toLowerCase() === needle.toLowerCase()) ||
-                (t.table_id && t.table_id.toLowerCase() === needle.toLowerCase())
+                String(t.table_no).padStart(2, '0') === needle ||
+                (t.table_number && t.table_number.toLowerCase() === needleLower) ||
+                (t.table_id && t.table_id.toLowerCase() === needleLower)
             );
 
             if (!matched) {
+              setTableNumber('');
               setTableStatusState({
                 isValid: false,
                 isActive: false,
@@ -330,6 +366,14 @@ export default function App() {
                 tableRecord: matched
               });
             }
+          } else {
+            setTableNumber('');
+            setTableStatusState({
+              isValid: false,
+              isActive: false,
+              errorMessage: 'This table QR code does not belong to this restaurant. Please scan the QR stand at your table.',
+              tableRecord: null
+            });
           }
         });
     } catch (e) {
@@ -2066,6 +2110,17 @@ export default function App() {
       };
     }
 
+    // If not in verified Table QR mode (e.g. Primary QR / generic browse), do not prompt waiter confirmation
+    if (!isTableMode) {
+      if (autoConfirmTimerRef.current) {
+        clearTimeout(autoConfirmTimerRef.current);
+        autoConfirmTimerRef.current = null;
+      }
+      pendingUnconfirmedItemRef.current = null;
+      setIsDetailSheetOpen(false);
+      return;
+    }
+
     setIsDetailSheetOpen(false);
     setAutoConfirmSource('customization');
 
@@ -2084,6 +2139,15 @@ export default function App() {
   // When customer exits Selected Food Items modal without answering (accidentally closes with X or outside tap)
   const handleCloseSelectedListWithoutConfirm = () => {
     setIsSelectedListOpen(false);
+
+    // If not in verified Table QR mode, do NOT trigger order confirmation popup
+    if (!isTableMode) {
+      if (autoConfirmTimerRef.current) {
+        clearTimeout(autoConfirmTimerRef.current);
+        autoConfirmTimerRef.current = null;
+      }
+      return;
+    }
 
     if (selectedList && selectedList.length > 0) {
       setAutoConfirmSource('selectedList');
@@ -2610,7 +2674,7 @@ export default function App() {
         <RestaurantHeader
           name={restaurantProfile?.name || activeRestaurant?.name || 'Monkey Bhai'}
           logoUrl={restaurantProfile?.logo || activeRestaurant?.logo || null}
-          brand="24 DIGITAL"
+          brand={isTableMode && tableNumber ? tableNumber : "24 DIGITAL"}
           welcomeText="Welcome, Our Dear Guest"
           isFollowing={isFollowing}
           onFollow={handleFollowRestaurant}
@@ -3133,7 +3197,7 @@ export default function App() {
             <div className="space-y-1.5">
               <h3 className="text-white font-black text-xl tracking-tight">Order Confirmed!</h3>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-normal">
-                Thank you! Your order confirmation has been noted by the restaurant for {tableNumber || 'Table 04'}. The waiter will serve your food shortly.
+                Thank you! Your order confirmation has been noted by the restaurant for {tableNumber || 'your table'}. The waiter will serve your food shortly.
               </p>
             </div>
             <button
@@ -3149,8 +3213,9 @@ export default function App() {
       {/* ======================================================== */}
       {/* 4.15 MANDATORY ORDER CONFIRMATION POPUP (CANNOT BE DISMISSED OUTSIDE) */}
       {/* Matches reference screenshot media_1794458766645_e708b220.jpg */}
+      {/* Table QR mode only: hidden for Primary QR generic browse mode */}
       {/* ======================================================== */}
-      {isAutoConfirmPopupOpen && (
+      {isAutoConfirmPopupOpen && isTableMode && (
         <div
           className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-[fadeIn_0.2s_ease-out] select-none"
         >
@@ -3512,49 +3577,61 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* 3. Order Confirmation with Waiter Card (Matches media_1794458766645_e708b220.jpg) */}
-                  <div className="p-4 sm:p-5 rounded-2xl bg-[#121826]/95 border border-white/10 space-y-3.5 shadow-md">
-                    <div className="flex items-start gap-3.5">
-                      <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
-                        <svg className="w-6 h-6 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 4v2" />
-                          <path d="M4 18h16" />
-                          <path d="M4 18c0-4.418 3.582-8 8-8s8 3.582 8 8" />
-                          <path d="M2 20h20" />
-                        </svg>
+                  {/* 3. Order Confirmation with Waiter Card (Only rendered in Table QR mode; hidden in Primary QR mode) */}
+                  {isTableMode ? (
+                    <div className="p-4 sm:p-5 rounded-2xl bg-[#121826]/95 border border-white/10 space-y-3.5 shadow-md">
+                      <div className="flex items-start gap-3.5">
+                        <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                          <svg className="w-6 h-6 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 4v2" />
+                            <path d="M4 18h16" />
+                            <path d="M4 18c0-4.418 3.582-8 8-8s8 3.582 8 8" />
+                            <path d="M2 20h20" />
+                          </svg>
+                        </div>
+                        <div className="space-y-1">
+                          <h3 className="text-white font-bold text-base sm:text-lg tracking-tight leading-snug">
+                            {selectedList.length > 1
+                              ? 'Have you ordered these items with the waiter?'
+                              : 'Have you ordered this item with the waiter?'}
+                          </h3>
+                          <p className="text-xs sm:text-[13px] text-slate-300/80 font-normal leading-relaxed">
+                            Please tap an answer below. Your response helps us improve PhoneMenu for everyone! 😊
+                          </p>
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        <h3 className="text-white font-bold text-base sm:text-lg tracking-tight leading-snug">
-                          {selectedList.length > 1
-                            ? 'Have you ordered these items with the waiter?'
-                            : 'Have you ordered this item with the waiter?'}
-                        </h3>
-                        <p className="text-xs sm:text-[13px] text-slate-300/80 font-normal leading-relaxed">
-                          Please tap an answer below. Your response helps us improve PhoneMenu for everyone! 😊
-                        </p>
+
+                      <div className="space-y-2.5 pt-1">
+                        {/* Primary White Button */}
+                        <button
+                          onClick={handleConfirmOrderWithWaiter}
+                          className="w-full py-3.5 px-6 rounded-full bg-white hover:bg-slate-100 active:scale-[0.98] text-black font-bold text-sm sm:text-base tracking-normal flex items-center justify-center gap-2.5 shadow-[0_4px_25px_rgba(255,255,255,0.2)] cursor-pointer transition-all"
+                        >
+                          <CheckCircle2 className="w-5 h-5 text-black stroke-[2.5]" />
+                          <span>Yes, I ordered</span>
+                        </button>
+
+                        {/* Secondary Glass Dark Button */}
+                        <button
+                          onClick={handleDismissSelectedListWithoutPopup}
+                          className="w-full py-3 px-6 rounded-full bg-white/[0.05] hover:bg-white/10 active:scale-[0.98] border border-white/15 text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
+                        >
+                          <RotateCcw className="w-4 h-4 text-white" />
+                          <span>Not yet — Keep browsing</span>
+                        </button>
                       </div>
                     </div>
-
-                    <div className="space-y-2.5 pt-1">
-                      {/* Primary White Button */}
+                  ) : (
+                    <div className="pt-2">
                       <button
-                        onClick={handleConfirmOrderWithWaiter}
-                        className="w-full py-3.5 px-6 rounded-full bg-white hover:bg-slate-100 active:scale-[0.98] text-black font-bold text-sm sm:text-base tracking-normal flex items-center justify-center gap-2.5 shadow-[0_4px_25px_rgba(255,255,255,0.2)] cursor-pointer transition-all"
+                        type="button"
+                        onClick={() => setIsSelectedListOpen(false)}
+                        className="w-full py-3.5 px-6 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:scale-[0.98] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
                       >
-                        <CheckCircle2 className="w-5 h-5 text-black stroke-[2.5]" />
-                        <span>Yes, I ordered</span>
-                      </button>
-
-                      {/* Secondary Glass Dark Button */}
-                      <button
-                        onClick={handleDismissSelectedListWithoutPopup}
-                        className="w-full py-3 px-6 rounded-full bg-white/[0.05] hover:bg-white/10 active:scale-[0.98] border border-white/15 text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
-                      >
-                        <RotateCcw className="w-4 h-4 text-white" />
-                        <span>Not yet — Keep browsing</span>
+                        <span>Back to Menu</span>
                       </button>
                     </div>
-                  </div>
+                  )}
                 </>
               )}
             </div>
