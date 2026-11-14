@@ -61,13 +61,15 @@ import {
   UserPlus,
   Bell,
   Share2,
-  Copy
+  Copy,
+  Smartphone
 } from 'lucide-react';
 
 import { QRCodeSVG } from 'qrcode.react';
 import AddFoodWizard from './AddFoodWizard';
 import FeaturedSliderWizard from './FeaturedSliderWizard';
 import TableQRManagement from './TableQRManagement';
+import RestaurantTopBar from './components/RestaurantTopBar';
 import { supabaseTableRepository } from '../data/supabaseTableRepository';
 import { supabase } from '../lib/supabaseClient';
 import {
@@ -841,6 +843,78 @@ export default function RestaurantPanel({
     return defaultTabs;
   }, [isPremiumActive, foods.length, uniqueCategories.length, subcategories.length, featuredSliders, tickets, orders]);
 
+  // Tab Title & Breadcrumb Metadata for Modern Top Bar
+  const tabMeta = useMemo(() => {
+    switch (activeTab) {
+      case 'table-qr':
+        return {
+          breadcrumb: 'TABLE QR',
+          title: 'Table QR Management',
+          subtitle: 'Manage table-wise QR codes for your restaurant menu'
+        };
+      case 'foods':
+        return {
+          breadcrumb: 'FOODS',
+          title: 'Food Items & Universal Menu Engine',
+          subtitle: 'Manage food items, categories, and your digital menu'
+        };
+      case 'categories':
+        return {
+          breadcrumb: 'CATEGORIES',
+          title: 'Category Management',
+          subtitle: 'Organize and structure food categories for your digital menu'
+        };
+      case 'subcategories':
+        return {
+          breadcrumb: 'SUB-CATEGORIES',
+          title: 'Sub-Category / Food Type Management',
+          subtitle: 'Configure food sub-types and custom variations'
+        };
+      case 'sliders':
+        return {
+          breadcrumb: 'FEATURED SLIDERS',
+          title: 'Featured Specials Slider Management',
+          subtitle: 'Create and manage promotional banner sliders'
+        };
+      case 'dashboard':
+        return {
+          breadcrumb: 'DASHBOARD',
+          title: 'Dashboard Overview',
+          subtitle: 'Real-time restaurant performance, analytics, and sales'
+        };
+      case 'orders':
+        return {
+          breadcrumb: 'ORDERS',
+          title: 'Order Management',
+          subtitle: 'Track, fulfill, and monitor customer table orders'
+        };
+      case 'payments':
+        return {
+          breadcrumb: 'PAYMENTS',
+          title: 'Customer Payments & Transactions',
+          subtitle: 'View settlement history and customer payment records'
+        };
+      case 'settings':
+        return {
+          breadcrumb: 'SETTINGS',
+          title: 'Restaurant Profile & Credentials Settings',
+          subtitle: 'Configure restaurant information, timings, and credentials'
+        };
+      case 'support':
+        return {
+          breadcrumb: 'SUPPORT',
+          title: 'Support Tickets & 24/7 Live Care',
+          subtitle: 'Get help, raise support tickets, and contact team 24/7'
+        };
+      default:
+        return {
+          breadcrumb: String(activeTab || 'MENU').toUpperCase(),
+          title: 'Restaurant Portal',
+          subtitle: 'Digital food menu restaurant management engine'
+        };
+    }
+  }, [activeTab]);
+
   return (
     <div className={`min-h-screen w-full flex flex-col md:flex-row font-sans select-auto ${isDark ? 'dark bg-[#0B0F19] text-slate-100' : 'bg-[#F8FAFC] text-slate-900'
       }`}>
@@ -849,74 +923,81 @@ export default function RestaurantPanel({
       {/* 1. SIDEBAR NAVIGATION                                    */}
       {/* ======================================================== */}
       <aside
-        className={`fixed md:sticky top-0 left-0 z-50 h-screen ${isSidebarCollapsed ? 'w-20' : 'w-64'} ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-200'
-          } border-r flex flex-col justify-between transition-all duration-200 ease-in-out shrink-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-          }`}
+        className={`fixed md:sticky top-0 left-0 z-50 h-screen ${
+          isSidebarCollapsed ? 'md:w-20' : 'md:w-72 md:min-w-[280px]'
+        } w-[82vw] max-w-[315px] ${
+          isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-200'
+        } border-r flex flex-col justify-between transition-all duration-200 ease-in-out shrink-0 ${
+          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}
       >
-        {/* Brand & Restaurant Header - Height exact h-16 (64px) matching main header bar */}
-        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
-          <div className={`h-16 px-4 border-b flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} shrink-0 ${isDark ? 'border-slate-800 bg-[#111827]' : 'border-slate-200 bg-white'
+        {/* Sticky Brand & Restaurant Header - STAYS PINNED AT TOP EVEN WHEN SCROLLING */}
+        <div className={`h-24 px-4 border-b flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} shrink-0 sticky top-0 z-20 ${
+          isDark ? 'border-slate-800 bg-[#111827]' : 'border-slate-200 bg-white'
+        }`}>
+          <div className={`flex items-center gap-3 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
+            {/* Brand Logo Box with Studio Backdrop & Rounded Aesthetic */}
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center p-0.5 shrink-0 overflow-hidden shadow-sm transition-all ${
+              profileForm.logo 
+                ? 'bg-white border border-slate-200/90 dark:border-slate-700/80 shadow-[0_2px_8px_rgba(0,0,0,0.08)]' 
+                : 'bg-gradient-to-br from-orange-500 to-amber-600 border border-orange-400/40 text-white'
             }`}>
-            <div className={`flex items-center gap-3 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
-              {/* Brand Logo Box with High Contrast Studio White Backdrop & HD Rendering (Fills box border-to-border) */}
-              <div className={`w-[54px] h-[54px] rounded-[5px] flex items-center justify-center p-0 shrink-0 overflow-hidden shadow-sm transition-all ${
-                profileForm.logo 
-                  ? 'bg-white border border-slate-200 dark:border-slate-700/80 shadow-[0_2px_8px_rgba(0,0,0,0.18)]' 
-                  : 'bg-gradient-to-br from-orange-500 to-amber-600 border border-orange-400/40 text-white'
-              }`}>
-                {profileForm.logo ? (
-                  <img
-                    src={profileForm.logo}
-                    alt={profileForm.name || 'Restaurant Logo'}
-                    className="w-full h-full object-contain scale-125 select-none filter contrast-[1.05] brightness-[1.02]"
-                  />
-                ) : (
-                  <Utensils className="w-7 h-7 text-white" />
-                )}
-              </div>
-              {!isSidebarCollapsed && (
-                <div className="truncate">
-                  <h2 className={`text-sm font-bold leading-tight truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    {profileForm.name || 'Restaurant Panel'}
-                  </h2>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className={`w-2 h-2 rounded-full ${isPremiumActive ? 'bg-emerald-500' : 'bg-blue-500'}`} />
-                    <span className="text-[11px] text-slate-500 font-semibold truncate">
-                      {isPremiumActive ? 'Premium Active' : 'Standard Menu'}
-                    </span>
-                  </div>
-                </div>
+              {profileForm.logo ? (
+                <img
+                  src={profileForm.logo}
+                  alt={profileForm.name || 'Restaurant Logo'}
+                  className="w-full h-full object-contain scale-110 select-none filter contrast-[1.03] brightness-[1.01]"
+                />
+              ) : (
+                <Utensils className="w-7 h-7 text-white" />
               )}
             </div>
-
-            {/* Desktop Collapse Button */}
             {!isSidebarCollapsed && (
-              <button
-                type="button"
-                onClick={() => setIsSidebarCollapsed(true)}
-                className="hidden md:flex p-1.5 rounded-[5px] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                title="Collapse sidebar (Right to Left)"
-              >
-                <PanelLeftClose className="w-4 h-4" />
-              </button>
+              <div className="truncate">
+                <h2 className={`text-base font-bold leading-tight truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  {profileForm.name || 'Restaurant Panel'}
+                </h2>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className={`w-2 h-2 rounded-full ${isPremiumActive ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
+                    {isPremiumActive ? 'Premium Active' : 'Standard Menu'}
+                  </span>
+                </div>
+              </div>
             )}
-
-            {/* Mobile Close Button */}
-            <button
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="md:hidden p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white"
-            >
-              <X className="w-5 h-5" />
-            </button>
           </div>
 
+          {/* Desktop Collapse Button */}
+          {!isSidebarCollapsed && (
+            <button
+              type="button"
+              onClick={() => setIsSidebarCollapsed(true)}
+              className="hidden md:flex p-1.5 rounded-[10px] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Collapse sidebar"
+            >
+              <PanelLeftClose className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Mobile Close Button */}
+          <button
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="md:hidden p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+            aria-label="Close navigation"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Scrollable Navigation Body Container - Seamless Scrolling without affecting header */}
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-thin">
           {/* Navigation Links */}
-          <nav className="p-2 space-y-1.5 flex-1">
+          <nav className="p-2.5 space-y-1.5">
             {isSidebarCollapsed && (
               <button
                 type="button"
                 onClick={() => setIsSidebarCollapsed(false)}
-                className="w-full flex items-center justify-center p-2 rounded-[5px] text-slate-400 hover:text-orange-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors mb-2 cursor-pointer"
+                className="w-full flex items-center justify-center p-2.5 rounded-[12px] text-slate-400 hover:text-orange-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors mb-2 cursor-pointer"
                 title="Expand sidebar"
               >
                 <PanelLeftOpen className="w-5 h-5" />
@@ -925,20 +1006,23 @@ export default function RestaurantPanel({
             {navigationItems.map(item => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
+              const currentPath = typeof window !== 'undefined' && window.location.pathname ? window.location.pathname : `/${currentRestoSlug}/admin`;
+              const itemHref = `${currentPath}?tab=${item.id}`;
               return (
                 <a
                   key={item.id}
-                  href={`/admin?tab=${item.id}`}
+                  href={itemHref}
                   onClick={(e) => {
                     // Standard left-click without keyboard modifiers switches tab smoothly in-page
                     if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
                       e.preventDefault();
                       handleTabSelect(item.id);
+                      setIsMobileMenuOpen(false); // Seamless mobile drawer close on tap
                     }
                   }}
                   title={isSidebarCollapsed ? item.label : undefined}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center p-3' : 'justify-between px-3.5 py-3'} rounded-[5px] text-sm font-semibold tracking-wide transition-all cursor-pointer no-underline select-none ${isActive
-                      ? 'bg-orange-600 text-white font-bold shadow-sm'
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center p-3' : 'justify-between px-3.5 py-3'} rounded-[12px] text-sm font-semibold tracking-wide transition-all cursor-pointer no-underline select-none ${isActive
+                      ? 'bg-[#f95700] text-white font-bold shadow-sm'
                       : isDark
                         ? 'text-slate-300 hover:text-white hover:bg-slate-800'
                         : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
@@ -949,8 +1033,13 @@ export default function RestaurantPanel({
                     {!isSidebarCollapsed && <span className="truncate">{item.label}</span>}
                   </div>
                   {!isSidebarCollapsed && item.badge !== undefined && item.badge !== null && (
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-[5px] shrink-0 ${item.badgeColor ? `${item.badgeColor} text-white` : isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-700'
-                      }`}>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-[8px] shrink-0 ${
+                      isActive
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : item.badgeColor
+                          ? `${item.badgeColor} text-white`
+                          : isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'
+                    }`}>
                       {item.badge}
                     </span>
                   )}
@@ -964,18 +1053,37 @@ export default function RestaurantPanel({
 
           {/* Restaurant Unique 3D Digital Menu QR Code Card */}
           {!isSidebarCollapsed && (
-            <div className="px-2.5 mb-2.5 shrink-0">
-              <div className={`p-3 rounded-[14px] border transition-all ${
+            <div className="px-3 mb-3 shrink-0">
+              <div className={`p-3.5 rounded-[20px] border transition-all relative overflow-hidden ${
                 isDark 
-                  ? 'bg-[#15100B] border-orange-950/60 shadow-[0_2px_10px_rgba(0,0,0,0.3)]' 
-                  : 'bg-[#FFF8F5] border-orange-100 shadow-[0_2px_8px_rgba(244,81,0,0.04)]'
+                  ? 'bg-gradient-to-b from-[#18120e] via-[#1c1510] to-[#140e0a] border-orange-950/80 shadow-[0_4px_16px_rgba(0,0,0,0.3)]' 
+                  : 'bg-gradient-to-b from-[#fffbf8] via-[#fff5ee] to-[#ffeedf] border-orange-100/90 shadow-[0_4px_16px_rgba(249,87,0,0.06)]'
               }`}>
+                {/* Subtle peach background glow */}
+                <div 
+                  className="pointer-events-none absolute -right-6 -bottom-6 w-28 h-28 rounded-full opacity-40 dark:opacity-20 blur-xl"
+                  style={{ background: 'radial-gradient(circle, #f97316 0%, transparent 70%)' }}
+                />
+
+                {/* Header Pill Badge */}
+                <div className="flex items-center justify-center mb-2">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[10px] bg-[#ffede2] dark:bg-orange-950/60 border border-orange-200/90 dark:border-orange-800/50 text-[#c44000] dark:text-orange-300 font-bold text-[11px] shadow-2xs">
+                    <QrCode className="w-3.5 h-3.5 text-[#c44000] dark:text-orange-400 shrink-0" />
+                    <span>Your Restaurant QR Code</span>
+                  </div>
+                </div>
+
+                {/* Subtitle */}
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center leading-snug px-1 mb-3 font-medium">
+                  Let customers scan to view your digital menu instantly on their phone.
+                </p>
+
                 {/* QR Code Container */}
-                <div className="bg-white rounded-[10px] p-2 border border-slate-100 dark:border-slate-800 shadow-[0_1px_4px_rgba(0,0,0,0.04)] flex items-center justify-center max-w-[155px] mx-auto">
+                <div className="bg-white dark:bg-slate-900 rounded-[18px] p-2.5 sm:p-3 border border-slate-100 dark:border-slate-800 shadow-[0_4px_14px_rgba(0,0,0,0.06)] flex items-center justify-center max-w-[165px] mx-auto">
                   <QRCodeSVG
                     value={currentMenuUrl}
-                    size={135}
-                    fgColor="#c44000"
+                    size={142}
+                    fgColor="#ea580c"
                     bgColor="transparent"
                     level="M"
                     includeMargin={false}
@@ -983,37 +1091,38 @@ export default function RestaurantPanel({
                   />
                 </div>
 
-                {/* Scan menu label */}
-                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 text-center mt-2 mb-2.5 tracking-wide">
-                  Scan menu
-                </p>
+                {/* Scan to Open Menu label with Smartphone icon */}
+                <div className="flex items-center justify-center gap-1.5 mt-2.5 mb-3 text-slate-800 dark:text-slate-200">
+                  <Smartphone className="w-3.5 h-3.5 text-slate-700 dark:text-slate-300 shrink-0" />
+                  <span className="text-xs font-bold tracking-tight">Scan to Open Menu</span>
+                </div>
 
                 {/* Action Buttons: Share QR Code & Copy */}
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={handleShareQrCode}
-                    className="flex-1 py-1.5 px-2.5 rounded-[8px] bg-[#FFEFE5] hover:bg-orange-100 dark:bg-orange-950/50 dark:hover:bg-orange-900/60 border border-orange-200/80 dark:border-orange-800/40 text-orange-700 dark:text-orange-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                    className="flex-1 py-2.5 px-3.5 rounded-[12px] bg-[#f95700] hover:bg-[#ea580c] text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-[0_2px_8px_rgba(249,87,0,0.25)] hover:scale-[1.01]"
                     title="Share digital menu QR code"
                   >
-                    <Share2 className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400 shrink-0" />
+                    <Share2 className="w-3.5 h-3.5 text-white shrink-0" />
                     <span>{copiedQr ? 'Copied Link!' : 'Share QR Code'}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={handleCopyQrLink}
-                    className={`p-1.5 rounded-[8px] border transition-colors cursor-pointer shrink-0 flex items-center justify-center ${
+                    className={`w-10 h-10 rounded-[12px] border transition-all cursor-pointer shrink-0 flex items-center justify-center ${
                       copiedQr 
                         ? 'bg-emerald-50 border-emerald-300 text-emerald-600 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-400' 
-                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 shadow-2xs'
                     }`}
                     title="Copy menu URL to clipboard"
                   >
                     {copiedQr ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <Check className="w-4 h-4 text-emerald-600" />
                     ) : (
-                      <Copy className="w-3.5 h-3.5" />
+                      <Copy className="w-4 h-4" />
                     )}
                   </button>
                 </div>
@@ -1024,11 +1133,11 @@ export default function RestaurantPanel({
           {/* Plan Status & Super Admin Simulator CTA */}
           {!isSidebarCollapsed && (
             <div className="p-2.5 shrink-0">
-              <div className={`p-2.5 rounded-[5px] border text-[11px] ${isDark ? 'bg-[#0B0F19] border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
+              <div className={`p-2.5 rounded-[12px] border text-[11px] ${isDark ? 'bg-[#0B0F19] border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
                 }`}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-bold uppercase tracking-wider text-[9px] text-slate-500">Plan Status</span>
-                  <span className={`px-1.5 py-0.2 rounded-[5px] font-bold text-[9px] ${isPremiumActive ? 'bg-emerald-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                  <span className={`px-2 py-0.5 rounded-[6px] font-bold text-[9px] ${isPremiumActive ? 'bg-emerald-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                     }`}>
                     {isPremiumActive ? 'PREMIUM' : 'BY-DEFAULT'}
                   </span>
@@ -1041,9 +1150,9 @@ export default function RestaurantPanel({
                 <button
                   type="button"
                   onClick={() => setIsSuperAdminModalOpen(true)}
-                  className="w-full py-1 px-2 rounded-[5px] bg-slate-200 dark:bg-slate-800 hover:bg-orange-600 hover:text-white text-[10px] font-bold text-slate-800 dark:text-slate-300 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                  className="w-full py-1.5 px-2 rounded-[8px] bg-slate-200 dark:bg-slate-800 hover:bg-orange-600 hover:text-white text-[10px] font-bold text-slate-800 dark:text-slate-300 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <Sliders className="w-3 h-3" />
+                  <Sliders className="w-3.5 h-3.5" />
                   <span>Super Admin Config</span>
                 </button>
               </div>
@@ -1051,15 +1160,24 @@ export default function RestaurantPanel({
           )}
         </div>
 
-        {/* Sidebar Footer Controls */}
-        <div className={`p-3 border-t space-y-2 shrink-0 ${isDark ? 'border-slate-800' : 'border-slate-300'}`}>
+        {/* Sidebar Footer Controls - PINNED AT BOTTOM */}
+        <div className={`p-3 border-t space-y-2 shrink-0 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
           {/* View Customer Menu */}
-          <button
-            onClick={onBackToMenu}
+          <a
+            href={currentMenuUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => {
+              if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+                e.preventDefault();
+                setIsMobileMenuOpen(false);
+                onBackToMenu();
+              }
+            }}
             title={isSidebarCollapsed ? "Customer 3D Menu" : undefined}
-            className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center p-2.5' : 'justify-between px-3.5 py-2.5'} rounded-[5px] border text-xs font-semibold transition-colors cursor-pointer ${isDark
+            className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center p-2.5' : 'justify-between px-3.5 py-2.5'} rounded-[12px] border text-xs font-semibold transition-colors cursor-pointer no-underline ${isDark
                 ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200'
-                : 'bg-slate-100 border-slate-300 hover:bg-slate-200 text-slate-800'
+                : 'bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-800'
               }`}
           >
             <div className="flex items-center gap-2">
@@ -1067,13 +1185,13 @@ export default function RestaurantPanel({
               {!isSidebarCollapsed && <span>Customer 3D Menu</span>}
             </div>
             {!isSidebarCollapsed && <span className="text-[10px] text-slate-500 font-bold uppercase">Exit</span>}
-          </button>
+          </a>
 
           {/* Logout */}
           <button
             onClick={onLogout}
             title={isSidebarCollapsed ? "Sign Out" : undefined}
-            className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center p-2.5' : 'gap-2 px-3.5 py-2.5'} rounded-[5px] text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 text-xs font-semibold transition-colors cursor-pointer`}
+            className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center p-2.5' : 'gap-2 px-3.5 py-2.5'} rounded-[12px] text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 text-xs font-semibold transition-colors cursor-pointer`}
           >
             <LogOut className="w-4 h-4 shrink-0" />
             {!isSidebarCollapsed && <span>Sign Out</span>}
@@ -1094,127 +1212,38 @@ export default function RestaurantPanel({
       {/* ======================================================== */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
 
-        {/* Top Header Bar - Solid, Clean, Handcrafted Enterprise Finish (Exact h-16 to perfectly align with sidebar header lower edge) */}
-        <header className={`h-16 px-4 sm:px-6 border-b flex items-center justify-between sticky top-0 z-30 shrink-0 ${
-          isDark ? 'bg-[#111827] border-slate-800 shadow-sm' : 'bg-white border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.03)]'
-        }`}>
-          {/* Left: Mobile trigger, Desktop collapse toggle & Breadcrumb */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="md:hidden p-2 rounded-[5px] border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 cursor-pointer"
-              aria-label="Open mobile navigation"
-            >
-              <MenuIcon className="w-5 h-5" />
-            </button>
-
-            <button
-              onClick={() => setIsSidebarCollapsed(prev => !prev)}
-              className="hidden md:flex p-2 rounded-[5px] border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-orange-600 hover:border-orange-500/40 transition-colors cursor-pointer"
-              title={isSidebarCollapsed ? "Expand Navigation Sidebar" : "Minimize Navigation Sidebar (Right to Left)"}
-            >
-              {isSidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-            </button>
-
-            <div>
-              {activeTab === 'table-qr' ? (
-                <div>
-                  <h1 className={`text-base sm:text-lg font-bold leading-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    Table QR Management
-                  </h1>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                    Manage table-wise QR codes for your restaurant menu
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="text-[11px] font-bold tracking-wider uppercase text-orange-600 dark:text-orange-400">
-                      RESTAURANT PORTAL
-                    </span>
-                    <span className="text-slate-400 text-xs">/</span>
-                    <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                      {activeTab}
-                    </span>
-                  </div>
-                  <h1 className={`text-base sm:text-lg font-bold capitalize leading-none tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    {activeTab === 'dashboard' && 'Dashboard Overview'}
-                    {activeTab === 'foods' && 'Food Items & Universal Menu Engine'}
-                    {activeTab === 'categories' && 'Category Management'}
-                    {activeTab === 'subcategories' && 'Sub-Category / Food Type Management'}
-                    {activeTab === 'sliders' && 'Featured Specials Slider Management'}
-                    {activeTab === 'settings' && 'Restaurant Profile & Credentials Settings'}
-                    {activeTab === 'support' && 'Support Tickets & 24/7 Live Care'}
-                    {activeTab === 'orders' && 'Order Management'}
-                    {activeTab === 'payments' && 'Customer Payments & Transactions'}
-                  </h1>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right: Live Clock, Timezone, Theme Toggle, CTA */}
-          <div className="flex items-center gap-2.5 sm:gap-3">
-            {/* Live Native Clock with Timezone Detection */}
-            <div className="hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-[5px] border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#0B0F19]">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              <div className="text-left leading-tight">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-100 tracking-wider">
-                    {currentTime}
-                  </span>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                    {currentDate}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleDetectLocation}
-                  title="Click to detect/sync device location and timezone"
-                  className="flex items-center gap-1 text-[10px] text-orange-600 dark:text-orange-400 font-semibold hover:underline cursor-pointer"
-                >
-                  <MapPin className="w-3 h-3 shrink-0" />
-                  <span className="truncate max-w-[140px]">{deviceTimeZone}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Dark Mode / Light Mode Toggle Button */}
-            <button
-              onClick={toggleTheme}
-              className={`px-3 py-2 rounded-[5px] border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                isDark
-                  ? 'bg-slate-800 border-slate-700 text-amber-400 hover:bg-slate-700'
-                  : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
-              }`}
-              title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            >
-              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              <span className="hidden sm:inline text-xs font-bold">{isDark ? 'Light' : 'Dark'}</span>
-            </button>
-
-            {/* Quick Add CTA */}
-            {activeTab === 'sliders' ? (
-              <button
-                onClick={() => { setEditingSlider(null); setIsSliderWizardOpen(true); }}
-                className="px-3.5 py-2 rounded-[5px] bg-orange-600 hover:bg-orange-500 text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shrink-0"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Create Featured Slider</span>
-                <span className="sm:hidden">Create</span>
-              </button>
-            ) : activeTab === 'foods' ? (
-              <button
-                onClick={() => { setEditingFood(null); setIsWizardOpen(true); }}
-                className="px-3.5 py-2 rounded-[5px] bg-orange-600 hover:bg-orange-500 text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shrink-0"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Add New Food</span>
-                <span className="sm:hidden">Add</span>
-              </button>
-            ) : null}
-          </div>
-        </header>
+        {/* Modern Restaurant Panel Top Bar matching provided specifications */}
+        <div className="sticky top-0 z-30 shrink-0">
+          <RestaurantTopBar
+            restaurantName={profileForm.name || "Hungry Bite Café"}
+            restaurantLogo={profileForm.logo || ""}
+            planName={isPremiumActive ? "Premium Active" : "Standard Menu"}
+            section={tabMeta.breadcrumb}
+            pageTitle={tabMeta.title}
+            pageSubtitle={tabMeta.subtitle}
+            notificationCount={22}
+            sidebarCollapsed={isSidebarCollapsed}
+            showIdentity={true}
+            actionLabel={activeTab === 'sliders' ? 'Create Slider' : 'Add New Food'}
+            darkMode={isDark}
+            onToggleDarkMode={toggleTheme}
+            onToggleSidebar={() => {
+              if (window.innerWidth < 768) {
+                setIsMobileMenuOpen(prev => !prev);
+              } else {
+                setIsSidebarCollapsed(prev => !prev);
+              }
+            }}
+            onOpenNotifications={() => handleTabSelect('support')}
+            onAddNewFood={
+              activeTab === 'foods'
+                ? () => { setEditingFood(null); setIsWizardOpen(true); }
+                : activeTab === 'sliders'
+                ? () => { setEditingSlider(null); setIsSliderWizardOpen(true); }
+                : null
+            }
+          />
+        </div>
 
         {/* Location / Timezone Notification Toast */}
         {locationNotice && (
@@ -1402,8 +1431,8 @@ export default function RestaurantPanel({
                   </div>
                 </div>
 
-                {/* 10 Metric / KPI Cards (2 Rows of 5 Columns matching RPDS 004) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4 pt-1 relative z-10">
+                {/* 10 Metric / KPI Cards (2 Columns on mobile app, 5 Columns on desktop matching RPDS 004) */}
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-4 pt-1 relative z-10">
                   {[
                     {
                       id: 'total_items',
@@ -1528,16 +1557,16 @@ export default function RestaurantPanel({
                       }`}
                     >
                       {/* Top Row: Icon + Title */}
-                      <div className="flex items-center gap-2.5">
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 relative ${
+                      <div className="flex items-center gap-2">
+                        <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 relative ${
                           isDark ? 'bg-orange-500/10 border border-orange-500/20 text-orange-400' : 'bg-orange-50 border border-orange-200/60 text-orange-500'
                         }`}>
-                          <card.icon className="w-5 h-5 stroke-[2.2]" />
+                          <card.icon className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.2]" />
                           {card.isCartWithClock && (
                             <Clock className="w-2.5 h-2.5 text-orange-600 absolute -bottom-0.5 -right-0.5 bg-orange-100 dark:bg-orange-950 rounded-full stroke-[2.5]" />
                           )}
                         </div>
-                        <span className={`text-xs sm:text-[13px] font-bold truncate tracking-tight ${
+                        <span className={`text-[11px] sm:text-[13px] font-bold truncate tracking-tight ${
                           isDark ? 'text-slate-200' : 'text-slate-800'
                         }`}>
                           {card.title}
@@ -1545,15 +1574,15 @@ export default function RestaurantPanel({
                       </div>
 
                       {/* Middle Row: Big Metric Value with Count-Up Animation + Sparkline Chart with Left-to-Right Draw Animation */}
-                      <div className="flex items-end justify-between gap-2 pt-0.5 pb-1">
-                        <span className={`text-2xl sm:text-[26px] font-black tabular-nums tracking-tight leading-none ${
+                      <div className="flex items-end justify-between gap-1.5 pt-0.5 pb-1">
+                        <span className={`text-xl sm:text-[26px] font-black tabular-nums tracking-tight leading-none ${
                           isDark ? 'text-white' : 'text-slate-900'
                         }`}>
                           <AnimatedCounter value={card.value} duration={1300} />
                         </span>
 
                         {/* Sparkline Wave Chart with Smooth Gradient & Draw Animation from start to end */}
-                        <svg className="w-20 h-10 overflow-visible shrink-0 transition-transform duration-300 group-hover:scale-105" viewBox="0 0 80 32" fill="none">
+                        <svg className="w-14 sm:w-20 h-8 sm:h-10 overflow-visible shrink-0 transition-transform duration-300 group-hover:scale-105" viewBox="0 0 80 32" fill="none">
                           <defs>
                             <linearGradient id={`sparkGrad-${card.id}`} x1="0" y1="0" x2="0" y2="1">
                               <stop offset="0%" stopColor={card.sparkColor === 'orange' ? '#F97316' : '#94A3B8'} stopOpacity={card.sparkColor === 'orange' ? 0.32 : 0.16} />
@@ -1652,14 +1681,14 @@ export default function RestaurantPanel({
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                 {/* Search Input */}
                 <div className="relative flex-1 max-w-md">
-                  <Search className="w-4 h-4 absolute left-3.5 top-2.5 text-slate-400" />
+                  <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
                   <input
                     type="text"
                     placeholder="Search by food title or category..."
                     value={foodSearchQuery}
                     onChange={(e) => setFoodSearchQuery(e.target.value)}
-                    className={`w-full pl-10 pr-4 py-2 rounded-[5px] border text-xs sm:text-sm focus:outline-none focus:border-orange-500 ${
-                      isDark ? 'bg-[#0F1420] border-slate-800 text-white placeholder-slate-500' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all ${
+                      isDark ? 'bg-[#0F1420] border-slate-800 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400 shadow-2xs'
                     }`}
                   />
                 </div>
@@ -1668,12 +1697,12 @@ export default function RestaurantPanel({
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
                   <button
                     onClick={() => setSelectedFoodCategory('All')}
-                    className={`px-3 py-1.5 rounded-[5px] text-xs font-bold transition-colors cursor-pointer shrink-0 ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
                       selectedFoodCategory === 'All'
-                        ? 'bg-orange-600 text-white shadow-sm'
+                        ? 'bg-[#f95700] text-white shadow-xs'
                         : isDark
                           ? 'bg-[#0F1420] border border-slate-800 text-slate-400 hover:text-white'
-                          : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs'
                     }`}
                   >
                     All
@@ -1682,12 +1711,12 @@ export default function RestaurantPanel({
                     <button
                       key={cat}
                       onClick={() => setSelectedFoodCategory(cat)}
-                      className={`px-3 py-1.5 rounded-[5px] text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
                         selectedFoodCategory === cat
-                          ? 'bg-orange-600 text-white shadow-sm'
+                          ? 'bg-[#f95700] text-white shadow-xs'
                           : isDark
                             ? 'bg-[#0F1420] border border-slate-800 text-slate-400 hover:text-white'
-                            : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-2xs'
                       }`}
                     >
                       {cat}
@@ -1697,7 +1726,7 @@ export default function RestaurantPanel({
               </div>
 
               {/* 3-Column Food Items Catalog Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {filteredFoods.map(food => {
                   const isPub = food.is_published !== false && food.status !== 'draft' && food.status !== 'unpublished';
                   const portionCount = food.customizable?.portions?.length || 1;
@@ -1706,12 +1735,12 @@ export default function RestaurantPanel({
                   return (
                     <div
                       key={food.id}
-                      className={`rounded-[5px] border flex flex-col justify-between overflow-hidden transition-all group ${
-                        isDark ? 'bg-[#0F1420] border-slate-800 hover:border-slate-700' : 'bg-white border-slate-300 shadow-sm hover:border-slate-400'
+                      className={`rounded-2xl border flex flex-col justify-between overflow-hidden transition-all group ${
+                        isDark ? 'bg-[#0F1420] border-slate-800 hover:border-slate-700 shadow-sm' : 'bg-white border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300'
                       }`}
                     >
                       {/* Top Framed Food Image Box */}
-                      <div className={`h-48 relative flex items-center justify-center p-4 overflow-hidden ${
+                      <div className={`h-48 relative flex items-center justify-center p-4 overflow-hidden rounded-t-2xl ${
                         isDark ? 'bg-[#080B11] border-b border-slate-800/80' : 'bg-slate-50 border-b border-slate-200'
                       }`}>
                         {/* Tag Badge (top-left) - only render if real tag exists */}
@@ -1792,39 +1821,42 @@ export default function RestaurantPanel({
                         isDark ? 'bg-[#080B11] border-slate-800' : 'bg-slate-50 border-slate-200'
                       }`}>
                         <button
+                          type="button"
                           onClick={() => onToggleFoodStatus && onToggleFoodStatus(food.id)}
-                          className={`flex items-center gap-1.5 font-semibold transition-opacity cursor-pointer hover:opacity-80 ${
-                            isPub ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-400'
+                          className={`flex items-center gap-1.5 font-bold px-2.5 py-1.5 rounded-xl transition-all cursor-pointer ${
+                            isPub ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40' : 'text-slate-500 bg-slate-100 dark:bg-slate-800'
                           }`}
                         >
-                          <Check className={`w-3.5 h-3.5 ${isPub ? 'text-emerald-500' : 'text-slate-400'}`} />
+                          <Check className={`w-3.5 h-3.5 ${isPub ? 'text-emerald-600' : 'text-slate-400'}`} />
                           <span>{isPub ? 'Live on Menu' : 'Draft / Off'}</span>
                         </button>
 
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <button
+                            type="button"
                             onClick={() => {
                               setEditingFood(food);
                               setIsWizardOpen(true);
                             }}
-                            className={`p-1.5 rounded-[5px] transition-colors cursor-pointer ${
-                              isDark ? 'text-slate-400 hover:text-orange-400 hover:bg-slate-800' : 'text-slate-500 hover:text-orange-600 hover:bg-slate-200/70'
+                            className={`p-2 rounded-xl transition-colors cursor-pointer ${
+                              isDark ? 'text-slate-300 hover:text-orange-400 hover:bg-slate-800' : 'text-slate-600 hover:text-orange-600 hover:bg-slate-200/80'
                             }`}
                             title="Edit Food Item"
                           >
-                            <Pencil className="w-3.5 h-3.5" />
+                            <Pencil className="w-4 h-4" />
                           </button>
 
                           <button
+                            type="button"
                             onClick={() => {
                               if (window.confirm(`Are you sure you want to delete "${food.title}"?`)) {
                                 onDeleteFood && onDeleteFood(food.id);
                               }
                             }}
-                          className={`p-1 transition-colors cursor-pointer ${
-                            isDark ? 'text-slate-500 hover:text-red-400' : 'text-slate-400 hover:text-red-600'
-                          }`}
-                          title="Delete Food Item"
+                            className={`p-2 rounded-xl transition-colors cursor-pointer ${
+                              isDark ? 'text-slate-400 hover:text-red-400 hover:bg-red-950/30' : 'text-slate-500 hover:text-red-600 hover:bg-red-50'
+                            }`}
+                            title="Delete Food Item"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>

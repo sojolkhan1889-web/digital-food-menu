@@ -836,14 +836,23 @@ export default function AllRestaurantsView({
                     {/* 10. Actions */}
                     <td>
                       <div className="row-actions">
-                        <button
+                        <a
+                          href={`/${r.slug || r.menuSlug || 'hungry-bite'}/admin`}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="rs-panel"
-                          onClick={() => onOpenRestaurantPanel?.(r)}
+                          onClick={(e) => {
+                            if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+                              e.preventDefault();
+                              onOpenRestaurantPanel?.(r);
+                            }
+                          }}
                           title="Open this restaurant panel with authorized Super Admin access"
+                          style={{ textDecoration: 'none' }}
                         >
                           <ExternalLink size={14} />
                           Rs Panel
-                        </button>
+                        </a>
                         <button
                           className="action-square"
                           onClick={() => setDetailModal(r)}

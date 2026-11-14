@@ -111,6 +111,9 @@
   font-weight: 600;
   border-radius: 9px;
   min-height: 44px;
+  text-decoration: none;
+  cursor: pointer;
+  box-sizing: border-box;
 }
 
 .superadmin-app .nav-item span:nth-child(2) {
@@ -156,7 +159,11 @@
   border-left: 1px solid #4b5a6d;
 }
 
-.superadmin-app .subnav button {
+.superadmin-app .subnav button,
+.superadmin-app .subnav a {
+  display: block;
+  text-decoration: none;
+  cursor: pointer;
   border: 0;
   background: none;
   color: #c2cbd9;
@@ -164,10 +171,14 @@
   padding: 7px;
   font-size: 12px;
   border-radius: 5px;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
 }
 
 .superadmin-app .subnav button:hover,
-.superadmin-app .subnav button.subactive {
+.superadmin-app .subnav button.subactive,
+.superadmin-app .subnav a:hover,
+.superadmin-app .subnav a.subactive {
   color: white;
   background: #ffffff16;
 }

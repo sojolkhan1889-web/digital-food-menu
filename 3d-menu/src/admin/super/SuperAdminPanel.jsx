@@ -52,7 +52,52 @@ const NAV = [
 ];
 
 export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRestaurantPortal }) {
-  const [current, setCurrent] = useState('Dashboard');
+  // Helper to determine initial active tab from URL query param (Supports Open in New Tab)
+  const getInitialSuperAdminTab = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab) return decodeURIComponent(tab);
+      } catch (e) {
+        console.error('Error reading super admin tab:', e);
+      }
+    }
+    return 'Dashboard';
+  };
+
+  const [current, setCurrentState] = useState(getInitialSuperAdminTab);
+
+  // Sync active super admin tab with URL query parameter for browser history & right-click new tab support
+  const setCurrent = (tabName) => {
+    setCurrentState(tabName);
+    if (typeof window !== 'undefined') {
+      try {
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('tab', tabName);
+        window.history.pushState({ superTab: tabName }, '', currentUrl.toString());
+      } catch (err) {
+        console.warn('URL pushState bypassed:', err);
+      }
+    }
+  };
+
+  // Listen to popstate (browser Back/Forward navigation)
+  useEffect(() => {
+    const onPopState = () => {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab) {
+          setCurrentState(decodeURIComponent(tab));
+        } else {
+          setCurrentState('Dashboard');
+        }
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dark, setDark] = useState(false);
   const [foodModal, setFoodModal] = useState(false);
@@ -768,7 +813,19 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
 // -------------------------------------------------------------
 
 function Sidebar({ current, onNavigate, mobileOpen, onClose, supportBadge }) {
-  const [expanded, setExpanded] = useState('Restaurants');
+  const initialExpanded = useMemo(() => {
+    const parent = NAV.find(item => item.name === current || item.routes.includes(current));
+    return parent && parent.routes.length > 0 ? parent.name : 'Restaurants';
+  }, [current]);
+  const [expanded, setExpanded] = useState(initialExpanded);
+
+  useEffect(() => {
+    const parent = NAV.find(item => item.name === current || item.routes.includes(current));
+    if (parent && parent.routes.length > 0) {
+      setExpanded(parent.name);
+    }
+  }, [current]);
+
   return (
     <>
       <div className={'sidebar-backdrop ' + (mobileOpen ? 'visible' : '')} onClick={onClose} />
@@ -792,16 +849,22 @@ function Sidebar({ current, onNavigate, mobileOpen, onClose, supportBadge }) {
             const selected = item.name === current || item.routes.includes(current);
             const open = item.name === expanded;
             const badgeCount = item.name === 'Support Center' ? supportBadge : item.badge;
+            const targetRoute = item.routes.length > 0 ? item.routes[0] : item.name;
+            const navHref = `/super-admin?tab=${encodeURIComponent(targetRoute)}`;
             return (
               <React.Fragment key={item.name}>
-                <button
+                <a
+                  href={navHref}
                   className={'nav-item ' + (selected ? 'active' : '')}
-                  onClick={() => {
-                    if (item.routes.length) {
-                      setExpanded(open ? '' : item.name);
-                    } else {
-                      onNavigate(item.name);
-                      onClose();
+                  onClick={(e) => {
+                    if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+                      e.preventDefault();
+                      if (item.routes.length) {
+                        setExpanded(open ? '' : item.name);
+                      } else {
+                        onNavigate(item.name);
+                        onClose();
+                      }
                     }
                   }}
                 >
@@ -813,20 +876,24 @@ function Sidebar({ current, onNavigate, mobileOpen, onClose, supportBadge }) {
                   {item.routes.length > 0 && (
                     <ChevronDown size={16} className={'nav-chevron ' + (open ? 'up' : '')} />
                   )}
-                </button>
+                </a>
                 {open && item.routes.length > 0 && (
                   <div className="subnav">
                     {item.routes.map(route => (
-                      <button
+                      <a
                         key={route}
+                        href={`/super-admin?tab=${encodeURIComponent(route)}`}
                         className={current === route ? 'subactive' : ''}
-                        onClick={() => {
-                          onNavigate(route);
-                          onClose();
+                        onClick={(e) => {
+                          if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+                            e.preventDefault();
+                            onNavigate(route);
+                            onClose();
+                          }
                         }}
                       >
                         {route}
-                      </button>
+                      </a>
                     ))}
                   </div>
                 )}
@@ -1510,7 +1577,18 @@ function PendingActions({ onNavigate, pending }) {
         {pending.map(p => {
           const Icon = p.icon;
           return (
-            <button key={p.name} className="pending-action" onClick={() => onNavigate(p.route)}>
+            <a
+              key={p.name}
+              href={`/super-admin?tab=${encodeURIComponent(p.route)}`}
+              className="pending-action"
+              style={{ textDecoration: 'none' }}
+              onClick={(e) => {
+                if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+                  e.preventDefault();
+                  onNavigate(p.route);
+                }
+              }}
+            >
               <span className="pending-icon">
                 <Icon size={25} />
               </span>
@@ -1520,7 +1598,7 @@ function PendingActions({ onNavigate, pending }) {
               </span>
               <span className="pending-number">{p.count}</span>
               <ChevronRight size={20} className="pending-chevron" />
-            </button>
+            </a>
           );
         })}
       </div>
@@ -2042,9 +2120,17 @@ function DigitalMenusView({ restaurants = [], onGoToCustomerMenu, onBack }) {
                     </div>
                   </div>
 
-                  {/* Open 3D Menu Button */}
-                  <button
-                    onClick={() => onGoToCustomerMenu?.(r)}
+                  {/* Open 3D Menu Button with Right-Click New Tab Support */}
+                  <a
+                    href={`/${r.slug || r.menuSlug || '3d-dine'}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => {
+                      if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+                        e.preventDefault();
+                        onGoToCustomerMenu?.(r);
+                      }
+                    }}
                     style={{
                       width: '100%',
                       padding: '10px 14px',
@@ -2061,7 +2147,9 @@ function DigitalMenusView({ restaurants = [], onGoToCustomerMenu, onBack }) {
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
                       marginTop: 3,
-                      boxShadow: '0 2px 8px rgba(244, 81, 0, 0.22)'
+                      boxShadow: '0 2px 8px rgba(244, 81, 0, 0.22)',
+                      textDecoration: 'none',
+                      boxSizing: 'border-box'
                     }}
                     onMouseEnter={e => {
                       e.currentTarget.style.backgroundColor = '#ff6014';
@@ -2073,7 +2161,7 @@ function DigitalMenusView({ restaurants = [], onGoToCustomerMenu, onBack }) {
                     }}
                   >
                     <ExternalLink size={15} /> Open 3D Menu
-                  </button>
+                  </a>
                 </div>
               </div>
             );
