@@ -117,6 +117,9 @@ export const supabaseTableRepository = {
       throw new Error(insertErr.message || 'Failed to create table in database.');
     }
 
+    // Keep restaurants.table_count synchronized in PostgreSQL
+    this.syncRestaurantTableCount(restaurantId);
+
     return {
       id: newRecord.id,
       restaurantId,
@@ -227,6 +230,31 @@ export const supabaseTableRepository = {
 
     if (error) {
       throw new Error(error.message || 'Failed to delete table.');
+    }
+
+    // Keep restaurants.table_count synchronized in PostgreSQL
+    this.syncRestaurantTableCount(restaurantId);
+  },
+
+  /**
+   * Sync the total table count back to the restaurants table in Supabase.
+   */
+  async syncRestaurantTableCount(restaurantId) {
+    try {
+      const { count, error } = await supabase
+        .from('restaurant_tables')
+        .select('*', { count: 'exact', head: true })
+        .eq('restaurant_id', restaurantId)
+        .is('deleted_at', null);
+
+      if (!error && typeof count === 'number') {
+        await supabase
+          .from('restaurants')
+          .update({ table_count: count })
+          .eq('id', restaurantId);
+      }
+    } catch (e) {
+      console.warn('syncRestaurantTableCount error:', e);
     }
   }
 };

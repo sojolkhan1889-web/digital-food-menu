@@ -25,8 +25,11 @@ export const initialSuperAdminRestaurants = [
     location: 'Dhaka, Banani',
     address: 'Dhaka, Banani',
     plan: 'Pro Holographic',
-    tableCount: 12,
-    table_count: 12,
+    tableCount: 24,
+    table_count: 24,
+    activeTableCount: 22,
+    active_table_count: 22,
+    activeQrCount: 22,
     status: 'active',
     theme: 'Warm Amber Glass',
     created_at: '2026-10-31T19:25:00Z',
@@ -66,8 +69,11 @@ export const initialSuperAdminRestaurants = [
     location: 'Dhaka, Uttara',
     address: 'Dhaka, Uttara',
     plan: 'Starter',
-    tableCount: 8,
-    table_count: 8,
+    tableCount: 19,
+    table_count: 19,
+    activeTableCount: 19,
+    active_table_count: 19,
+    activeQrCount: 19,
     status: 'active',
     theme: 'Classic Clean',
     created_at: '2026-11-04T12:00:00Z',
@@ -109,6 +115,9 @@ export const initialSuperAdminRestaurants = [
     plan: 'Business',
     tableCount: 20,
     table_count: 20,
+    activeTableCount: 20,
+    active_table_count: 20,
+    activeQrCount: 20,
     status: 'active',
     theme: 'Warm Amber Glass',
     created_at: '2026-11-01T10:00:00Z',
@@ -131,56 +140,94 @@ export const initialSuperAdminRestaurants = [
   }
 ];
 
-// 1. Fetch live restaurants from Supabase
+// 1. Fetch live restaurants from Supabase with live real-time table counts
 export const fetchLiveRestaurantsFromSupabase = async () => {
   try {
-    const { data, error } = await supabase
-      .from('restaurants')
-      .select('*')
-      .order('display_id', { ascending: true, nullsFirst: false });
+    const [{ data, error }, { data: tablesData }] = await Promise.all([
+      supabase
+        .from('restaurants')
+        .select('*')
+        .order('display_id', { ascending: true, nullsFirst: false }),
+      supabase
+        .from('restaurant_tables')
+        .select('restaurant_id, is_active, status, deleted_at')
+        .is('deleted_at', null)
+    ]);
 
     if (!error && data && data.length > 0) {
-      const clean = data.map(remote => ({
-        id: String(remote.id),
-        displayId: remote.display_id || (remote.id.startsWith('resto_') ? `#${remote.id.slice(6)}` : remote.id),
-        display_id: remote.display_id || (remote.id.startsWith('resto_') ? `#${remote.id.slice(6)}` : remote.id),
-        name: remote.name || 'Restaurant',
-        slug: remote.slug || 'menu',
-        menuSlug: remote.slug || 'menu',
-        login_id: remote.login_id || 'admin',
-        password: remote.password || 'resto123',
-        phone: remote.phone || remote.owner_phone || '',
-        ownerName: remote.owner_name || 'Owner',
-        owner_name: remote.owner_name || 'Owner',
-        ownerPhone: remote.owner_phone || remote.phone || '',
-        owner_phone: remote.owner_phone || remote.phone || '',
-        type: remote.restaurant_type || 'fine',
-        restaurant_type: remote.restaurant_type || 'fine',
-        location: remote.address || 'Dhaka, Bangladesh',
-        address: remote.address || 'Dhaka, Bangladesh',
-        plan: remote.plan || 'Starter',
-        tableCount: Number(remote.table_count || 12),
-        table_count: Number(remote.table_count || 12),
-        settlementStatus: remote.settlement_status || 'settled',
-        settlement_status: remote.settlement_status || 'settled',
-        joinedAt: remote.created_at || new Date().toISOString(),
-        created_at: remote.created_at || new Date().toISOString(),
-        status: remote.status || 'active',
-        avatar: remote.avatar || remote.name?.slice(0, 2)?.toUpperCase() || '🍽️',
-        email: remote.email || '',
-        theme: remote.theme || 'Warm Amber Glass',
-        currency: remote.currency || '৳',
-        logo: remote.logo || '/monkey_bhai_logo.png',
-        features: remote.features || {
-          enable3D: true,
-          enableOrderManagement: true,
-          enablePayments: true,
-          enableCartPage: true,
-          enableKitchenNotes: true,
-          enablePortions: true,
-          enableAddons: true
+      const tablesByResto = {};
+      if (tablesData && Array.isArray(tablesData)) {
+        tablesData.forEach(t => {
+          const rId = t.restaurant_id;
+          if (!tablesByResto[rId]) {
+            tablesByResto[rId] = { total: 0, active: 0 };
+          }
+          tablesByResto[rId].total += 1;
+          if (t.is_active !== false && t.status !== 'inactive') {
+            tablesByResto[rId].active += 1;
+          }
+        });
+      }
+
+      const clean = data.map(remote => {
+        const restoTableStats = tablesByResto[remote.id] || tablesByResto[remote.slug];
+        const liveTotalTables = restoTableStats ? restoTableStats.total : Number(remote.table_count || 12);
+        const liveActiveQrStands = restoTableStats ? restoTableStats.active : liveTotalTables;
+
+        // Keep restaurants table in Supabase synchronized with live total table count
+        if (restoTableStats && remote.table_count !== liveTotalTables) {
+          supabase
+            .from('restaurants')
+            .update({ table_count: liveTotalTables })
+            .eq('id', remote.id)
+            .then(() => {});
         }
-      }));
+
+        return {
+          id: String(remote.id),
+          displayId: remote.display_id || (remote.id.startsWith('resto_') ? `#${remote.id.slice(6)}` : remote.id),
+          display_id: remote.display_id || (remote.id.startsWith('resto_') ? `#${remote.id.slice(6)}` : remote.id),
+          name: remote.name || 'Restaurant',
+          slug: remote.slug || 'menu',
+          menuSlug: remote.slug || 'menu',
+          login_id: remote.login_id || 'admin',
+          password: remote.password || 'resto123',
+          phone: remote.phone || remote.owner_phone || '',
+          ownerName: remote.owner_name || 'Owner',
+          owner_name: remote.owner_name || 'Owner',
+          ownerPhone: remote.owner_phone || remote.phone || '',
+          owner_phone: remote.owner_phone || remote.phone || '',
+          type: remote.restaurant_type || 'fine',
+          restaurant_type: remote.restaurant_type || 'fine',
+          location: remote.address || 'Dhaka, Bangladesh',
+          address: remote.address || 'Dhaka, Bangladesh',
+          plan: remote.plan || 'Starter',
+          tableCount: liveTotalTables,
+          table_count: liveTotalTables,
+          activeTableCount: liveActiveQrStands,
+          active_table_count: liveActiveQrStands,
+          activeQrCount: liveActiveQrStands,
+          settlementStatus: remote.settlement_status || 'settled',
+          settlement_status: remote.settlement_status || 'settled',
+          joinedAt: remote.created_at || new Date().toISOString(),
+          created_at: remote.created_at || new Date().toISOString(),
+          status: remote.status || 'active',
+          avatar: remote.avatar || remote.name?.slice(0, 2)?.toUpperCase() || '🍽️',
+          email: remote.email || '',
+          theme: remote.theme || 'Warm Amber Glass',
+          currency: remote.currency || '৳',
+          logo: remote.logo || '/monkey_bhai_logo.png',
+          features: remote.features || {
+            enable3D: true,
+            enableOrderManagement: true,
+            enablePayments: true,
+            enableCartPage: true,
+            enableKitchenNotes: true,
+            enablePortions: true,
+            enableAddons: true
+          }
+        };
+      });
       saveSuperAdminRestaurants(clean);
       return clean;
     }

@@ -207,10 +207,10 @@ export default function RestaurantPanel({
         console.error('Error parsing initial tab from URL:', e);
       }
     }
-    return isPremiumActive ? 'dashboard' : 'table-qr';
+    return isPremiumActive ? 'dashboard' : 'foods';
   };
 
-  // Navigation: Default is 'table-qr' (Table QR Management) or 'foods'
+  // Navigation: Default is 'foods' (Food Items & Publish) or 'dashboard' (if Order Management is enabled)
   const [activeTab, setActiveTab] = useState(getInitialActiveTab);
 
   // Sync active tab with URL query parameter for browser history & bookmarking
@@ -236,6 +236,8 @@ export default function RestaurantPanel({
         const tab = params.get('tab');
         if (tab) {
           setActiveTab(tab);
+        } else {
+          setActiveTab(isPremiumActive ? 'dashboard' : 'foods');
         }
       }
     };

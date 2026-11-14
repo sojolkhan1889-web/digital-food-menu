@@ -150,6 +150,9 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
       .on('postgres_changes', { event: '*', schema: 'public', table: 'restaurants' }, () => {
         fetchLiveRestaurantsFromSupabase().then(res => { if (res && res.length > 0) setRestaurants(res); });
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'restaurant_tables' }, () => {
+        fetchLiveRestaurantsFromSupabase().then(res => { if (res && res.length > 0) setRestaurants(res); });
+      })
       .subscribe();
 
     // 2. Refresh whenever SuperAdmin returns or focuses on this window
@@ -1613,7 +1616,7 @@ function NewRegistrationsView({ restaurants, onApprove, onBack }) {
                     <strong>{r.name}</strong>
                   </td>
                   <td>{r.address || 'Dhaka, Bangladesh'}</td>
-                  <td>{r.table_count || 12} Tables</td>
+                  <td>{r.tableCount ?? r.table_count ?? 12} Tables</td>
                   <td><strong>{r.plan || 'Standard Digital'}</strong></td>
                   <td style={{ textAlign: 'right' }}>
                     <button
@@ -2028,7 +2031,7 @@ function DigitalMenusView({ restaurants = [], onGoToCustomerMenu, onBack }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <Store size={16} style={{ color: '#ea580c', flexShrink: 0 }} />
                       <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text)' }}>
-                        {r.table_count || 12} Active QR Stands
+                        {r.activeQrCount ?? r.activeTableCount ?? r.table_count ?? 12} Active QR Stands
                       </span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
