@@ -317,9 +317,18 @@ export default function RestaurantPanel({
     const nextTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(nextTheme);
     setAdminTheme(nextTheme);
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('dark', nextTheme === 'dark');
+    }
   };
 
   const isDark = theme === 'dark';
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('dark', isDark);
+    }
+  }, [isDark]);
 
   // Foods tab filters
   const [foodFilterTab, setFoodFilterTab] = useState('all'); // 'all' | 'published' | 'unpublished'
@@ -831,7 +840,7 @@ export default function RestaurantPanel({
   }, [isPremiumActive, foods.length, uniqueCategories.length, subcategories.length, featuredSliders, tickets, orders]);
 
   return (
-    <div className={`min-h-screen w-full flex flex-col md:flex-row font-sans select-auto ${isDark ? 'bg-[#0B0F19] text-slate-100' : 'bg-[#F8FAFC] text-slate-900'
+    <div className={`min-h-screen w-full flex flex-col md:flex-row font-sans select-auto ${isDark ? 'dark bg-[#0B0F19] text-slate-100' : 'bg-[#F8FAFC] text-slate-900'
       }`}>
 
       {/* ======================================================== */}
@@ -1235,6 +1244,7 @@ export default function RestaurantPanel({
                 slug: currentRestoSlug
               }}
               repository={supabaseTableRepository}
+              isDark={isDark}
             />
           )}
 

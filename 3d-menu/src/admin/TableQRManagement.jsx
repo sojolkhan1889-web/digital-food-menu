@@ -32,7 +32,7 @@ import TableQrImage, {
 import { supabaseTableRepository } from '../data/supabaseTableRepository.js';
 import './tableQrStyles.css';
 
-const PAGE_SIZES = [5, 10, 25];
+const PAGE_SIZES = [10, 20, 50];
 
 const readableDate = (iso) => {
   if (!iso) return 'Recent';
@@ -200,7 +200,8 @@ function StatCard({ label, value, detail, variant, icon: Icon }) {
 
 export default function TableQRManagement({
   restaurant = { id: 'resto_001', name: 'Monkey Bhai', slug: '3d-dine' },
-  repository = supabaseTableRepository
+  repository = supabaseTableRepository,
+  isDark = false
 }) {
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -208,11 +209,17 @@ export default function TableQRManagement({
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
+  const [pageSize, setPageSize] = useState(10);
   const [preview, setPreview] = useState(null);
   const [editing, setEditing] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [message, setMessage] = useState(null);
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('dark', isDark);
+    }
+  }, [isDark]);
 
   const refresh = useCallback(async () => {
     const rows = await repository.list({ restaurantId: restaurant.id });
@@ -361,7 +368,7 @@ export default function TableQRManagement({
   };
 
   return (
-    <div className="qr-management-page">
+    <div className={`qr-management-page ${isDark ? 'dark dark-theme' : ''}`}>
       {/* 1. Header Intro Banner */}
       <section className="intro-banner" aria-labelledby="table-intro-title">
         <div className="hero-left-image" aria-hidden="true">
@@ -456,9 +463,10 @@ export default function TableQRManagement({
         </div>
       </div>
 
-      {/* 4. Table Card */}
+      {/* 4. Table Card (Desktop Table + Mobile App-Like Feed) */}
       <div className="table-card">
-        <div className="table-scroll">
+        {/* Desktop Data Table */}
+        <div className="table-scroll desktop-only">
           <table className="data-table">
             <thead>
               <tr>
@@ -565,7 +573,7 @@ export default function TableQRManagement({
                           onClick={() => remove(row)}
                           aria-label={`Delete ${formatTable(row.tableNo)}`}
                         >
-                          <Trash2 size={16} strokeWidth={2.4} />
+                          <Trash2 size={18} strokeWidth={2.4} />
                         </button>
                       </div>
                     </td>
@@ -575,6 +583,94 @@ export default function TableQRManagement({
             </tbody>
           </table>
         </div>
+
+        {/* Mobile App-Like Card Feed */}
+        <div className="mobile-table-cards mobile-only">
+          {loading ? (
+            <div className="empty-state">
+              <LoaderCircle className="spinning" size={26} /> Loading tables…
+            </div>
+          ) : visible.length === 0 ? (
+            <div className="empty-state">
+              <Search size={24} /> No tables match your filters.
+            </div>
+          ) : (
+            visible.map((row) => (
+              <div key={row.id} className="mobile-table-card">
+                <div className="mobile-card-header">
+                  <div className="flex items-center gap-2">
+                    <span className="table-id-badge">{formatTableId(row.tableNo)}</span>
+                    <span className="table-number-badge">{formatTable(row.tableNo)}</span>
+                  </div>
+                  <span className={`status-pill ${row.active ? 'status-active' : 'status-inactive'}`}>
+                    {row.active ? <CircleCheck size={14} /> : <Power size={13} />} {row.active ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+
+                <div className="mobile-card-body" onClick={() => setPreview(row)}>
+                  <div className="mobile-card-qr">
+                    <TableQrImage restaurant={restaurant} table={row} size={68} />
+                  </div>
+                  <div className="mobile-card-info">
+                    <strong>{formatTable(row.tableNo)} Menu</strong>
+                    <small>Scan with phone camera</small>
+                    <span className="date-cell">
+                      <CalendarDays size={13} />
+                      {readableDate(row.createdAt)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mobile-card-actions">
+                  <button
+                    type="button"
+                    title="Edit table number"
+                    className="action-button edit-action"
+                    disabled={!!busy}
+                    onClick={() => {
+                      setEditing(row);
+                      setEditValue(String(row.tableNo));
+                    }}
+                  >
+                    <Pencil size={14} strokeWidth={2.4} />
+                    <b>Edit</b>
+                  </button>
+                  <button
+                    type="button"
+                    title="Download Table Stand QR"
+                    className="action-button download-action"
+                    disabled={!!busy}
+                    onClick={() => download(row)}
+                  >
+                    <Download size={14} strokeWidth={2.4} />
+                    <b>Download QR</b>
+                  </button>
+                  <button
+                    type="button"
+                    title={row.active ? 'Deactivate table QR' : 'Activate table QR'}
+                    className={`action-button toggle-action ${row.active ? 'deactivate-action' : 'activate-action'}`}
+                    disabled={!!busy}
+                    onClick={() => toggle(row)}
+                  >
+                    <Power size={14} strokeWidth={2.4} />
+                    <b>{row.active ? 'Deactivate' : 'Activate'}</b>
+                  </button>
+                  <button
+                    type="button"
+                    title={`Delete ${formatTable(row.tableNo)}`}
+                    className="action-button delete-action"
+                    disabled={!!busy}
+                    onClick={() => remove(row)}
+                    aria-label={`Delete ${formatTable(row.tableNo)}`}
+                  >
+                    <Trash2 size={18} strokeWidth={2.4} />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
         <Pagination
           page={page}
           total={filtered.length}
