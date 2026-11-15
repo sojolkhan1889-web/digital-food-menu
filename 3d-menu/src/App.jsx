@@ -31,7 +31,10 @@ import {
   RefreshCw,
   Receipt,
   ArrowLeft,
-  Bell
+  Bell,
+  AlertTriangle,
+  Info,
+  Headphones
 } from 'lucide-react';
 
 import foodGif from './assets/Food.gif';
@@ -43,7 +46,13 @@ import RestaurantPanel from './admin/RestaurantPanel';
 import RestaurantLogin from './admin/RestaurantLogin';
 import SuperAdminPanel from './admin/super/SuperAdminPanel';
 import SuperAdminLogin from './admin/super/SuperAdminLogin';
-import { getSuperAdminAuthSession, setSuperAdminAuthSession, initialSuperAdminRestaurants } from './admin/super/superAdminStore';
+import {
+  getSuperAdminAuthSession,
+  setSuperAdminAuthSession,
+  initialSuperAdminRestaurants,
+  getSuperAdminRestaurants,
+  saveSuperAdminRestaurants
+} from './admin/super/superAdminStore';
 import {
   getStoredFoods,
   saveStoredFoods,
@@ -197,20 +206,28 @@ export default function App() {
     if (typeof window === 'undefined') return initialSuperAdminRestaurants[0];
     try {
       const { restaurantSlug } = parseAppRoute(window.location.pathname);
+      const allRestos = getSuperAdminRestaurants();
       if (restaurantSlug) {
-        const found = findRestaurantBySlug(restaurantSlug, initialSuperAdminRestaurants);
+        const found = findRestaurantBySlug(restaurantSlug, allRestos);
         if (found) return found;
       }
       const imp = sessionStorage.getItem('superadmin_impersonating_resto');
       if (imp) {
         const parsed = JSON.parse(imp);
-        if (parsed && parsed.id) return parsed;
+        if (parsed && parsed.id) {
+          const fresh = allRestos.find(r => String(r.id) === String(parsed.id)) || parsed;
+          return fresh;
+        }
       }
       const sess = sessionStorage.getItem('active_resto_session');
       if (sess) {
         const parsed = JSON.parse(sess);
-        if (parsed && parsed.id) return parsed;
+        if (parsed && parsed.id) {
+          const fresh = allRestos.find(r => String(r.id) === String(parsed.id)) || parsed;
+          return fresh;
+        }
       }
+      return allRestos[0] || initialSuperAdminRestaurants[0];
     } catch (e) {}
     return initialSuperAdminRestaurants[0];
   };
@@ -258,7 +275,14 @@ export default function App() {
         const params = new URLSearchParams(window.location.search);
         const t = params.get('table') || params.get('tableNumber');
         if (t) {
-          setTableNumber(decodeURIComponent(t));
+          const raw = decodeURIComponent(t).trim();
+          const digits = raw.replace(/\D/g, '');
+          const parsed = digits ? parseInt(digits, 10) : null;
+          if (parsed) {
+            setTableNumber(`Table ${String(parsed).padStart(2, '0')}`);
+          } else {
+            setTableNumber(raw);
+          }
         } else {
           setTableNumber('');
         }
@@ -274,6 +298,46 @@ export default function App() {
     errorMessage: null,
     tableRecord: null
   });
+
+  // Human readable table display label for badge, e.g. "Table 01" or "Table 02"
+  const resolvedTableDisplay = useMemo(() => {
+    if (tableNumber) {
+      const trimmed = String(tableNumber).trim();
+      const numMatch = trimmed.match(/\d+/);
+      if (numMatch) {
+        return `Table ${String(numMatch[0]).padStart(2, '0')}`;
+      }
+      if (!trimmed.includes('-')) {
+        return trimmed;
+      }
+    }
+    // Fallback extraction from URL query parameter
+    if (typeof window !== 'undefined') {
+      try {
+        const p = new URLSearchParams(window.location.search);
+        const raw = p.get('table') || p.get('tableNumber');
+        if (raw) {
+          const num = raw.replace(/\D/g, '');
+          if (num) return `Table ${String(num).padStart(2, '0')}`;
+          return 'Table 01';
+        }
+      } catch (e) {}
+    }
+    return null;
+  }, [tableNumber]);
+
+  // Determine if customer visited via Table QR or Primary QR
+  const isTableVisit = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const p = new URLSearchParams(window.location.search);
+        return Boolean(p.get('table') || p.get('tableNumber'));
+      } catch (e) {
+        return false;
+      }
+    }
+    return Boolean(resolvedTableDisplay);
+  }, [resolvedTableDisplay]);
 
   // Mode check: Table QR Dine-In vs Primary QR Generic Browse
   const isTableMode = Boolean(
@@ -301,16 +365,50 @@ export default function App() {
       }
 
       const needle = decodeURIComponent(rawParam).trim();
+      const needleLower = needle.toLowerCase();
+      const digits = needle.replace(/\D/g, '');
+      const parsedNum = digits ? parseInt(digits, 10) : null;
+      const initialDisplay = parsedNum ? `Table ${String(parsedNum).padStart(2, '0')}` : needle;
+
+      // Instantly set a clean human-readable table label so top badge renders properly
+      if (parsedNum) {
+        setTableNumber(initialDisplay);
+      }
+
       const restoId = activeRestaurant?.id || currentRestoId || 'resto_001';
 
-      supabase
-        .from('restaurant_tables')
-        .select('*')
-        .eq('restaurant_id', restoId)
-        .is('deleted_at', null)
-        .then(async ({ data, error }) => {
-          let tables = data;
-          if ((!tables || tables.length === 0) && !error) {
+      const resolveTableFromDatabase = async () => {
+        try {
+          let tables = [];
+
+          // 1. If needle looks like a UUID or ID (contains hyphens), look up globally first
+          if (needle.includes('-')) {
+            const { data: directMatch } = await supabase
+              .from('restaurant_tables')
+              .select('*')
+              .or(`public_id.eq.${needle},id.eq.${needle},table_id.eq.${needle}`)
+              .is('deleted_at', null);
+
+            if (directMatch && directMatch.length > 0) {
+              tables = directMatch;
+            }
+          }
+
+          // 2. Fetch scoped restaurant tables
+          if (tables.length === 0) {
+            const { data, error } = await supabase
+              .from('restaurant_tables')
+              .select('*')
+              .eq('restaurant_id', restoId)
+              .is('deleted_at', null);
+
+            if (!error && data && data.length > 0) {
+              tables = data;
+            }
+          }
+
+          // 3. Fallback repository seed if empty
+          if (tables.length === 0) {
             try {
               const seeded = await supabaseTableRepository.list({ restaurantId: restoId });
               tables = seeded.map(s => ({
@@ -327,55 +425,62 @@ export default function App() {
             }
           }
 
+          // 4. Match table record
           if (tables && tables.length > 0) {
-            const needleLower = needle.toLowerCase();
-            const matched = tables.find(
-              (t) =>
-                t.public_id === needle ||
-                t.id === needle ||
-                String(t.table_no) === needle ||
-                String(t.table_no).padStart(2, '0') === needle ||
-                (t.table_number && t.table_number.toLowerCase() === needleLower) ||
-                (t.table_id && t.table_id.toLowerCase() === needleLower)
-            );
+            const matched = tables.find((t) => {
+              if (t.public_id && t.public_id.toLowerCase() === needleLower) return true;
+              if (t.id && t.id.toLowerCase() === needleLower) return true;
+              if (t.table_id && t.table_id.toLowerCase() === needleLower) return true;
+              if (t.table_number && t.table_number.toLowerCase() === needleLower) return true;
+              if (String(t.table_no) === needle) return true;
+              if (parsedNum !== null && Number(t.table_no) === parsedNum) return true;
+              return false;
+            });
 
-            if (!matched) {
-              setTableNumber('');
+            if (matched) {
+              const displayNum = matched.table_number || `Table ${String(matched.table_no).padStart(2, '0')}`;
+              setTableNumber(displayNum);
+              setTableStatusState({
+                isValid: true,
+                isActive: matched.is_active !== false && matched.status !== 'inactive',
+                errorMessage: (matched.is_active === false || matched.status === 'inactive')
+                  ? `${displayNum} QR is currently deactivated by the restaurant. Ordering is unavailable.`
+                  : null,
+                tableRecord: matched
+              });
+            } else if (parsedNum !== null) {
+              const displayNum = `Table ${String(parsedNum).padStart(2, '0')}`;
+              setTableNumber(displayNum);
+              setTableStatusState({
+                isValid: true,
+                isActive: true,
+                errorMessage: null,
+                tableRecord: { table_no: parsedNum, table_number: displayNum, is_active: true }
+              });
+            } else {
               setTableStatusState({
                 isValid: false,
                 isActive: false,
                 errorMessage: 'This table QR code does not belong to this restaurant. Please scan the QR stand at your table.',
                 tableRecord: null
               });
-            } else if (matched.is_active === false || matched.status === 'inactive') {
-              const displayNum = matched.table_number || `Table ${String(matched.table_no).padStart(2, '0')}`;
-              setTableNumber(displayNum);
-              setTableStatusState({
-                isValid: true,
-                isActive: false,
-                errorMessage: `${displayNum} QR is currently deactivated by the restaurant. Ordering is unavailable.`,
-                tableRecord: matched
-              });
-            } else {
-              const displayNum = matched.table_number || `Table ${String(matched.table_no).padStart(2, '0')}`;
-              setTableNumber(displayNum);
-              setTableStatusState({
-                isValid: true,
-                isActive: true,
-                errorMessage: null,
-                tableRecord: matched
-              });
             }
-          } else {
-            setTableNumber('');
+          } else if (parsedNum !== null) {
+            const displayNum = `Table ${String(parsedNum).padStart(2, '0')}`;
+            setTableNumber(displayNum);
             setTableStatusState({
-              isValid: false,
-              isActive: false,
-              errorMessage: 'This table QR code does not belong to this restaurant. Please scan the QR stand at your table.',
-              tableRecord: null
+              isValid: true,
+              isActive: true,
+              errorMessage: null,
+              tableRecord: { table_no: parsedNum, table_number: displayNum, is_active: true }
             });
           }
-        });
+        } catch (err) {
+          console.warn('Table validation fetch error:', err);
+        }
+      };
+
+      resolveTableFromDatabase();
     } catch (e) {
       console.warn('Table validation exception:', e);
     }
@@ -446,6 +551,29 @@ export default function App() {
           setChatMessagesList(data.remoteChat);
         }
       }
+
+      // Sync active restaurant status (active vs suspended) from Supabase / Super Admin store
+      try {
+        const { data: dbResto } = await supabase
+          .from('restaurants')
+          .select('*')
+          .eq('id', restoId)
+          .maybeSingle();
+
+        if (dbResto && dbResto.status) {
+          setActiveRestaurant(prev => ({
+            ...prev,
+            ...dbResto,
+            status: dbResto.status
+          }));
+        } else {
+          const list = getSuperAdminRestaurants();
+          const found = list.find(r => String(r.id) === String(restoId));
+          if (found && found.status) {
+            setActiveRestaurant(prev => ({ ...prev, status: found.status }));
+          }
+        }
+      } catch (e) {}
     } catch (err) {
       console.warn('loadRestaurantData failed for', restoId, err);
     }
@@ -485,6 +613,30 @@ export default function App() {
     setCurrentView('admin');
   };
 
+  // Navigate to Restaurant Portal purely as a restaurant user (WITHOUT Super Admin impersonation banner)
+  const navigateToRestaurantPortal = async (targetRestaurant) => {
+    try {
+      sessionStorage.removeItem('superadmin_impersonating_resto');
+    } catch (e) {}
+
+    const resto = targetRestaurant || activeRestaurant || initialSuperAdminRestaurants[0];
+    if (resto) {
+      try {
+        sessionStorage.setItem('active_resto_session', JSON.stringify(resto));
+        setActiveRestaurant(resto);
+        await loadRestaurantData(resto.id, resto);
+      } catch (e) {
+        console.warn('Restaurant portal navigation warning:', e);
+      }
+    }
+
+    const adminSlug = getRestaurantAdminSlug(resto);
+    if (typeof window !== 'undefined' && window.history.pushState) {
+      window.history.pushState({}, '', `/${adminSlug}/admin`);
+    }
+    setCurrentView('admin');
+  };
+
   const navigateToSuperAdmin = () => {
     if (typeof window !== 'undefined' && window.history.pushState) {
       window.history.pushState({}, '', '/super-admin');
@@ -503,8 +655,9 @@ export default function App() {
       }
 
       let target = null;
+      const allRestos = getSuperAdminRestaurants();
       if (restaurantSlug) {
-        target = findRestaurantBySlug(restaurantSlug, initialSuperAdminRestaurants);
+        target = findRestaurantBySlug(restaurantSlug, allRestos);
         if (!target) {
           try {
             const { data } = await supabase.from('restaurants').select('*');
@@ -520,20 +673,24 @@ export default function App() {
           const imp = sessionStorage.getItem('superadmin_impersonating_resto');
           if (imp) {
             const parsed = JSON.parse(imp);
-            if (parsed?.id) target = parsed;
+            if (parsed?.id) {
+              target = allRestos.find(r => String(r.id) === String(parsed.id)) || parsed;
+            }
           }
           if (!target) {
             const sess = sessionStorage.getItem('active_resto_session');
             if (sess) {
               const parsed = JSON.parse(sess);
-              if (parsed?.id) target = parsed;
+              if (parsed?.id) {
+                target = allRestos.find(r => String(r.id) === String(parsed.id)) || parsed;
+              }
             }
           }
         } catch (e) {}
       }
 
       if (!target) {
-        target = initialSuperAdminRestaurants[0];
+        target = allRestos[0] || initialSuperAdminRestaurants[0];
       }
 
       if (target && target.id !== activeRestaurant?.id) {
@@ -645,6 +802,59 @@ export default function App() {
       clearInterval(interval);
     };
   }, [currentRestoId]);
+
+  // Realtime Restaurant Status (Active vs Suspended) Synchronization across all devices & tabs
+  useEffect(() => {
+    let isMounted = true;
+
+    const handleStatusEvt = (e) => {
+      const { id, status } = e.detail || {};
+      if (id && (String(id) === String(currentRestoId) || String(id) === String(activeRestaurant?.id))) {
+        setActiveRestaurant(prev => ({ ...prev, status }));
+      }
+    };
+    window.addEventListener('restaurant_status_updated', handleStatusEvt);
+
+    const handleStorageChange = (e) => {
+      if (e.key?.includes('restaurants')) {
+        try {
+          const all = getSuperAdminRestaurants();
+          const target = all.find(r => String(r.id) === String(currentRestoId));
+          if (target && target.status) {
+            setActiveRestaurant(prev => ({ ...prev, status: target.status }));
+          }
+        } catch (err) {}
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('superadmin_restaurants_changed', handleStorageChange);
+
+    const statusChannel = supabase
+      .channel(`realtime_app_restaurant_status_${currentRestoId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'restaurants' },
+        (payload) => {
+          if (!isMounted) return;
+          if (payload?.new && String(payload.new.id) === String(currentRestoId)) {
+            setActiveRestaurant(prev => ({
+              ...prev,
+              ...payload.new,
+              status: payload.new.status || 'active'
+            }));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('restaurant_status_updated', handleStatusEvt);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('superadmin_restaurants_changed', handleStorageChange);
+      supabase.removeChannel(statusChannel);
+    };
+  }, [currentRestoId, activeRestaurant?.id]);
 
   // Record real menu scan in Supabase menu_scans when customer accesses the digital menu view
   const hasRecordedScanRef = useRef(false);
@@ -2627,6 +2837,126 @@ export default function App() {
             setCurrentView('admin');
           }}
         />
+      </div>
+    );
+  }
+
+  // Suspended Restaurant Barrier Screen for Customer Digital Menu (Exact Match to User Reference Specification)
+  if (currentView === 'menu' && activeRestaurant?.status === 'suspended') {
+    return (
+      <div className="relative w-full h-[100dvh] overflow-hidden bg-[#080B11] font-sans text-slate-100 flex flex-col justify-between select-none">
+        {/* Subtle Ambient Vignette Background */}
+        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+          <div
+            className="absolute inset-0 opacity-25"
+            style={{
+              background: 'radial-gradient(circle at 50% 45%, rgba(245, 158, 11, 0.08) 0%, rgba(8, 11, 17, 0.98) 70%)'
+            }}
+          />
+        </div>
+
+        {/* Top Header Section */}
+        <div className="relative z-10 w-full shrink-0">
+          <header className="w-full max-w-xl mx-auto px-4 sm:px-6 pt-5 pb-3.5 flex items-center justify-between gap-3">
+            {/* Restaurant Logo & Brand Info */}
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-[#121620] border border-white/10 p-0.5 overflow-hidden flex items-center justify-center shrink-0 shadow-sm">
+                {restaurantProfile?.logo || activeRestaurant?.logo ? (
+                  <img
+                    src={restaurantProfile?.logo || activeRestaurant?.logo}
+                    alt={restaurantProfile?.name || activeRestaurant?.name || 'Restaurant'}
+                    className="w-full h-full object-contain rounded-lg"
+                  />
+                ) : (
+                  <Utensils size={22} className="text-amber-400" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-white font-bold text-[16px] sm:text-[18px] leading-tight tracking-tight truncate">
+                  {restaurantProfile?.name || activeRestaurant?.name || 'Spice Lounge'}
+                </h2>
+                <p className="text-[#8E9CAE] text-xs sm:text-[13px] font-medium leading-tight mt-0.5">
+                  Phone Menu
+                </p>
+              </div>
+            </div>
+
+            {/* QR Code Status Badge (Primary Menu QR or Table 01 QR) */}
+            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-xl bg-[#111724]/90 border border-slate-700/60 shadow-xs backdrop-blur-md shrink-0">
+              <svg
+                className="w-4 h-4 text-amber-400 shrink-0"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+                <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+                <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+                <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+                <rect x="7" y="7" width="3" height="3" fill="currentColor"/>
+                <rect x="14" y="7" width="3" height="3" fill="currentColor"/>
+                <rect x="7" y="14" width="3" height="3" fill="currentColor"/>
+                <rect x="14" y="14" width="3" height="3" fill="currentColor"/>
+              </svg>
+              <span className="text-white text-xs sm:text-[13px] font-medium tracking-tight">
+                {isTableVisit ? `${resolvedTableDisplay || 'Table 01'} QR` : 'Primary Menu QR'}
+              </span>
+            </div>
+          </header>
+
+          {/* Thin Divider Line Below Header (Runs Full Width) */}
+          <div className="w-full border-b border-slate-800/80" />
+        </div>
+
+        {/* Center 'Service on hold' Card */}
+        <main className="relative z-10 my-auto px-4 py-8 w-full max-w-md mx-auto flex flex-col items-center justify-center">
+          <div className="w-full rounded-[28px] sm:rounded-[32px] bg-[#0E131F]/95 border border-amber-500/30 px-6 sm:px-8 py-9 sm:py-11 flex flex-col items-center text-center shadow-[0_25px_60px_rgba(0,0,0,0.8),0_0_35px_rgba(245,158,11,0.08)] backdrop-blur-xl animate-[fadeIn_0.3s_ease-out]">
+            {/* Warm Amber Squircle with Golden Pause Icon */}
+            <div className="w-[74px] h-[74px] sm:w-[80px] sm:h-[80px] rounded-[22px] bg-[#332212] border border-amber-600/30 flex items-center justify-center mb-6 sm:mb-7 shadow-inner">
+              <div className="flex items-center gap-2.5">
+                <span className="w-2.5 h-7 sm:w-3 sm:h-8 rounded-full bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.5)]" />
+                <span className="w-2.5 h-7 sm:w-3 sm:h-8 rounded-full bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.5)]" />
+              </div>
+            </div>
+
+            {/* Title */}
+            <h1 className="text-2xl sm:text-[28px] font-extrabold text-white tracking-tight leading-tight">
+              Service on hold
+            </h1>
+
+            {/* Exact Subtitles */}
+            <div className="text-slate-300/85 text-sm sm:text-base mt-3.5 sm:mt-4 leading-relaxed font-normal max-w-xs space-y-1">
+              <p>This restaurant&apos;s digital menu is on hold.</p>
+              <p>Please ask your waiter for the menu.</p>
+            </div>
+          </div>
+        </main>
+
+        {/* Bottom Platform Support Link */}
+        <footer className="relative z-10 pb-8 sm:pb-9 pt-3 px-4 flex flex-col items-center justify-center gap-2.5 text-center">
+          <a
+            href={`https://wa.me/8801700000000?text=Hello%20Phone%20Menu%20Support,%20restaurant%20(${encodeURIComponent(restaurantProfile?.name || activeRestaurant?.name || 'Restaurant')})%20menu%20is%20currently%20on%20hold.`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-amber-400 hover:text-amber-300 transition-colors text-xs sm:text-sm font-semibold tracking-tight group no-underline cursor-pointer"
+            title="Contact Platform Support"
+          >
+            <Headphones size={18} className="text-amber-400 group-hover:scale-110 transition-transform shrink-0" strokeWidth={2.3} />
+            <span>Please Contact Phone Menu Platform Support</span>
+          </a>
+
+          {/* Discreet Restaurant Owner/Staff Navigation (Clears Superadmin Impersonation completely) */}
+          <button
+            onClick={() => navigateToRestaurantPortal(activeRestaurant)}
+            className="text-[11px] text-slate-500 hover:text-slate-400 underline font-medium transition-colors cursor-pointer mt-0.5"
+            title="Open Restaurant Panel"
+          >
+            Restaurant Owner or Staff? Access Portal →
+          </button>
+        </footer>
       </div>
     );
   }

@@ -62,7 +62,9 @@ import {
   Bell,
   Share2,
   Copy,
-  Smartphone
+  Smartphone,
+  AlertTriangle,
+  Info
 } from 'lucide-react';
 
 import { QRCodeSVG } from 'qrcode.react';
@@ -70,6 +72,7 @@ import AddFoodWizard from './AddFoodWizard';
 import FeaturedSliderWizard from './FeaturedSliderWizard';
 import TableQRManagement from './TableQRManagement';
 import RestaurantTopBar from './components/RestaurantTopBar';
+import { getSuperAdminRestaurants } from './super/superAdminStore';
 import { supabaseTableRepository } from '../data/supabaseTableRepository';
 import { supabase } from '../lib/supabaseClient';
 import {
@@ -459,6 +462,91 @@ export default function RestaurantPanel({
   }, [foods, orders]);
 
   const panelRestoId = activeRestaurant?.id || restaurantProfile?.restaurant_id || (restaurantProfile?.id ? String(restaurantProfile.id).replace(/^set_/, '') : 'resto_001');
+
+  // Restaurant Suspension Status State & Realtime Sync
+  const [currentStatus, setCurrentStatus] = useState(() => {
+    return activeRestaurant?.status || restaurantProfile?.status || 'active';
+  });
+
+  useEffect(() => {
+    if (activeRestaurant?.status) {
+      setCurrentStatus(activeRestaurant.status);
+    }
+  }, [activeRestaurant?.status]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    // Check cached superadmin store
+    try {
+      const allRestos = getSuperAdminRestaurants();
+      const target = allRestos.find(r => String(r.id) === String(panelRestoId));
+      if (target && target.status) {
+        setCurrentStatus(target.status);
+      }
+    } catch (e) {}
+
+    // Check Supabase directly for accurate remote status
+    supabase
+      .from('restaurants')
+      .select('status')
+      .eq('id', String(panelRestoId))
+      .maybeSingle()
+      .then(({ data }) => {
+        if (isMounted && data?.status) {
+          setCurrentStatus(data.status);
+        }
+      });
+
+    // Custom event broadcast from SuperAdminPanel in the same tab
+    const handleStatusUpdate = (e) => {
+      const { id, status } = e.detail || {};
+      if (id && (String(id) === String(panelRestoId) || String(id) === String(activeRestaurant?.id))) {
+        setCurrentStatus(status);
+      }
+    };
+    window.addEventListener('restaurant_status_updated', handleStatusUpdate);
+
+    // Cross-tab storage changes
+    const handleStorageChange = (e) => {
+      if (e.key?.includes('restaurants')) {
+        try {
+          const list = getSuperAdminRestaurants();
+          const target = list.find(r => String(r.id) === String(panelRestoId));
+          if (target && target.status) {
+            setCurrentStatus(target.status);
+          }
+        } catch (err) {}
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('superadmin_restaurants_changed', handleStorageChange);
+
+    // Supabase Realtime channel for instant push on restaurant suspension across devices
+    const statusChannel = supabase
+      .channel(`realtime_resto_panel_status_${panelRestoId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'restaurants' },
+        (payload) => {
+          if (!isMounted) return;
+          if (payload?.new && String(payload.new.id) === String(panelRestoId)) {
+            setCurrentStatus(payload.new.status || 'active');
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('restaurant_status_updated', handleStatusUpdate);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('superadmin_restaurants_changed', handleStorageChange);
+      supabase.removeChannel(statusChannel);
+    };
+  }, [panelRestoId, activeRestaurant?.id]);
+
+  const isSuspended = currentStatus === 'suspended';
 
   // QR Code State & Dynamic Link for Active Restaurant
   const [copiedQr, setCopiedQr] = useState(false);
@@ -932,16 +1020,24 @@ export default function RestaurantPanel({
         }`}
       >
         {/* Sticky Brand & Restaurant Header - STAYS PINNED AT TOP EVEN WHEN SCROLLING */}
-        <div className={`h-24 px-4 border-b flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} shrink-0 sticky top-0 z-20 ${
+        <div className={`h-[106px] px-3.5 border-b flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} shrink-0 sticky top-0 z-20 ${
           isDark ? 'border-slate-800 bg-[#111827]' : 'border-slate-200 bg-white'
         }`}>
-          <div className={`flex items-center gap-3 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
+          <div className={`flex items-center gap-3 ${isSidebarCollapsed ? 'justify-center' : 'min-w-0 flex-1'}`}>
             {/* Brand Logo Box with Studio Backdrop & Rounded Aesthetic */}
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center p-0.5 shrink-0 overflow-hidden shadow-sm transition-all ${
-              profileForm.logo 
-                ? 'bg-white border border-slate-200/90 dark:border-slate-700/80 shadow-[0_2px_8px_rgba(0,0,0,0.08)]' 
-                : 'bg-gradient-to-br from-orange-500 to-amber-600 border border-orange-400/40 text-white'
-            }`}>
+            <div
+              className={`w-14 h-14 rounded-2xl flex items-center justify-center p-0.5 shrink-0 overflow-hidden shadow-sm transition-all ${
+                isSidebarCollapsed ? 'cursor-pointer hover:scale-105' : ''
+              } ${
+                profileForm.logo 
+                  ? 'bg-white border border-slate-200/90 dark:border-slate-700/80 shadow-[0_2px_8px_rgba(0,0,0,0.08)]' 
+                  : 'bg-gradient-to-br from-orange-500 to-amber-600 border border-orange-400/40 text-white'
+              }`}
+              onClick={() => {
+                if (isSidebarCollapsed) setIsSidebarCollapsed(false);
+              }}
+              title={isSidebarCollapsed ? (profileForm.name || 'Restaurant Panel') : undefined}
+            >
               {profileForm.logo ? (
                 <img
                   src={profileForm.logo}
@@ -953,8 +1049,8 @@ export default function RestaurantPanel({
               )}
             </div>
             {!isSidebarCollapsed && (
-              <div className="truncate">
-                <h2 className={`text-base font-bold leading-tight truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              <div className="truncate min-w-0">
+                <h2 className={`text-base font-bold leading-tight truncate ${isDark ? 'text-white' : 'text-slate-900'}`} title={profileForm.name}>
                   {profileForm.name || 'Restaurant Panel'}
                 </h2>
                 <div className="flex items-center gap-1.5 mt-1">
@@ -972,7 +1068,7 @@ export default function RestaurantPanel({
             <button
               type="button"
               onClick={() => setIsSidebarCollapsed(true)}
-              className="hidden md:flex p-1.5 rounded-[10px] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="hidden md:flex p-1.5 rounded-[10px] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0 ml-1"
               title="Collapse sidebar"
             >
               <PanelLeftClose className="w-4 h-4" />
@@ -982,7 +1078,7 @@ export default function RestaurantPanel({
           {/* Mobile Close Button */}
           <button
             onClick={() => setIsMobileMenuOpen(false)}
-            className="md:hidden p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
+            className="md:hidden p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white shrink-0 ml-1"
             aria-label="Close navigation"
           >
             <X className="w-5 h-5" />
@@ -1223,7 +1319,7 @@ export default function RestaurantPanel({
             pageSubtitle={tabMeta.subtitle}
             notificationCount={22}
             sidebarCollapsed={isSidebarCollapsed}
-            showIdentity={true}
+            showIdentity={false}
             actionLabel={activeTab === 'sliders' ? 'Create Slider' : 'Add New Food'}
             darkMode={isDark}
             onToggleDarkMode={toggleTheme}
@@ -1244,6 +1340,48 @@ export default function RestaurantPanel({
             }
           />
         </div>
+
+        {/* Restaurant Suspension Warning Alert Banner (Matches Reference Specification Exactly) */}
+        {isSuspended && (
+          <div className="mx-3 sm:mx-6 mt-3 sm:mt-4 p-4 sm:p-5 rounded-[22px] bg-gradient-to-r from-[#fff1f2] via-[#ffe4e6] to-[#fff1f2] dark:from-[#251217] dark:via-[#35151e] dark:to-[#251217] border border-rose-200/90 dark:border-rose-900/60 shadow-[0_4px_20px_rgba(244,63,94,0.08)] flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all animate-[fadeIn_0.3s_ease-out]">
+            <div className="flex items-start sm:items-center gap-3.5 flex-1 min-w-0">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/80 border border-rose-300/60 dark:border-rose-800/60 flex items-center justify-center shrink-0 text-rose-600 dark:text-rose-400 shadow-sm">
+                <AlertTriangle size={24} strokeWidth={2.3} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight">
+                    Your restaurant is currently
+                  </h3>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-100 text-rose-700 dark:bg-rose-950/90 dark:text-rose-300 border border-rose-300/80 dark:border-rose-800">
+                    Suspended
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 mt-1 font-medium leading-relaxed">
+                  Your Digital Menu service is currently disabled. To reactivate your service, please contact Customer Care right now.
+                </p>
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-1.5">
+                  <Info size={13} className="text-rose-500 shrink-0" />
+                  <span>To know why your restaurant has been suspended, please contact Customer Care.</span>
+                </div>
+              </div>
+            </div>
+
+            {/* WhatsApp Support CTA Pill Button */}
+            <a
+              href={`https://wa.me/8801700000000?text=Hello%20Support,%20my%20restaurant%20(${encodeURIComponent(profileForm.name || 'Restaurant')})%20is%20currently%20suspended.%20Please%20help%20reactivate.`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#00c653] hover:bg-[#00b04a] text-white font-bold text-sm shadow-[0_4px_14px_rgba(0,198,83,0.35)] transition-all hover:scale-105 shrink-0 select-none no-underline cursor-pointer"
+              title="Contact Customer Support on WhatsApp"
+            >
+              <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
+                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+              </svg>
+              <span>WhatsApp Support</span>
+            </a>
+          </div>
+        )}
 
         {/* Location / Timezone Notification Toast */}
         {locationNotice && (

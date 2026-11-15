@@ -10,11 +10,11 @@
   --dfm-muted: #657794;
   --dfm-border: #dce5ef;
 
-  width: calc(100% - 24px);
+  width: calc(100% - 20px);
   height: 96px;
   min-height: 96px;
-  margin: 12px;
-  padding: 0 24px;
+  margin: 10px;
+  padding: 0 16px;
 
   box-sizing: border-box;
   display: flex;
@@ -497,7 +497,7 @@
 }
 
 /* ==========================================
-   NO-IDENTITY VARIANT (when sidebar open on desktop)
+   NO-IDENTITY VARIANT (desktop always uses sidebar for identity)
    ========================================== */
 
 .dfm-topbar--no-identity .dfm-topbar__identity,
@@ -505,9 +505,9 @@
   display: none !important;
 }
 
-@media (min-width: 901px) {
-  .dfm-topbar--sidebar-expanded .dfm-topbar__identity,
-  .dfm-topbar--sidebar-expanded .dfm-topbar__divider {
+@media (min-width: 768px) {
+  .dfm-topbar__identity,
+  .dfm-topbar__divider {
     display: none !important;
   }
 }
@@ -638,7 +638,9 @@
   }
 
   .dfm-topbar__clock {
-    display: none;
+    min-width: 175px;
+    height: 48px;
+    padding: 6px 10px;
   }
 
   .dfm-topbar__page h1 {
@@ -649,7 +651,7 @@
 @media (max-width: 900px) {
   .dfm-topbar {
     height: auto;
-    min-height: 96px;
+    min-height: unset;
     flex-wrap: wrap;
     padding: 12px 14px;
     gap: 10px;
@@ -659,26 +661,86 @@
   }
 
   .dfm-topbar__identity {
-    flex: 1 1 auto;
+    display: none !important;
   }
 
   .dfm-topbar__divider {
-    display: none;
+    display: none !important;
   }
 
   .dfm-topbar__menu-toggle {
-    order: -1;
-  }
-
-  .dfm-topbar__page {
-    order: 3;
-    flex: 1 1 100%;
-    padding: 8px 4px 2px;
-    border-top: 1px solid #e8edf5;
+    order: 1;
   }
 
   .dfm-topbar__actions {
+    order: 2;
     margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Full-width responsive interactive clock on mobile & tablets */
+  .dfm-topbar__clock {
+    order: 3;
+    display: flex !important;
+    width: 100%;
+    min-width: 100%;
+    height: auto;
+    min-height: 40px;
+    padding: 7px 12px;
+    margin: 2px 0 0;
+    border-radius: 14px;
+    justify-content: space-between;
+    align-items: center;
+    box-sizing: border-box;
+    cursor: pointer;
+  }
+
+  .dfm-topbar__clock-content {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 10px;
+  }
+
+  .dfm-topbar__clock-main {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dfm-topbar__clock-main strong {
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .dfm-topbar__clock-main > span:last-child {
+    font-size: 11px;
+    color: var(--dfm-muted);
+  }
+
+  .dfm-topbar__timezone {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 8px;
+    background: rgba(255, 82, 0, 0.08);
+    border: 1px solid rgba(255, 82, 0, 0.2);
+    border-radius: 8px;
+    color: var(--dfm-orange);
+    flex-shrink: 0;
+  }
+
+  .dfm-topbar__page {
+    order: 4;
+    width: 100%;
+    flex: 1 1 100%;
+    padding: 8px 4px 2px;
+    border-top: 1px solid #e8edf5;
   }
 
   .dfm-topbar__page p {
@@ -690,29 +752,9 @@
   .dfm-topbar {
     width: calc(100% - 16px);
     margin: 8px;
-    padding: 10px;
+    padding: 10px 12px;
     border-radius: 15px;
     gap: 8px;
-  }
-
-  .dfm-topbar__logo {
-    width: 42px;
-    height: 42px;
-    border-radius: 10px;
-  }
-
-  .dfm-topbar__identity {
-    gap: 7px;
-    min-width: 90px;
-  }
-
-  .dfm-topbar__restaurant h2 {
-    font-size: 13px;
-  }
-
-  .dfm-topbar__plan {
-    padding: 3px 5px;
-    font-size: 9px;
   }
 
   .dfm-topbar__menu-toggle {
@@ -738,6 +780,25 @@
   .dfm-topbar__theme-btn span,
   .dfm-topbar__add-btn span {
     display: none;
+  }
+
+  .dfm-topbar__clock {
+    padding: 6px 10px;
+    min-height: 38px;
+    border-radius: 12px;
+  }
+
+  .dfm-topbar__clock-main strong {
+    font-size: 12px;
+  }
+
+  .dfm-topbar__clock-main > span:last-child {
+    font-size: 10px;
+  }
+
+  .dfm-topbar__timezone {
+    font-size: 10px;
+    padding: 3px 6px;
   }
 
   .dfm-topbar__page {

@@ -49,7 +49,7 @@ export default function RestaurantTopBar({
   pageSubtitle = "Manage food items, categories, and your digital menu",
   notificationCount = 22,
   sidebarCollapsed = false,
-  showIdentity = true,
+  showIdentity = false,
   actionLabel = "Add New Food",
 
   darkMode = false,
@@ -226,39 +226,39 @@ export default function RestaurantTopBar({
           <p>{pageSubtitle}</p>
         </div>
 
-        {/* Right-side Controls */}
-        <div className="dfm-topbar__actions">
-          {/* Live Interactive Clock with Timezone Selector Trigger */}
-          <div
-            className="dfm-topbar__clock dfm-topbar__clock--clickable"
-            onClick={() => setIsTimezoneModalOpen((prev) => !prev)}
-            title="Click to select or change timezone"
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                setIsTimezoneModalOpen((prev) => !prev);
-              }
-            }}
-          >
-            <span className="dfm-topbar__online-dot" />
+        {/* Live Interactive Clock with Timezone Selector Trigger (Desktop & Mobile) */}
+        <div
+          className="dfm-topbar__clock dfm-topbar__clock--clickable"
+          onClick={() => setIsTimezoneModalOpen((prev) => !prev)}
+          title="Click to select or change timezone"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setIsTimezoneModalOpen((prev) => !prev);
+            }
+          }}
+        >
+          <span className="dfm-topbar__online-dot" />
 
-            <div className="dfm-topbar__clock-content">
-              <div className="dfm-topbar__clock-main">
-                <strong>{time}</strong>
-                <span className="dfm-topbar__clock-divider">|</span>
-                <span>{date}</span>
-              </div>
+          <div className="dfm-topbar__clock-content">
+            <div className="dfm-topbar__clock-main">
+              <strong>{time}</strong>
+              <span className="dfm-topbar__clock-divider">|</span>
+              <span>{date}</span>
+            </div>
 
-              <div className="dfm-topbar__timezone">
-                <MapPin size={13} className="text-orange-500 shrink-0" />
-                <span className="truncate max-w-[110px]">{currentTimeZone}</span>
-                <ChevronDown size={12} className="opacity-70 shrink-0 ml-0.5" />
-              </div>
+            <div className="dfm-topbar__timezone">
+              <MapPin size={13} className="text-orange-500 shrink-0" />
+              <span className="truncate max-w-[120px]">{currentTimeZone}</span>
+              <ChevronDown size={12} className="opacity-70 shrink-0 ml-0.5" />
             </div>
           </div>
+        </div>
 
+        {/* Right-side Controls */}
+        <div className="dfm-topbar__actions">
           {/* Theme Toggle */}
           <button
             type="button"

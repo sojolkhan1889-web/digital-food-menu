@@ -503,6 +503,9 @@ export const updateRestaurantInSupabase = async (id, updates = {}) => {
 export const updateRestaurantStatusInSupabase = async (id, status) => {
   try {
     await supabase.from('restaurants').update({ status }).eq('id', String(id));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('restaurant_status_updated', { detail: { id: String(id), status } }));
+    }
   } catch (err) {
     console.warn('Supabase update status caught:', err);
   }
@@ -608,6 +611,9 @@ export const getSuperAdminRestaurants = () => {
 export const saveSuperAdminRestaurants = (restaurants) => {
   try {
     localStorage.setItem(`${SUPER_ADMIN_STORAGE_PREFIX}restaurants`, JSON.stringify(restaurants));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('superadmin_restaurants_changed', { detail: { restaurants } }));
+    }
   } catch (e) {
     console.error('Failed saving super admin restaurants:', e);
   }
