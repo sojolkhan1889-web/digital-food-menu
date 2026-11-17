@@ -30,6 +30,8 @@ import TableQrImage, {
   getTableMenuUrl
 } from './TableQrImage.jsx';
 import { supabaseTableRepository } from '../data/supabaseTableRepository.js';
+import { fetchFineDineTableStats } from '../data/dgmSessionStore.js';
+import { supabase } from '../lib/supabaseClient.js';
 import './tableQrStyles.css';
 
 const PAGE_SIZES = [10, 20, 50];
@@ -214,12 +216,48 @@ export default function TableQRManagement({
   const [editing, setEditing] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [message, setMessage] = useState(null);
+  const [tableStatsMap, setTableStatsMap] = useState({});
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
       document.documentElement.classList.toggle('dark', isDark);
     }
   }, [isDark]);
+
+  const refreshStats = useCallback(async () => {
+    if (restaurant?.id) {
+      try {
+        const stats = await fetchFineDineTableStats(restaurant.id);
+        setTableStatsMap(stats || {});
+      } catch (e) {
+        console.warn('Error fetching fine dine table stats:', e);
+      }
+    }
+  }, [restaurant?.id]);
+
+  useEffect(() => {
+    refreshStats();
+  }, [refreshStats, tables]);
+
+  // Realtime live synchronization of Fine-Dine table order counts & active sessions
+  useEffect(() => {
+    if (!restaurant?.id) return;
+    const channel = supabase
+      .channel(`realtime_table_qr_stats_${restaurant.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'dgm_table_sessions',
+        filter: `restaurant_id=eq.${restaurant.id}`
+      }, () => {
+        refreshStats();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [restaurant?.id, refreshStats]);
 
   const refresh = useCallback(async () => {
     const rows = await repository.list({ restaurantId: restaurant.id });
@@ -473,15 +511,17 @@ export default function TableQRManagement({
                 <th>Table ID</th>
                 <th>Created Date</th>
                 <th>Table No</th>
-                <th>Status</th>
+                <th style={{ textAlign: 'center' }}>Today Orders</th>
+                <th style={{ textAlign: 'center' }}>Total Orders</th>
+                <th style={{ textAlign: 'center' }}>Status</th>
                 <th>QR Code</th>
-                <th>Action</th>
+                <th style={{ textAlign: 'right' }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={8}>
                     <div className="empty-state">
                       <LoaderCircle className="spinning" size={26} /> Loading tables…
                     </div>
@@ -489,49 +529,66 @@ export default function TableQRManagement({
                 </tr>
               ) : visible.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={8}>
                     <div className="empty-state">
                       <Search size={24} /> No tables match your filters.
                     </div>
                   </td>
                 </tr>
               ) : (
-                visible.map((row) => (
-                  <tr key={row.id}>
-                    <td>
-                      <span className="table-id-badge">{formatTableId(row.tableNo)}</span>
-                    </td>
-                    <td>
-                      <span className="date-cell">
-                        <CalendarDays size={16} />
-                        {readableDate(row.createdAt)}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="table-number-badge">{formatTable(row.tableNo)}</span>
-                    </td>
-                    <td>
-                      <span className={`status-pill ${row.active ? 'status-active' : 'status-inactive'}`}>
-                        {row.active ? <CircleCheck size={15} /> : <Power size={14} />} {row.active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="qr-table-cell"
-                        onClick={() => setPreview(row)}
-                        aria-label={`Preview QR code for ${formatTable(row.tableNo)}`}
-                      >
-                        <TableQrImage restaurant={restaurant} table={row} size={65} />
-                        <span>
-                          <strong>{formatTable(row.tableNo)} Menu</strong>
-                          <small>Scan for {formatTable(row.tableNo)}</small>
-                          <em>Click to enlarge</em>
+                visible.map((row) => {
+                  const statsForTable = tableStatsMap[row.id] ||
+                    tableStatsMap[String(row.tableNo)] ||
+                    tableStatsMap[formatTable(row.tableNo)] ||
+                    tableStatsMap[formatTableId(row.tableNo)] ||
+                    { todayOrders: 0, totalOrders: 0 };
+
+                  return (
+                    <tr key={row.id}>
+                      <td>
+                        <span className="table-id-badge">{formatTableId(row.tableNo)}</span>
+                      </td>
+                      <td>
+                        <span className="date-cell">
+                          <CalendarDays size={16} />
+                          {readableDate(row.createdAt)}
                         </span>
-                      </button>
-                    </td>
-                    <td>
-                      <div className="action-group">
+                      </td>
+                      <td>
+                        <span className="table-number-badge">{formatTable(row.tableNo)}</span>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span className="orders-count-pill today" title={`${statsForTable.todayOrders} orders today`}>
+                          {statsForTable.todayOrders}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span className="orders-count-pill total" title={`${statsForTable.totalOrders} total orders`}>
+                          {statsForTable.totalOrders}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span className={`status-pill ${row.active ? 'status-active' : 'status-inactive'}`}>
+                          {row.active ? <CircleCheck size={15} /> : <Power size={14} />} {row.active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="qr-table-cell"
+                          onClick={() => setPreview(row)}
+                          aria-label={`Preview QR code for ${formatTable(row.tableNo)}`}
+                        >
+                          <TableQrImage restaurant={restaurant} table={row} size={50} />
+                          <span>
+                            <strong>{formatTable(row.tableNo)} Menu</strong>
+                            <small>Scan for {formatTable(row.tableNo)}</small>
+                            <em>Click to enlarge</em>
+                          </span>
+                        </button>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div className="action-group">
                         <button
                           type="button"
                           title="Edit table number"
@@ -542,7 +599,7 @@ export default function TableQRManagement({
                             setEditValue(String(row.tableNo));
                           }}
                         >
-                          <Pencil size={15} strokeWidth={2.4} />
+                          <Pencil size={13.5} strokeWidth={2.4} />
                           <b>Edit</b>
                         </button>
                         <button
@@ -552,7 +609,7 @@ export default function TableQRManagement({
                           disabled={!!busy}
                           onClick={() => download(row)}
                         >
-                          <Download size={15} strokeWidth={2.4} />
+                          <Download size={13.5} strokeWidth={2.4} />
                           <b>Download QR</b>
                         </button>
                         <button
@@ -562,7 +619,7 @@ export default function TableQRManagement({
                           disabled={!!busy}
                           onClick={() => toggle(row)}
                         >
-                          <Power size={15} strokeWidth={2.4} />
+                          <Power size={13.5} strokeWidth={2.4} />
                           <b>{row.active ? 'Deactivate' : 'Activate'}</b>
                         </button>
                         <button
@@ -573,13 +630,13 @@ export default function TableQRManagement({
                           onClick={() => remove(row)}
                           aria-label={`Delete ${formatTable(row.tableNo)}`}
                         >
-                          <Trash2 size={18} strokeWidth={2.4} />
+                          <Trash2 size={16} strokeWidth={2.4} />
                         </button>
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
+                );
+              }))}
             </tbody>
           </table>
         </div>
@@ -595,19 +652,41 @@ export default function TableQRManagement({
               <Search size={24} /> No tables match your filters.
             </div>
           ) : (
-            visible.map((row) => (
-              <div key={row.id} className="mobile-table-card">
-                <div className="mobile-card-header">
-                  <div className="flex items-center gap-2">
-                    <span className="table-id-badge">{formatTableId(row.tableNo)}</span>
-                    <span className="table-number-badge">{formatTable(row.tableNo)}</span>
-                  </div>
-                  <span className={`status-pill ${row.active ? 'status-active' : 'status-inactive'}`}>
-                    {row.active ? <CircleCheck size={14} /> : <Power size={13} />} {row.active ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
+            visible.map((row) => {
+              const statsForTable = tableStatsMap[row.id] ||
+                tableStatsMap[String(row.tableNo)] ||
+                tableStatsMap[formatTable(row.tableNo)] ||
+                tableStatsMap[formatTableId(row.tableNo)] ||
+                { todayOrders: 0, totalOrders: 0 };
 
-                <div className="mobile-card-body" onClick={() => setPreview(row)}>
+              return (
+                <div key={row.id} className="mobile-table-card">
+                  <div className="mobile-card-header">
+                    <div className="flex items-center gap-2">
+                      <span className="table-id-badge">{formatTableId(row.tableNo)}</span>
+                      <span className="table-number-badge">{formatTable(row.tableNo)}</span>
+                    </div>
+                    <span className={`status-pill ${row.active ? 'status-active' : 'status-inactive'}`}>
+                      {row.active ? <CircleCheck size={14} /> : <Power size={13} />} {row.active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+
+                  <div className="mobile-orders-row flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl my-2 text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium">Today Orders:</span>
+                      <span className="orders-count-pill today text-xs font-bold">
+                        {statsForTable.todayOrders}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-500 font-medium">Total Orders:</span>
+                      <span className="orders-count-pill total text-xs font-bold">
+                        {statsForTable.totalOrders}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mobile-card-body" onClick={() => setPreview(row)}>
                   <div className="mobile-card-qr">
                     <TableQrImage restaurant={restaurant} table={row} size={68} />
                   </div>
@@ -667,8 +746,8 @@ export default function TableQRManagement({
                   </button>
                 </div>
               </div>
-            ))
-          )}
+            );
+          }))}
         </div>
 
         <Pagination

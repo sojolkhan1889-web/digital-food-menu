@@ -105,6 +105,7 @@ import {
 } from './data/menuStore';
 import { supabase } from './lib/supabaseClient';
 import { supabaseTableRepository } from './data/supabaseTableRepository';
+import { handleFineDineTableVisit, confirmFineDineTableSession } from './data/dgmSessionStore';
 import RestaurantHeader from './components/RestaurantHeader';
 
 const categories = [
@@ -185,6 +186,26 @@ import {
   parseAppRoute
 } from './utils/routeUtils';
 
+/**
+ * Safely parse a customer table number from URL params or state strings.
+ * Prevents treating UUIDs or hex hashes as huge 16-digit table numbers.
+ */
+export const parseSafeTableNumber = (str) => {
+  if (!str) return null;
+  const s = String(str).trim();
+  // UUIDs, hex IDs, or long tokens are NOT table numbers
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(s) || (s.includes('-') && s.length > 10) || s.startsWith('pub_') || s.startsWith('tbl_')) {
+    return null;
+  }
+  // Matches "1", "01", "Table 01", "tbl-1"
+  const match = s.match(/^(?:table\s*|tbl[-_\s]*)?(\d{1,4})$/i);
+  if (match) {
+    const n = parseInt(match[1], 10);
+    if (!isNaN(n) && n >= 1 && n <= 9999) return n;
+  }
+  return null;
+};
+
 export default function App() {
   // Master Admin Dynamic Configuration State
   const [adminConfig, setAdminConfig] = useState(defaultRestaurantConfig);
@@ -260,7 +281,12 @@ export default function App() {
       try {
         const params = new URLSearchParams(window.location.search);
         const t = params.get('table') || params.get('tableNumber');
-        if (t) return decodeURIComponent(t);
+        if (t) {
+          const raw = decodeURIComponent(t).trim();
+          const parsed = parseSafeTableNumber(raw);
+          if (parsed !== null) return `Table ${String(parsed).padStart(2, '0')}`;
+          return '';
+        }
       } catch (e) {
         // fallback
       }
@@ -276,12 +302,9 @@ export default function App() {
         const t = params.get('table') || params.get('tableNumber');
         if (t) {
           const raw = decodeURIComponent(t).trim();
-          const digits = raw.replace(/\D/g, '');
-          const parsed = digits ? parseInt(digits, 10) : null;
-          if (parsed) {
+          const parsed = parseSafeTableNumber(raw);
+          if (parsed !== null) {
             setTableNumber(`Table ${String(parsed).padStart(2, '0')}`);
-          } else {
-            setTableNumber(raw);
           }
         } else {
           setTableNumber('');
@@ -301,14 +324,16 @@ export default function App() {
 
   // Human readable table display label for badge, e.g. "Table 01" or "Table 02"
   const resolvedTableDisplay = useMemo(() => {
+    if (tableStatusState.tableRecord?.table_number) {
+      return tableStatusState.tableRecord.table_number;
+    }
     if (tableNumber) {
-      const trimmed = String(tableNumber).trim();
-      const numMatch = trimmed.match(/\d+/);
-      if (numMatch) {
-        return `Table ${String(numMatch[0]).padStart(2, '0')}`;
+      const parsed = parseSafeTableNumber(tableNumber);
+      if (parsed !== null) {
+        return `Table ${String(parsed).padStart(2, '0')}`;
       }
-      if (!trimmed.includes('-')) {
-        return trimmed;
+      if (!tableNumber.includes('-') && tableNumber.length < 15) {
+        return tableNumber;
       }
     }
     // Fallback extraction from URL query parameter
@@ -317,14 +342,13 @@ export default function App() {
         const p = new URLSearchParams(window.location.search);
         const raw = p.get('table') || p.get('tableNumber');
         if (raw) {
-          const num = raw.replace(/\D/g, '');
-          if (num) return `Table ${String(num).padStart(2, '0')}`;
-          return 'Table 01';
+          const parsed = parseSafeTableNumber(decodeURIComponent(raw).trim());
+          if (parsed !== null) return `Table ${String(parsed).padStart(2, '0')}`;
         }
       } catch (e) {}
     }
     return null;
-  }, [tableNumber]);
+  }, [tableNumber, tableStatusState.tableRecord]);
 
   // Determine if customer visited via Table QR or Primary QR
   const isTableVisit = useMemo(() => {
@@ -366,12 +390,11 @@ export default function App() {
 
       const needle = decodeURIComponent(rawParam).trim();
       const needleLower = needle.toLowerCase();
-      const digits = needle.replace(/\D/g, '');
-      const parsedNum = digits ? parseInt(digits, 10) : null;
-      const initialDisplay = parsedNum ? `Table ${String(parsedNum).padStart(2, '0')}` : needle;
+      const parsedNum = parseSafeTableNumber(needle);
+      const initialDisplay = parsedNum !== null ? `Table ${String(parsedNum).padStart(2, '0')}` : '';
 
-      // Instantly set a clean human-readable table label so top badge renders properly
-      if (parsedNum) {
+      // Instantly set a clean human-readable table label only if it's a valid small table number
+      if (parsedNum !== null) {
         setTableNumber(initialDisplay);
       }
 
@@ -856,15 +879,98 @@ export default function App() {
     };
   }, [currentRestoId, activeRestaurant?.id]);
 
-  // Record real menu scan in Supabase menu_scans when customer accesses the digital menu view
+  // Fine-Dine Table Session tracking (90-minute session, +1 DGM Order & 5h Protection)
+  const [currentDgmSession, setCurrentDgmSession] = useState(null);
+  const [isFineDineConfirmed, setIsFineDineConfirmed] = useState(false);
+
+  // Determine whether current restaurant is Fine-Dine
+  const isCurrentFineDine = useMemo(() => {
+    const type = activeRestaurant?.type || activeRestaurant?.restaurant_type;
+    if (type) {
+      const lower = String(type).toLowerCase();
+      return lower === 'fine' || lower === 'fine-dine' || lower === 'finedine';
+    }
+    return currentRestoId === 'resto_001' || currentRestoId === 'resto_003';
+  }, [activeRestaurant, currentRestoId]);
+
+  // Record real menu scan in Supabase menu_scans or start Fine-Dine 90m session
   const hasRecordedScanRef = useRef(false);
 
   useEffect(() => {
     if (currentView === 'menu' && !hasRecordedScanRef.current) {
+      // If customer visited via Table QR, wait for tableRecord to finish database verification!
+      if (isTableVisit && !tableStatusState.tableRecord) {
+        if (tableStatusState.isValid === false) {
+          // Explicitly invalid QR code: don't start session
+          hasRecordedScanRef.current = true;
+        }
+        // Still loading table from Supabase, wait for next render
+        return;
+      }
+
       hasRecordedScanRef.current = true;
-      recordMenuScan(currentRestoId, tableNumber || 'Table 04');
+      const isTableTarget = Boolean(tableNumber || isTableVisit || isTableMode);
+
+      if (isCurrentFineDine && isTableTarget) {
+        const rec = tableStatusState.tableRecord;
+        let tNo = 1;
+        if (rec && typeof rec.table_no === 'number' && rec.table_no > 0 && rec.table_no <= 9999) {
+          tNo = rec.table_no;
+        } else {
+          const parsed = parseSafeTableNumber(tableNumber);
+          if (parsed !== null) tNo = parsed;
+        }
+
+        const tId = rec?.id || `tbl_${currentRestoId}_${String(tNo).padStart(3, '0')}`;
+        const tDisplay = rec?.table_number || `Table ${String(tNo).padStart(2, '0')}`;
+
+        handleFineDineTableVisit({
+          restaurantId: currentRestoId || 'resto_001',
+          tableId: tId,
+          tableNo: tNo,
+          tableNumber: tDisplay
+        }).then((res) => {
+          if (res && res.applied) {
+            setCurrentDgmSession(res);
+            if (res.is_confirmed) {
+              setIsFineDineConfirmed(true);
+              setIsAutoConfirmPopupOpen(false);
+            }
+          }
+        }).catch((err) => {
+          console.warn('Error in handleFineDineTableVisit:', err);
+        });
+      } else {
+        // Non-fine-dine restaurant or generic primary QR scan
+        recordMenuScan(currentRestoId, tableNumber || 'Primary Menu QR');
+      }
     }
-  }, [currentView, tableNumber, currentRestoId]);
+  }, [currentView, tableNumber, isTableVisit, isTableMode, isCurrentFineDine, currentRestoId, tableStatusState, resolvedTableDisplay]);
+
+  // Realtime subscription to the active Fine-Dine session confirmation state across all devices
+  useEffect(() => {
+    const sId = currentDgmSession?.session_id || currentDgmSession?.id;
+    if (!sId) return;
+
+    const sessionChan = supabase
+      .channel(`realtime_dgm_session_${sId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'dgm_table_sessions',
+        filter: `id=eq.${sId}`
+      }, (payload) => {
+        if (payload?.new?.confirmed_at) {
+          setIsFineDineConfirmed(true);
+          setIsAutoConfirmPopupOpen(false);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(sessionChan);
+    };
+  }, [currentDgmSession?.session_id, currentDgmSession?.id]);
 
   // Active Featured Sliders or fallback to foodsList for Digital Menu (declared early before any useEffect)
   const activeFeaturedSliders = useMemo(() => {
@@ -2202,6 +2308,12 @@ export default function App() {
       setOrdersList(updatedOrders);
     }
 
+    const sId = currentDgmSession?.session_id || currentDgmSession?.id;
+    if (sId) {
+      confirmFineDineTableSession(sId);
+      setIsFineDineConfirmed(true);
+    }
+
     if (autoConfirmTimerRef.current) {
       clearTimeout(autoConfirmTimerRef.current);
       autoConfirmTimerRef.current = null;
@@ -2341,9 +2453,11 @@ export default function App() {
 
     // Immediately show mandatory order confirmation popup right upon exiting customization (200ms)
     // Customer won't have time to navigate anywhere else before answering
-    autoConfirmTimerRef.current = setTimeout(() => {
-      setIsAutoConfirmPopupOpen(true);
-    }, 200);
+    if (!isFineDineConfirmed) {
+      autoConfirmTimerRef.current = setTimeout(() => {
+        setIsAutoConfirmPopupOpen(true);
+      }, 200);
+    }
   };
 
   // When customer exits Selected Food Items modal without answering (accidentally closes with X or outside tap)
@@ -2351,7 +2465,7 @@ export default function App() {
     setIsSelectedListOpen(false);
 
     // If not in verified Table QR mode, do NOT trigger order confirmation popup
-    if (!isTableMode) {
+    if (!isTableMode || isFineDineConfirmed) {
       if (autoConfirmTimerRef.current) {
         clearTimeout(autoConfirmTimerRef.current);
         autoConfirmTimerRef.current = null;
@@ -2365,9 +2479,11 @@ export default function App() {
         clearTimeout(autoConfirmTimerRef.current);
       }
       // Immediately show mandatory order confirmation popup (200ms)
-      autoConfirmTimerRef.current = setTimeout(() => {
-        setIsAutoConfirmPopupOpen(true);
-      }, 200);
+      if (!isFineDineConfirmed) {
+        autoConfirmTimerRef.current = setTimeout(() => {
+          setIsAutoConfirmPopupOpen(true);
+        }, 200);
+      }
     }
   };
 
@@ -2442,6 +2558,12 @@ export default function App() {
     const updatedOrders = addStoredOrder(newOrder);
     if (updatedOrders) {
       setOrdersList(updatedOrders);
+    }
+
+    const sId = currentDgmSession?.session_id || currentDgmSession?.id;
+    if (sId) {
+      confirmFineDineTableSession(sId);
+      setIsFineDineConfirmed(true);
     }
 
     setSelectedList([]);
@@ -3545,7 +3667,7 @@ export default function App() {
       {/* Matches reference screenshot media_1794458766645_e708b220.jpg */}
       {/* Table QR mode only: hidden for Primary QR generic browse mode */}
       {/* ======================================================== */}
-      {isAutoConfirmPopupOpen && isTableMode && (
+      {isAutoConfirmPopupOpen && isTableMode && !isFineDineConfirmed && (
         <div
           className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-[fadeIn_0.2s_ease-out] select-none"
         >
@@ -3908,7 +4030,7 @@ export default function App() {
                   </div>
 
                   {/* 3. Order Confirmation with Waiter Card (Only rendered in Table QR mode; hidden in Primary QR mode) */}
-                  {isTableMode ? (
+                  {isTableMode && !isFineDineConfirmed ? (
                     <div className="p-4 sm:p-5 rounded-2xl bg-[#121826]/95 border border-white/10 space-y-3.5 shadow-md">
                       <div className="flex items-start gap-3.5">
                         <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
@@ -3948,6 +4070,25 @@ export default function App() {
                         >
                           <RotateCcw className="w-4 h-4 text-white" />
                           <span>Not yet — Keep browsing</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : isTableMode && isFineDineConfirmed ? (
+                    <div className="p-4 sm:p-5 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 space-y-3 shadow-md">
+                      <div className="flex items-center gap-2.5 text-emerald-400 font-bold text-sm sm:text-base">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                        <span>Table Order Confirmed</span>
+                      </div>
+                      <p className="text-xs sm:text-[13px] text-emerald-200/80 font-normal leading-relaxed">
+                        An order has already been confirmed for {resolvedTableDisplay || tableNumber || 'this table'}. You can continue browsing dishes!
+                      </p>
+                      <div className="pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setIsSelectedListOpen(false)}
+                          className="w-full py-3 px-6 rounded-full bg-white/[0.08] hover:bg-white/15 active:scale-[0.98] border border-white/15 text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
+                        >
+                          <span>Close & Keep Browsing</span>
                         </button>
                       </div>
                     </div>

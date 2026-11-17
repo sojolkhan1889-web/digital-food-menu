@@ -483,6 +483,8 @@ export const updateRestaurantInSupabase = async (id, updates = {}) => {
     }
     if (updates.status !== undefined) payload.status = updates.status;
     if (updates.avatar !== undefined) payload.avatar = updates.avatar;
+    if (updates.login_id !== undefined) payload.login_id = updates.login_id;
+    if (updates.password !== undefined) payload.password = updates.password;
 
     const { error } = await supabase.from('restaurants').update(payload).eq('id', String(id));
     if (error) console.warn('Supabase update restaurant error:', error);

@@ -431,6 +431,50 @@ export default function RestaurantPanel({
     }
   }, [isPremiumActive, activeTab]);
 
+  const panelRestoId = activeRestaurant?.id || restaurantProfile?.restaurant_id || (restaurantProfile?.id ? String(restaurantProfile.id).replace(/^set_/, '') : 'resto_001');
+
+  // Fine-Dine Table Session tracking counts for Restaurant Panel metrics
+  const [fineDineSessionCounts, setFineDineSessionCounts] = useState({ totalOrders: 0, todayOrders: 0 });
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchFineDineCounts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('dgm_table_sessions')
+          .select('id, started_at')
+          .eq('restaurant_id', panelRestoId);
+
+        if (!error && data && isMounted) {
+          const totalOrders = data.length;
+          const todayOrders = data.filter(s => isSameCalendarDay(s.started_at)).length;
+          setFineDineSessionCounts({ totalOrders, todayOrders });
+        }
+      } catch (e) {
+        console.warn('Error fetching fine dine session counts for restaurant panel:', e);
+      }
+    };
+
+    fetchFineDineCounts();
+
+    const channel = supabase
+      .channel(`realtime_panel_sessions_${panelRestoId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'dgm_table_sessions',
+        filter: `restaurant_id=eq.${panelRestoId}`
+      }, () => {
+        fetchFineDineCounts();
+      })
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [panelRestoId]);
+
   // --- Computed Metrics ---
   const metrics = useMemo(() => {
     const publishedCount = foods.filter(f => f.is_published !== false && f.status !== 'draft' && f.status !== 'unpublished').length;
@@ -451,17 +495,20 @@ export default function RestaurantPanel({
       .filter(o => o.orderStatus !== 'cancelled')
       .reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
 
+    const isFineDine = (activeRestaurant?.type === 'fine' || activeRestaurant?.restaurant_type === 'fine' || panelRestoId === 'resto_001' || panelRestoId === 'resto_003');
+    // For Fine-Dine, 1 table session (1:30h) = 1 DGM order. Confirming with "Yes, I Ordered" does NOT add a second order.
+    const finalTotalOrders = isFineDine ? fineDineSessionCounts.totalOrders : totalOrdersCount;
+    const finalTodayOrders = isFineDine ? fineDineSessionCounts.todayOrders : todayOrders.length;
+
     return {
       todaySales,
       totalSales,
       totalPublishedItems: publishedCount,
-      totalOrders: totalOrdersCount,
-      todayOrders: todayOrders.length,
+      totalOrders: finalTotalOrders,
+      todayOrders: finalTodayOrders,
       unpublishedItems: unpublishedCount
     };
-  }, [foods, orders]);
-
-  const panelRestoId = activeRestaurant?.id || restaurantProfile?.restaurant_id || (restaurantProfile?.id ? String(restaurantProfile.id).replace(/^set_/, '') : 'resto_001');
+  }, [foods, orders, activeRestaurant, panelRestoId, fineDineSessionCounts]);
 
   // Restaurant Suspension Status State & Realtime Sync
   const [currentStatus, setCurrentStatus] = useState(() => {
@@ -1400,7 +1447,9 @@ export default function RestaurantPanel({
         )}
 
         {/* Dynamic Section Content with Full Native Scrolling */}
-        <main className="p-4 sm:p-6 flex-1 space-y-6 max-w-7xl w-full mx-auto pb-16">
+        <main className={`p-4 sm:p-6 flex-1 space-y-6 w-full mx-auto pb-16 ${
+          activeTab === 'table-qr' ? 'max-w-[1850px] px-3 sm:px-8' : 'max-w-7xl'
+        }`}>
 
           {/* ====================================================== */}
           {/* SECTION: TABLE QR MANAGEMENT                           */}

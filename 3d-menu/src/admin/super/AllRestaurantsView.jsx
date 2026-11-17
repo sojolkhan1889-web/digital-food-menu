@@ -205,19 +205,29 @@ function DetailModal({ restaurant, onClose, onEdit }) {
 }
 
 function EditModal({ restaurant, onClose, onSave }) {
-  const [formData, setFormData] = useState({
-    name: restaurant?.name || '',
-    slug: restaurant?.slug || restaurant?.menuSlug || '',
-    ownerName: restaurant?.ownerName || restaurant?.owner_name || '',
-    ownerPhone: restaurant?.ownerPhone || restaurant?.owner_phone || restaurant?.phone || '',
-    type: restaurant?.type || restaurant?.restaurant_type || 'fine',
-    settlementStatus: restaurant?.settlementStatus || restaurant?.settlement_status || 'settled',
-    status: restaurant?.status || 'active',
-    location: restaurant?.location || restaurant?.address || '',
-    plan: restaurant?.plan || 'Starter',
-    tableCount: restaurant?.tableCount || restaurant?.table_count || 12
+  const getInitialState = (r) => ({
+    name: r?.name || '',
+    slug: r?.slug || r?.menuSlug || '',
+    ownerName: r?.owner_name || r?.ownerName || '',
+    ownerPhone: r?.owner_phone || r?.ownerPhone || r?.phone || '',
+    type: r?.restaurant_type || r?.type || 'fine',
+    settlementStatus: r?.settlement_status || r?.settlementStatus || 'settled',
+    status: r?.status || 'active',
+    location: r?.address || r?.location || '',
+    plan: r?.plan || 'Starter',
+    tableCount: Number(r?.table_count || r?.tableCount) || 12,
+    login_id: r?.login_id || (r?.slug ? `admin_${r.slug}` : ''),
+    password: r?.password || 'resto123'
   });
+
+  const [formData, setFormData] = useState(() => getInitialState(restaurant));
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (restaurant) {
+      setFormData(getInitialState(restaurant));
+    }
+  }, [restaurant]);
 
   if (!restaurant) return null;
 
@@ -225,7 +235,27 @@ function EditModal({ restaurant, onClose, onSave }) {
     e.preventDefault();
     setSaving(true);
     try {
-      await onSave(restaurant.id, formData);
+      await onSave(restaurant.id, {
+        name: formData.name,
+        slug: formData.slug || formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        owner_name: formData.ownerName,
+        ownerName: formData.ownerName,
+        owner_phone: formData.ownerPhone,
+        ownerPhone: formData.ownerPhone,
+        phone: formData.ownerPhone,
+        restaurant_type: formData.type,
+        type: formData.type,
+        settlement_status: formData.settlementStatus,
+        settlementStatus: formData.settlementStatus,
+        plan: formData.plan,
+        table_count: Number(formData.tableCount) || 12,
+        tableCount: Number(formData.tableCount) || 12,
+        address: formData.location,
+        location: formData.location,
+        status: formData.status,
+        login_id: formData.login_id,
+        password: formData.password
+      });
       onClose();
     } catch (err) {
       console.error('Failed to update restaurant:', err);
@@ -238,39 +268,57 @@ function EditModal({ restaurant, onClose, onSave }) {
     <div className="superadmin-modal-backdrop" onClick={onClose}>
       <div className="superadmin-modal-card" onClick={e => e.stopPropagation()}>
         <div className="modal-heading">
-          <h2>Edit Restaurant</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Store size={22} color="#f97316" />
+            <h2>Edit Restaurant</h2>
+          </div>
           <button className="modal-close" onClick={onClose} aria-label="Close">
             <X size={20} />
           </button>
         </div>
         <p className="modal-sub">Update live restaurant metadata in Supabase PostgreSQL</p>
         <form onSubmit={handleSubmit}>
-          <div className="superadmin-form-group">
-            <label>Restaurant Name</label>
-            <input
-              className="superadmin-form-input"
-              value={formData.name}
-              onChange={e => setFormData({ ...formData, name: e.target.value })}
-              required
-            />
-          </div>
-
           <div className="superadmin-form-row">
             <div className="superadmin-form-group">
-              <label>Owner Name</label>
+              <label>Restaurant Name *</label>
               <input
                 className="superadmin-form-input"
-                value={formData.ownerName}
-                onChange={e => setFormData({ ...formData, ownerName: e.target.value })}
+                value={formData.name}
+                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                placeholder="e.g. Sultan's Dine"
                 required
               />
             </div>
             <div className="superadmin-form-group">
-              <label>Owner Phone</label>
+              <label>Menu Slug URL *</label>
+              <input
+                className="superadmin-form-input"
+                value={formData.slug}
+                onChange={e => setFormData({ ...formData, slug: e.target.value })}
+                placeholder="e.g. sultans-dine"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="superadmin-form-row">
+            <div className="superadmin-form-group">
+              <label>Owner Name *</label>
+              <input
+                className="superadmin-form-input"
+                value={formData.ownerName}
+                onChange={e => setFormData({ ...formData, ownerName: e.target.value })}
+                placeholder="e.g. Md. Hossain"
+                required
+              />
+            </div>
+            <div className="superadmin-form-group">
+              <label>Owner Phone *</label>
               <input
                 className="superadmin-form-input"
                 value={formData.ownerPhone}
                 onChange={e => setFormData({ ...formData, ownerPhone: e.target.value })}
+                placeholder="+880 1700-000000"
                 required
               />
             </div>
@@ -315,7 +363,7 @@ function EditModal({ restaurant, onClose, onSave }) {
                 <option value="Business">Business</option>
                 <option value="Pro">Pro</option>
                 <option value="Pro Holographic">Pro Holographic</option>
-                <option value="Enterprise">Enterprise</option>
+                <option value="Enterprise 3D">Enterprise 3D</option>
               </select>
             </div>
             <div className="superadmin-form-group">
@@ -334,11 +382,12 @@ function EditModal({ restaurant, onClose, onSave }) {
 
           <div className="superadmin-form-row">
             <div className="superadmin-form-group">
-              <label>Location / City</label>
+              <label>Location / City *</label>
               <input
                 className="superadmin-form-input"
                 value={formData.location}
                 onChange={e => setFormData({ ...formData, location: e.target.value })}
+                placeholder="e.g. Dhaka, Gulshan-2"
                 required
               />
             </div>
@@ -352,6 +401,28 @@ function EditModal({ restaurant, onClose, onSave }) {
                 <option value="active">Active</option>
                 <option value="suspended">Suspended</option>
               </select>
+            </div>
+          </div>
+
+          <div className="superadmin-form-row">
+            <div className="superadmin-form-group">
+              <label>Login ID</label>
+              <input
+                className="superadmin-form-input"
+                value={formData.login_id}
+                onChange={e => setFormData({ ...formData, login_id: e.target.value })}
+                placeholder="e.g. sultansdine"
+              />
+            </div>
+            <div className="superadmin-form-group">
+              <label>Password</label>
+              <input
+                type="text"
+                className="superadmin-form-input"
+                value={formData.password}
+                onChange={e => setFormData({ ...formData, password: e.target.value })}
+                placeholder="resto123"
+              />
             </div>
           </div>
 
@@ -372,16 +443,31 @@ function AddModal({ onClose, onAdd }) {
     name: '',
     slug: '',
     ownerName: '',
-    ownerPhone: '+8801',
+    ownerPhone: '+880 1',
     type: 'fine',
     settlementStatus: 'settled',
     plan: 'Pro Holographic',
     tableCount: 12,
-    location: 'Dhaka, Bangladesh',
+    location: 'Dhaka, Banani',
+    status: 'active',
     login_id: '',
     password: 'password123'
   });
   const [saving, setSaving] = useState(false);
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [loginTouched, setLoginTouched] = useState(false);
+
+  const handleNameChange = (val) => {
+    const next = { ...formData, name: val };
+    const autoSlug = val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    if (!slugTouched) {
+      next.slug = autoSlug;
+    }
+    if (!loginTouched) {
+      next.login_id = autoSlug.replace(/-/g, '');
+    }
+    setFormData(next);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -403,11 +489,11 @@ function AddModal({ onClose, onAdd }) {
         settlement_status: formData.settlementStatus,
         settlementStatus: formData.settlementStatus,
         plan: formData.plan,
-        table_count: formData.tableCount,
-        tableCount: formData.tableCount,
+        table_count: Number(formData.tableCount) || 12,
+        tableCount: Number(formData.tableCount) || 12,
         address: formData.location,
         location: formData.location,
-        status: 'active',
+        status: formData.status || 'active',
         login_id: formData.login_id || `admin_${generatedSlug}`,
         password: formData.password || 'password123',
         avatar: formData.name.slice(0, 2).toUpperCase()
@@ -424,7 +510,10 @@ function AddModal({ onClose, onAdd }) {
     <div className="superadmin-modal-backdrop" onClick={onClose}>
       <div className="superadmin-modal-card" onClick={e => e.stopPropagation()}>
         <div className="modal-heading">
-          <h2>Add New Restaurant</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Store size={22} color="#f97316" />
+            <h2>Register New Restaurant</h2>
+          </div>
           <button className="modal-close" onClick={onClose} aria-label="Close">
             <X size={20} />
           </button>
@@ -433,29 +522,33 @@ function AddModal({ onClose, onAdd }) {
         <form onSubmit={handleSubmit}>
           <div className="superadmin-form-row">
             <div className="superadmin-form-group">
-              <label>Restaurant Name</label>
+              <label>Restaurant Name *</label>
               <input
                 className="superadmin-form-input"
-                placeholder="e.g. Sultan's Dine"
+                placeholder="e.g. Kacchi Bhai"
                 value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                onChange={e => handleNameChange(e.target.value)}
                 required
               />
             </div>
             <div className="superadmin-form-group">
-              <label>Menu URL Slug</label>
+              <label>Menu Slug URL *</label>
               <input
                 className="superadmin-form-input"
-                placeholder="e.g. sultans-dine"
+                placeholder="e.g. kacchi-bhai"
                 value={formData.slug}
-                onChange={e => setFormData({ ...formData, slug: e.target.value })}
+                onChange={e => {
+                  setSlugTouched(true);
+                  setFormData({ ...formData, slug: e.target.value });
+                }}
+                required
               />
             </div>
           </div>
 
           <div className="superadmin-form-row">
             <div className="superadmin-form-group">
-              <label>Owner Name</label>
+              <label>Owner Name *</label>
               <input
                 className="superadmin-form-input"
                 placeholder="e.g. Md. Hossain"
@@ -465,10 +558,10 @@ function AddModal({ onClose, onAdd }) {
               />
             </div>
             <div className="superadmin-form-group">
-              <label>Owner Phone</label>
+              <label>Owner Phone *</label>
               <input
                 className="superadmin-form-input"
-                placeholder="+8801700000000"
+                placeholder="+880 1700-000000"
                 value={formData.ownerPhone}
                 onChange={e => setFormData({ ...formData, ownerPhone: e.target.value })}
                 required
@@ -515,7 +608,7 @@ function AddModal({ onClose, onAdd }) {
                 <option value="Business">Business</option>
                 <option value="Pro">Pro</option>
                 <option value="Pro Holographic">Pro Holographic</option>
-                <option value="Enterprise">Enterprise</option>
+                <option value="Enterprise 3D">Enterprise 3D</option>
               </select>
             </div>
             <div className="superadmin-form-group">
@@ -532,15 +625,53 @@ function AddModal({ onClose, onAdd }) {
             </div>
           </div>
 
-          <div className="superadmin-form-group">
-            <label>Location / City</label>
-            <input
-              className="superadmin-form-input"
-              placeholder="e.g. Dhaka, Gulshan-2"
-              value={formData.location}
-              onChange={e => setFormData({ ...formData, location: e.target.value })}
-              required
-            />
+          <div className="superadmin-form-row">
+            <div className="superadmin-form-group">
+              <label>Location / City *</label>
+              <input
+                className="superadmin-form-input"
+                placeholder="e.g. Dhaka, Banani"
+                value={formData.location}
+                onChange={e => setFormData({ ...formData, location: e.target.value })}
+                required
+              />
+            </div>
+            <div className="superadmin-form-group">
+              <label>Status</label>
+              <select
+                className="superadmin-form-select"
+                value={formData.status}
+                onChange={e => setFormData({ ...formData, status: e.target.value })}
+              >
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="superadmin-form-row">
+            <div className="superadmin-form-group">
+              <label>Login ID</label>
+              <input
+                className="superadmin-form-input"
+                placeholder="e.g. kacchibhai"
+                value={formData.login_id}
+                onChange={e => {
+                  setLoginTouched(true);
+                  setFormData({ ...formData, login_id: e.target.value });
+                }}
+              />
+            </div>
+            <div className="superadmin-form-group">
+              <label>Password</label>
+              <input
+                type="text"
+                className="superadmin-form-input"
+                placeholder="resto123"
+                value={formData.password}
+                onChange={e => setFormData({ ...formData, password: e.target.value })}
+              />
+            </div>
           </div>
 
           <div className="modal-footer">
@@ -919,11 +1050,14 @@ export default function AllRestaurantsView({
         onEdit={(r) => setEditModal(r)}
       />
 
-      <EditModal
-        restaurant={editModal}
-        onClose={() => setEditModal(null)}
-        onSave={handleSaveEdit}
-      />
+      {editModal && (
+        <EditModal
+          key={editModal.id}
+          restaurant={editModal}
+          onClose={() => setEditModal(null)}
+          onSave={handleSaveEdit}
+        />
+      )}
 
       {isAddOpen && (
         <AddModal

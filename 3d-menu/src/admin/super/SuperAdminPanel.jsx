@@ -34,6 +34,8 @@ import {
   savePlatformSettings
 } from './superAdminStore';
 import AllRestaurantsView from './AllRestaurantsView';
+import DGMSessionTrackingView from './DGMSessionTrackingView';
+import { fetchSuperAdminDGMMetrics } from '../../data/dgmSessionStore';
 import { isSameCalendarDay } from '../../data/menuStore';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -41,7 +43,7 @@ const NAV = [
   { name: 'Dashboard', icon: LayoutDashboard, routes: [] },
   { name: 'Restaurants', icon: Store, routes: ['All Restaurants', 'New Registrations', 'Restaurant Profiles'] },
   { name: 'Digital Menus', icon: BookOpen, routes: ['All Menus', 'Food Catalog', 'Categories & Templates'] },
-  { name: 'Orders & Bills', icon: ClipboardList, routes: ['Digital Bills', 'Customer Confirmations', 'Disputes'] },
+  { name: 'Orders & Bills', icon: ClipboardList, routes: ['DGM Session Tracking', 'Digital Bills', 'Customer Confirmations', 'Disputes'] },
   { name: 'Revenue & Settlement', icon: Coins, routes: ['Fee Ledger', 'Restaurant Dues', 'Settlements'] },
   { name: 'Design & Themes', icon: Paintbrush, routes: ['Theme Library', 'Festival Campaigns'] },
   { name: 'Media & 3D Library', icon: ImageIcon, routes: ['Food Photos', '3D Models', 'Media Library'] },
@@ -111,6 +113,7 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
   const [orders, setOrders] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [settlements, setSettlements] = useState([]);
+  const [dgmMetrics, setDgmMetrics] = useState({ totalDgmOrders: 0, todayOrders: 0 });
   const [catalog, setCatalog] = useState({ foods: [], categories: [] });
   const [platformSettings, setPlatformSettings] = useState(getPlatformSettings);
   const [searchQuery, setSearchQuery] = useState('');
@@ -123,13 +126,16 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
   const [newResto, setNewResto] = useState({
     name: '',
     slug: '',
+    ownerName: '',
+    ownerPhone: '+880 1',
+    type: 'fine',
+    settlementStatus: 'settled',
+    plan: 'Pro Holographic',
+    tableCount: 12,
+    location: 'Dhaka, Banani',
+    status: 'active',
     login_id: '',
-    password: '',
-    phone: '',
-    email: '',
-    address: 'Dhaka, Banani',
-    plan: 'Enterprise 3D',
-    table_count: 12
+    password: 'password123'
   });
 
   // Settlement Form State for manual recording
@@ -151,14 +157,15 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
   // Sync latest live data from Supabase on mount and poll every 6s for realtime parity
   const loadAllLiveData = async () => {
     try {
-      const [liveRestos, liveOrders, liveTickets, liveCatalog, liveSettings, liveSettlements, liveScansRes] = await Promise.all([
+      const [liveRestos, liveOrders, liveTickets, liveCatalog, liveSettings, liveSettlements, liveScansRes, liveDgm] = await Promise.all([
         fetchLiveRestaurantsFromSupabase(),
         fetchLiveOrdersFromSupabase(),
         fetchLiveTicketsFromSupabase(),
         fetchLiveCatalogFromSupabase(),
         fetchLivePlatformSettingsFromSupabase(),
         fetchLiveSettlementsFromSupabase(),
-        fetchLiveScansFromSupabase()
+        fetchLiveScansFromSupabase(),
+        fetchSuperAdminDGMMetrics()
       ]);
       if (liveRestos && liveRestos.length > 0) setRestaurants(liveRestos);
       if (liveOrders) setOrders(liveOrders);
@@ -167,6 +174,7 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
       if (liveSettings) setPlatformSettings(liveSettings);
       if (liveSettlements) setSettlements(liveSettlements);
       if (liveScansRes) setLiveScans(liveScansRes);
+      if (liveDgm) setDgmMetrics(liveDgm);
     } catch (err) {
       console.warn('Super Admin load live data caught:', err);
     } finally {
@@ -182,6 +190,9 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
       .channel('realtime_super_admin_live_feed')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
         fetchLiveOrdersFromSupabase().then(res => { if (res) setOrders(res); });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dgm_table_sessions' }, () => {
+        fetchSuperAdminDGMMetrics().then(res => { if (res) setDgmMetrics(res); });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_scans' }, () => {
         fetchLiveScansFromSupabase().then(res => { if (res) setLiveScans(res); });
@@ -283,12 +294,23 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
   const dynamicStats = useMemo(() => {
     const feePerBill = platformSettings?.feeRules?.platformFeePerBill ?? 5;
 
-    // 1. Total DGM Orders
-    const totalOrdersCount = orders.length;
+    // 1. Total DGM Orders (Non-Fine Dine confirmed orders + Fine-Dine table session orders)
+    const fineDineTotalOrders = dgmMetrics?.totalDgmOrders || 0;
+    const fineDineTodayOrders = dgmMetrics?.todayOrders || 0;
+
+    // Filter out fine-dine orders from orders table to avoid double-counting table sessions
+    const fineDineRestoIds = new Set(
+      restaurants
+        .filter(r => (r.type === 'fine' || r.restaurant_type === 'fine' || r.id === 'resto_001' || r.id === 'resto_003'))
+        .map(r => String(r.id))
+    );
+    const nonFineDineOrders = orders.filter(o => !fineDineRestoIds.has(String(o.restaurantId || o.restaurant_id || 'resto_001')));
+    const nonFineDineTodayOrders = nonFineDineOrders.filter(o => isSameCalendarDay(o.createdAt || o.created_at));
+
+    const totalOrdersCount = nonFineDineOrders.length + fineDineTotalOrders;
 
     // 2. Today DGM Orders (all restaurants) - Robust Local & UTC Date Matching
-    const todayOrders = orders.filter(o => isSameCalendarDay(o.createdAt || o.created_at));
-    const todayOrdersCount = todayOrders.length;
+    const todayOrdersCount = nonFineDineTodayOrders.length + fineDineTodayOrders;
 
     // 3. Total Suspended Restaurants
     const suspendedCount = restaurants.filter(r => r.status === 'suspended').length;
@@ -480,20 +502,32 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
     e.preventDefault();
     if (!newResto.name || !newResto.slug) return;
 
+    const autoSlug = newResto.slug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const created = {
       id: `resto_${Date.now()}`,
       name: newResto.name,
-      slug: newResto.slug.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-      login_id: newResto.login_id || newResto.slug.replace(/[^a-z0-9]/g, ''),
+      slug: autoSlug,
+      login_id: newResto.login_id || `admin_${autoSlug}`,
       password: newResto.password || 'resto123',
-      phone: newResto.phone || '+880 1700-000000',
-      email: newResto.email || `${newResto.slug}@gmail.com`,
-      address: newResto.address || 'Dhaka, Bangladesh',
-      table_count: Number(newResto.table_count) || 12,
-      status: 'active',
-      plan: newResto.plan || 'Enterprise 3D',
+      phone: newResto.ownerPhone || newResto.phone || '+880 1700-000000',
+      owner_name: newResto.ownerName || newResto.owner_name || 'Owner',
+      ownerName: newResto.ownerName || newResto.owner_name || 'Owner',
+      owner_phone: newResto.ownerPhone || newResto.phone || '+880 1700-000000',
+      ownerPhone: newResto.ownerPhone || newResto.phone || '+880 1700-000000',
+      restaurant_type: newResto.type || 'fine',
+      type: newResto.type || 'fine',
+      settlement_status: newResto.settlementStatus || 'settled',
+      settlementStatus: newResto.settlementStatus || 'settled',
+      email: newResto.email || `${autoSlug}@gmail.com`,
+      address: newResto.location || newResto.address || 'Dhaka, Bangladesh',
+      location: newResto.location || newResto.address || 'Dhaka, Bangladesh',
+      table_count: Number(newResto.tableCount || newResto.table_count) || 12,
+      tableCount: Number(newResto.tableCount || newResto.table_count) || 12,
+      status: newResto.status || 'active',
+      plan: newResto.plan || 'Pro Holographic',
       theme: 'Warm Amber Glass',
       currency: '৳',
+      avatar: newResto.name.slice(0, 2).toUpperCase(),
       logo: '/monkey_bhai_logo.png',
       features: {
         enable3D: true,
@@ -516,13 +550,16 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
     setNewResto({
       name: '',
       slug: '',
+      ownerName: '',
+      ownerPhone: '+880 1',
+      type: 'fine',
+      settlementStatus: 'settled',
+      plan: 'Pro Holographic',
+      tableCount: 12,
+      location: 'Dhaka, Banani',
+      status: 'active',
       login_id: '',
-      password: '',
-      phone: '',
-      email: '',
-      address: 'Dhaka, Banani',
-      plan: 'Enterprise 3D',
-      table_count: 12
+      password: 'password123'
     });
     showToast(`Restaurant "${created.name}" created and synced to Supabase!`);
   };
@@ -721,6 +758,16 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
                 catalog={catalog}
                 onBack={() => setCurrent('Dashboard')}
                 onOpenAddFood={() => setFoodModal(true)}
+              />
+            ) : current === 'DGM Session Tracking' ? (
+              <DGMSessionTrackingView
+                restaurants={restaurants}
+                onBack={() => setCurrent('Dashboard')}
+                onOpenRestaurantPanel={(r) => {
+                  if (onGoToRestaurantPortal) {
+                    onGoToRestaurantPortal(r);
+                  }
+                }}
               />
             ) : current === 'Digital Bills' || current === 'Orders & Bills' || current === 'Customer Confirmations' ? (
               <DigitalBillsView
@@ -940,6 +987,8 @@ function Header({ current, onMenu, onNavigate, onLogout, onRefresh, isRefreshing
           <p>
             {current === 'Dashboard'
               ? 'Real-time multi-tenant dashboard connected to Supabase PostgreSQL database'
+              : current === 'DGM Session Tracking'
+              ? 'Track table sessions, DGM orders, confirmations, and charges for Fine Dine restaurants.'
               : 'Digital Food Menu platform operations'}
           </p>
         </div>
@@ -2925,115 +2974,193 @@ function AddFoodModal({ onClose, onOpenBuilder }) {
 }
 
 function AddRestaurantModal({ newResto, setNewResto, onSubmit, onClose }) {
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [loginTouched, setLoginTouched] = useState(false);
+
+  const handleNameChange = (val) => {
+    const next = { ...newResto, name: val };
+    const autoSlug = val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    if (!slugTouched) {
+      next.slug = autoSlug;
+    }
+    if (!loginTouched) {
+      next.login_id = autoSlug.replace(/-/g, '');
+    }
+    setNewResto(next);
+  };
+
   return (
-    <div className="modal-screen" onMouseDown={onClose}>
-      <div className="modal-card" onMouseDown={e => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose}>
-          <X size={20} />
-        </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-          <Store size={26} color="#f45100" />
-          <h2 style={{ margin: 0, fontSize: 18 }}>Register New Restaurant</h2>
-        </div>
-
-        <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>Restaurant Name *</label>
-            <input
-              type="text"
-              required
-              value={newResto.name}
-              onChange={e => setNewResto({ ...newResto, name: e.target.value })}
-              placeholder="e.g. Kacchi Bhai"
-              style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 13 }}
-            />
+    <div className="superadmin-modal-backdrop" onClick={onClose}>
+      <div className="superadmin-modal-card" onClick={e => e.stopPropagation()}>
+        <div className="modal-heading">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Store size={22} color="#f97316" />
+            <h2>Register New Restaurant</h2>
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>Menu Slug URL *</label>
+          <button className="modal-close" onClick={onClose} aria-label="Close">
+            <X size={20} />
+          </button>
+        </div>
+        <p className="modal-sub">Register a new restaurant tenant into Supabase PostgreSQL</p>
+        <form onSubmit={onSubmit}>
+          <div className="superadmin-form-row">
+            <div className="superadmin-form-group">
+              <label>Restaurant Name *</label>
               <input
-                type="text"
+                className="superadmin-form-input"
+                placeholder="e.g. Kacchi Bhai"
+                value={newResto.name || ''}
+                onChange={e => handleNameChange(e.target.value)}
                 required
-                value={newResto.slug}
-                onChange={e => setNewResto({ ...newResto, slug: e.target.value })}
-                placeholder="e.g. kacchi-bhai"
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 13 }}
               />
             </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>Plan</label>
+            <div className="superadmin-form-group">
+              <label>Menu Slug URL *</label>
+              <input
+                className="superadmin-form-input"
+                placeholder="e.g. kacchi-bhai"
+                value={newResto.slug || ''}
+                onChange={e => {
+                  setSlugTouched(true);
+                  setNewResto({ ...newResto, slug: e.target.value });
+                }}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="superadmin-form-row">
+            <div className="superadmin-form-group">
+              <label>Owner Name *</label>
+              <input
+                className="superadmin-form-input"
+                placeholder="e.g. Md. Hossain"
+                value={newResto.ownerName || ''}
+                onChange={e => setNewResto({ ...newResto, ownerName: e.target.value })}
+                required
+              />
+            </div>
+            <div className="superadmin-form-group">
+              <label>Owner Phone *</label>
+              <input
+                className="superadmin-form-input"
+                placeholder="+880 1700-000000"
+                value={newResto.ownerPhone || ''}
+                onChange={e => setNewResto({ ...newResto, ownerPhone: e.target.value })}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="superadmin-form-row">
+            <div className="superadmin-form-group">
+              <label>Restaurant Type</label>
               <select
-                value={newResto.plan}
-                onChange={e => setNewResto({ ...newResto, plan: e.target.value })}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 13 }}
+                className="superadmin-form-select"
+                value={newResto.type || 'fine'}
+                onChange={e => setNewResto({ ...newResto, type: e.target.value })}
               >
-                <option value="Enterprise 3D">Enterprise 3D</option>
-                <option value="Pro Holographic">Pro Holographic</option>
-                <option value="Standard Digital">Standard Digital</option>
+                <option value="fine">Fine-Dine</option>
+                <option value="non-fine">Non-Fine Dine</option>
+              </select>
+            </div>
+            <div className="superadmin-form-group">
+              <label>Settlement Status</label>
+              <select
+                className="superadmin-form-select"
+                value={newResto.settlementStatus || 'settled'}
+                onChange={e => setNewResto({ ...newResto, settlementStatus: e.target.value })}
+              >
+                <option value="settled">Settled</option>
+                <option value="pending">Pending</option>
+                <option value="partial">Partial</option>
+                <option value="due">Due</option>
               </select>
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>Login ID</label>
+          <div className="superadmin-form-row">
+            <div className="superadmin-form-group">
+              <label>Subscription Plan</label>
+              <select
+                className="superadmin-form-select"
+                value={newResto.plan || 'Pro Holographic'}
+                onChange={e => setNewResto({ ...newResto, plan: e.target.value })}
+              >
+                <option value="Starter">Starter</option>
+                <option value="Business">Business</option>
+                <option value="Pro">Pro</option>
+                <option value="Pro Holographic">Pro Holographic</option>
+                <option value="Enterprise 3D">Enterprise 3D</option>
+              </select>
+            </div>
+            <div className="superadmin-form-group">
+              <label>Table Count</label>
               <input
-                type="text"
-                value={newResto.login_id}
-                onChange={e => setNewResto({ ...newResto, login_id: e.target.value })}
+                type="number"
+                min="1"
+                max="500"
+                className="superadmin-form-input"
+                value={newResto.tableCount || 12}
+                onChange={e => setNewResto({ ...newResto, tableCount: Number(e.target.value) })}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="superadmin-form-row">
+            <div className="superadmin-form-group">
+              <label>Location / City *</label>
+              <input
+                className="superadmin-form-input"
+                placeholder="e.g. Dhaka, Banani"
+                value={newResto.location || ''}
+                onChange={e => setNewResto({ ...newResto, location: e.target.value })}
+                required
+              />
+            </div>
+            <div className="superadmin-form-group">
+              <label>Status</label>
+              <select
+                className="superadmin-form-select"
+                value={newResto.status || 'active'}
+                onChange={e => setNewResto({ ...newResto, status: e.target.value })}
+              >
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="superadmin-form-row">
+            <div className="superadmin-form-group">
+              <label>Login ID</label>
+              <input
+                className="superadmin-form-input"
                 placeholder="e.g. kacchibhai"
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 13 }}
+                value={newResto.login_id || ''}
+                onChange={e => {
+                  setLoginTouched(true);
+                  setNewResto({ ...newResto, login_id: e.target.value });
+                }}
               />
             </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>Password</label>
+            <div className="superadmin-form-group">
+              <label>Password</label>
               <input
                 type="text"
-                value={newResto.password}
-                onChange={e => setNewResto({ ...newResto, password: e.target.value })}
+                className="superadmin-form-input"
                 placeholder="resto123"
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 13 }}
+                value={newResto.password || ''}
+                onChange={e => setNewResto({ ...newResto, password: e.target.value })}
               />
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>Phone</label>
-              <input
-                type="text"
-                value={newResto.phone}
-                onChange={e => setNewResto({ ...newResto, phone: e.target.value })}
-                placeholder="+880 1711-000000"
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 13 }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>Location</label>
-              <input
-                type="text"
-                value={newResto.address}
-                onChange={e => setNewResto({ ...newResto, address: e.target.value })}
-                placeholder="Dhaka, Banani"
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 13 }}
-              />
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid var(--border)', background: 'none' }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              style={{ padding: '8px 18px', borderRadius: 6, border: 0, background: '#f45100', color: '#fff', fontWeight: 700 }}
-            >
-              Create & Sync
+          <div className="modal-footer">
+            <button type="button" className="secondary-btn" onClick={onClose}>Cancel</button>
+            <button type="submit" className="orange-btn">
+              + Register Restaurant
             </button>
           </div>
         </form>
