@@ -2244,8 +2244,8 @@ export default function App() {
     setIsSelectedListOpen(true);
 
     const toastText = isItemAlreadyInList || wasUpdated
-      ? `"${activeFood.title}" updated in your list!`
-      : `"${activeFood.title}" added to your selected items!`;
+      ? `"${activeFood.title}" updated in your order list!`
+      : `"${activeFood.title}" added to your order list!`;
     setAddToListToast(toastText);
     setTimeout(() => setAddToListToast(null), 3000);
   };
@@ -3304,7 +3304,7 @@ export default function App() {
                 ? 'cta-order-btn border-white/20 text-white shadow-[0_8px_22px_rgba(234,88,12,0.45)]'
                 : 'hologram-glass border-white/10 text-white/80 hover:text-white hover:border-white/20'
             }`}
-            aria-label="View Selected Items"
+            aria-label="View your Order List"
           >
             {/* True Centered Content: Checklist Icon + Title & Counter */}
             <div className="flex items-center justify-center gap-2 sm:gap-2.5 min-w-0">
@@ -3319,7 +3319,7 @@ export default function App() {
               </div>
 
               <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wider truncate text-white">
-                VIEW SELECTED ITEMS ({selectedListCount})
+                VIEW YOUR ORDER LIST ({selectedListCount})
               </span>
             </div>
 
@@ -3610,7 +3610,7 @@ export default function App() {
                     ? 'bg-white/20 text-slate-400 cursor-not-allowed border border-white/10'
                     : 'bg-[#F59E0B] hover:bg-[#d97706] active:scale-95 text-black shadow-[0_0_20px_rgba(245,158,11,0.5)]'
                 }`}
-                aria-label={isItemAlreadyInList ? 'Update Your List' : 'Add to List'}
+                aria-label={isItemAlreadyInList ? 'Update Order List' : 'Add To Order List'}
               >
                 {/* Circular Action Icon */}
                 <div className="w-5 h-5 rounded-full bg-black/20 flex items-center justify-center shrink-0">
@@ -3621,7 +3621,7 @@ export default function App() {
                   )}
                 </div>
                 <span className="tracking-wider uppercase font-black">
-                  {isItemAlreadyInList ? 'UPDATE YOUR LIST' : 'ADD TO LIST'}
+                  {isItemAlreadyInList ? 'UPDATE ORDER LIST' : 'ADD TO ORDER LIST'}
                 </span>
               </button>
             </div>
@@ -3747,8 +3747,8 @@ export default function App() {
                   </svg>
                 </div>
                 <div>
-                  <h2 className="text-white font-black text-lg sm:text-xl tracking-tight leading-tight">
-                    Selected Food Items
+                  <h2 className="text-white font-black text-lg sm:text-xl tracking-tight leading-tight uppercase">
+                    YOUR ORDER LIST
                   </h2>
                   <p className="text-[11px] text-slate-400 font-medium">
                     {selectedList.length} dish{selectedList.length !== 1 ? 'es' : ''} in your list
@@ -3777,7 +3777,7 @@ export default function App() {
                   </div>
                   <p className="text-white font-bold text-sm">No items selected yet</p>
                   <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                    Browse our digital menu and tap "+ ADD TO LIST" on any food item to add it here.
+                    Browse our digital menu and tap "+ ADD TO ORDER LIST" on any food item to add it here.
                   </p>
                   <button
                     onClick={handleDismissSelectedListWithoutPopup}
