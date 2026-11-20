@@ -4345,7 +4345,7 @@ export default function App() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xl mx-auto glass-sheet rounded-t-[32px] sm:rounded-[36px] px-4 sm:px-6 pt-3.5 pb-4 sm:pt-5 sm:pb-6 h-[88vh] sm:h-[86vh] max-h-[92vh] flex flex-col overflow-hidden relative border-t sm:border border-[#F59E0B]/30 shadow-[0_0_60px_rgba(0,0,0,0.85)] animate-[slideUp_0.3s_cubic-bezier(0.16,1,0.3,1)]"
+            className="w-full max-w-xl mx-auto glass-sheet rounded-t-[32px] sm:rounded-[36px] px-4 sm:px-6 pt-3.5 pb-4 sm:pt-5 sm:pb-6 h-[calc(88vh+40px)] sm:h-[calc(86vh+40px)] max-h-[96vh] flex flex-col overflow-hidden relative border-t sm:border border-[#F59E0B]/30 shadow-[0_0_60px_rgba(0,0,0,0.85)] animate-[slideUp_0.3s_cubic-bezier(0.16,1,0.3,1)]"
           >
             {/* Top Sheet Drag Handle on mobile */}
             <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-2 shrink-0 sm:hidden" />
