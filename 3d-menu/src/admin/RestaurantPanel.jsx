@@ -2549,96 +2549,66 @@ export default function RestaurantPanel({
                       className={`rounded-2xl border overflow-hidden flex flex-col justify-between ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-300 shadow-sm'
                         }`}
                     >
-                      {/* Realistic Banner Card Inside - Exact Match with Customer 3D Menu */}
-                      <div className="flex-1 flex flex-col justify-between overflow-hidden bg-[#140D07] h-[280px]">
-                        {/* Zone A: Top Banner (Fixed 150px height as requested) */}
-                        <div className="p-3.5 sm:p-4 relative flex items-center justify-between h-[150px] shrink-0 overflow-hidden select-none bg-[#140D07]">
-                          {slide.bgImage ? (
-                            <>
-                              <img
-                                src={slide.bgImage}
-                                alt={slide.title}
-                                className="absolute inset-0 w-full h-full object-cover object-center"
-                              />
-                              <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/75 to-transparent pointer-events-none" />
-                            </>
-                          ) : (
-                            <>
-                              <div className="absolute inset-0 bg-gradient-to-br from-[#231409] via-[#170c04] to-[#0d0703]" />
-                              <div className="absolute -right-8 -bottom-8 w-44 h-44 rounded-full bg-[#F59E0B]/15 blur-3xl pointer-events-none" />
-                              <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/50 to-transparent pointer-events-none" />
-                            </>
-                          )}
+                      {/* Realistic Banner Card Inside - Exact Match with Image 1 (200px) */}
+                      <div className="flex-1 relative overflow-hidden bg-[#140D07] h-[200px]">
+                        {/* Background */}
+                        {slide.bgImage ? (
+                          <>
+                            <img
+                              src={slide.bgImage}
+                              alt={slide.title}
+                              className="absolute inset-0 w-full h-full object-cover object-center"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/80 to-transparent pointer-events-none z-10" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/35 pointer-events-none z-10" />
+                          </>
+                        ) : (
+                          <>
+                            <div className="absolute inset-0 bg-gradient-to-br from-[#231409] via-[#170c04] to-[#0d0703]" />
+                            <div className="absolute -right-8 -bottom-8 w-44 h-44 rounded-full bg-[#F59E0B]/15 blur-3xl pointer-events-none" />
+                            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/60 to-transparent pointer-events-none z-10" />
+                          </>
+                        )}
 
-                          <div className="z-10 flex-1 pr-3">
-                            <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B]/50 bg-black/40 text-[#F59E0B] text-[10px] font-black uppercase tracking-wider mb-2 w-fit">
-                              {slide.badge || 'WEEKEND SPECIAL'}
+                        {/* Floating Food Preview Image on Right */}
+                        {(() => {
+                          const linkedFood = foods.find(f => String(f.id) === String(slide.foodId || slide.id));
+                          const displaySlideImage = linkedFood?.image || slide.image;
+                          if (!displaySlideImage) return null;
+                          return (
+                            <div className="absolute right-1 sm:right-3 top-1/2 -translate-y-1/2 w-40 h-40 sm:w-44 sm:h-44 flex items-center justify-center z-15 pointer-events-none">
+                              <img
+                                src={displaySlideImage}
+                                alt={slide.title}
+                                className={slide.isPng !== false ? "w-full h-full object-contain drop-shadow-[0_14px_28px_rgba(0,0,0,0.85)] scale-110" : "w-32 h-32 sm:w-36 sm:h-36 object-cover rounded-full border border-white/20 shadow-2xl"}
+                              />
                             </div>
-                            <h4 className="text-white font-extrabold text-base sm:text-lg tracking-tight leading-snug line-clamp-2 max-w-[200px]">
+                          );
+                        })()}
+
+                        {/* Left Content (Z-index 20) */}
+                        <div className="relative z-20 h-full p-4 flex flex-col justify-between max-w-[62%]">
+                          <div className="space-y-1.5">
+                            <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B] bg-black/40 text-[#F59E0B] text-[10px] font-black uppercase tracking-wider w-fit">
+                              {slide.badge || 'DHAMAKA OFFER'}
+                            </div>
+                            <h4 className="text-white font-extrabold text-base sm:text-lg tracking-tight leading-snug line-clamp-2">
                               {slide.title}
                             </h4>
                           </div>
 
-                          {/* Floating Food Preview Image with Drop Shadow */}
-                          {(() => {
-                            const linkedFood = foods.find(f => String(f.id) === String(slide.foodId || slide.id));
-                            const displaySlideImage = linkedFood?.image || slide.image;
-                            if (!displaySlideImage) return null;
-                            return (
-                              <div className="z-10 w-28 h-28 sm:w-32 sm:h-32 shrink-0 flex items-center justify-center relative">
-                                <img
-                                  src={displaySlideImage}
-                                  alt={slide.title}
-                                  className={slide.isPng !== false ? "w-full h-full object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.85)] scale-110" : "w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-full border border-white/20 shadow-2xl"}
-                                />
-                              </div>
-                            );
-                          })()}
-                        </div>
-
-                        {/* Zone B: Bottom Included Items (Fixed 130px height as requested) */}
-                        <div className="h-[130px] shrink-0 flex flex-col justify-between bg-[#121316] border-t border-white/5 p-3 sm:p-3.5 z-10 relative overflow-hidden">
-                          <div className="space-y-1">
-                            {slide.includedType === 'description' && slide.subtitle ? (
-                              <p className="text-slate-300 text-xs leading-relaxed line-clamp-3">
-                                {slide.subtitle}
-                              </p>
-                            ) : (
-                              <div>
-                                <p className="text-[11px] font-semibold text-slate-300 mb-1">
-                                  {slide.includedHeading || 'Combo includes'}
-                                </p>
-                                <div className="space-y-0.5 sm:space-y-1">
-                                  {(() => {
-                                    let items = [];
-                                    if (Array.isArray(slide.includedItems) && slide.includedItems.length > 0) {
-                                      items = slide.includedItems.filter(Boolean);
-                                    } else if (slide.subtitle) {
-                                      items = slide.subtitle.split(/\n|\+/).map(s => s.trim().replace(/^[-•*]\s*/, '')).filter(Boolean);
-                                    }
-                                    if (items.length === 0) {
-                                      items = ['Double smash burger', 'Crispy fries', 'Coke • 350 ml', 'Dip sauce • 30 ml'];
-                                    }
-                                    return items.slice(0, 4).map((item, idx) => (
-                                      <div key={idx} className="flex items-center gap-2 text-xs font-medium text-slate-200">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] shrink-0 shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
-                                        <span className="line-clamp-1">{item}</span>
-                                      </div>
-                                    ));
-                                  })()}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex items-center justify-between pt-1 mt-auto">
-                            <span className="text-[#F59E0B] font-black text-xl tracking-tight tabular-nums">
+                          <div className="pt-2 mt-auto">
+                            <span className="text-[#F59E0B] font-black text-2xl tracking-tight tabular-nums">
                               {currency}{Number(slide.price || 0).toFixed(2)}
                             </span>
-                            <span className="text-xs text-slate-400 font-medium">
-                              Explore combo
-                            </span>
                           </div>
+                        </div>
+
+                        {/* Bottom-right Explore text */}
+                        <div className="absolute right-3.5 bottom-3.5 z-20">
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#F59E0B]/20 border border-[#F59E0B]/40 text-[#F59E0B] text-xs font-bold">
+                            Explore combo →
+                          </span>
                         </div>
                       </div>
                       {/* Controls Footer */}

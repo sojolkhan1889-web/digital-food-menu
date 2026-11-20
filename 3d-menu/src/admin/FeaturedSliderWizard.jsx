@@ -623,86 +623,65 @@ export default function FeaturedSliderWizard({
                       <span className="text-zinc-500 font-bold text-[10px]">01 / 01</span>
                     </div>
 
-                    {/* Exact 2-Zone Card matching Image 2 */}
-                    <div className="relative overflow-hidden rounded-2xl border border-[#F59E0B]/35 shadow-xl bg-[#140D07] h-[280px] flex flex-col justify-between">
-                      {/* ZONE A: Top Banner Zone (Fixed 150px height as requested) */}
-                      <div className="relative p-3.5 h-[150px] shrink-0 flex items-center justify-between overflow-hidden">
-                        {/* Background */}
-                        {bgImage ? (
-                          <>
-                            <img
-                              src={bgImage}
-                              alt={title || 'Featured'}
-                              className="absolute inset-0 w-full h-full object-cover object-center"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/75 to-transparent pointer-events-none" />
-                          </>
-                        ) : (
-                          <>
-                            <div className="absolute inset-0 bg-gradient-to-br from-[#231409] via-[#170c04] to-[#0d0703]" />
-                            <div className="absolute -right-8 -bottom-8 w-44 h-44 rounded-full bg-[#F59E0B]/15 blur-3xl pointer-events-none" />
-                            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/50 to-transparent pointer-events-none" />
-                          </>
-                        )}
+                    {/* Exact Card matching Image 1: 200px unified layout */}
+                    <div className="relative overflow-hidden rounded-2xl border border-[#F59E0B]/50 shadow-xl bg-[#140D07] h-[200px]">
+                      {/* Background */}
+                      {bgImage ? (
+                        <>
+                          <img
+                            src={bgImage}
+                            alt={title || 'Featured'}
+                            className="absolute inset-0 w-full h-full object-cover object-center"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/80 to-transparent pointer-events-none z-10" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/35 pointer-events-none z-10" />
+                        </>
+                      ) : (
+                        <>
+                          <div className="absolute inset-0 bg-gradient-to-br from-[#231409] via-[#170c04] to-[#0d0703]" />
+                          <div className="absolute -right-8 -bottom-8 w-44 h-44 rounded-full bg-[#F59E0B]/15 blur-3xl pointer-events-none" />
+                          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/60 to-transparent pointer-events-none z-10" />
+                        </>
+                      )}
 
-                        {/* Top Left info */}
-                        <div className="z-10 flex-1 pr-2">
-                          <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B]/50 bg-black/40 text-[#F59E0B] text-[10px] font-black uppercase tracking-wider mb-2 w-fit">
-                            {badgeText || 'WEEKEND SPECIAL'}
+                      {/* Food cutout on right side */}
+                      <div className="absolute right-1 top-1/2 -translate-y-1/2 w-40 h-40 flex items-center justify-center z-15 pointer-events-none">
+                        {foodImage ? (
+                          <img
+                            src={foodImage}
+                            alt={title}
+                            className="w-full h-full object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.85)] scale-110"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 rounded-full bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400">
+                            <Utensils className="w-6 h-6" />
                           </div>
-                          <h4 className="text-white font-black text-base sm:text-lg tracking-tight leading-snug line-clamp-2 max-w-[170px]">
+                        )}
+                      </div>
+
+                      {/* Left Content: Badge, Title & Price */}
+                      <div className="relative z-20 h-full p-4 flex flex-col justify-between max-w-[62%]">
+                        <div className="space-y-1.5">
+                          <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B] bg-black/40 text-[#F59E0B] text-[10px] font-black uppercase tracking-wider w-fit">
+                            {badgeText || 'DHAMAKA OFFER'}
+                          </div>
+                          <h4 className="text-white font-black text-lg tracking-tight leading-snug line-clamp-2">
                             {title || 'Double Smash Burger Combo'}
                           </h4>
                         </div>
 
-                        {/* Top Right food cutout */}
-                        <div className="z-10 w-28 h-28 shrink-0 flex items-center justify-center">
-                          {foodImage ? (
-                            <img
-                              src={foodImage}
-                              alt={title}
-                              className="w-full h-full object-contain drop-shadow-[0_12px_20px_rgba(0,0,0,0.85)] scale-110"
-                            />
-                          ) : (
-                            <div className="w-16 h-16 rounded-full bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400">
-                              <Utensils className="w-6 h-6" />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* ZONE B: Bottom Included Items Zone (Fixed 130px height as requested) */}
-                      <div className="h-[130px] shrink-0 flex flex-col justify-between bg-[#121316] border-t border-white/5 p-3 z-10 relative overflow-hidden">
-                        <div className="space-y-1">
-                          {includedType === 'description' && subtitle ? (
-                            <p className="text-slate-300 text-xs leading-relaxed line-clamp-3">
-                              {subtitle}
-                            </p>
-                          ) : (
-                            <div>
-                              <p className="text-[11px] font-semibold text-slate-300 mb-1">
-                                {includedHeading || 'Combo includes'}
-                              </p>
-                              <div className="space-y-0.5">
-                                {displayItems.slice(0, MAX_INCLUDED_ITEMS).map((item, idx) => (
-                                  <div key={idx} className="flex items-center gap-2 text-xs font-medium text-slate-200">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] shrink-0 shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
-                                    <span className="line-clamp-1">{item}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex items-center justify-between pt-1 mt-auto">
+                        <div className="pt-2 mt-auto">
                           <span className="text-[#F59E0B] font-black text-2xl tracking-tight tabular-nums">
                             {currency}{customPrice || '380'}
                           </span>
-                          <div className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-[#F59E0B] text-black font-black text-xs shadow-md">
-                            <span>Explore combo</span>
-                            <ArrowRight className="w-3.5 h-3.5 stroke-[2.8]" />
-                          </div>
+                        </div>
+                      </div>
+
+                      {/* Explore combo button on bottom right */}
+                      <div className="absolute right-3.5 bottom-3.5 z-20">
+                        <div className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-[#F59E0B] text-black font-black text-xs shadow-md">
+                          <span>Explore combo</span>
+                          <ArrowRight className="w-3.5 h-3.5 stroke-[2.8]" />
                         </div>
                       </div>
                     </div>
@@ -748,76 +727,76 @@ export default function FeaturedSliderWizard({
                       Two smashed beef patties with caramelized onions, cheddar cheese and signature smash sauce.
                     </p>
 
-                    {/* The 2-Zone Card inside Food Details Modal (Notice: NO Explore combo button!) */}
-                    <div className="relative overflow-hidden rounded-2xl border border-[#F59E0B]/35 shadow-xl bg-[#140D07] h-[280px] flex flex-col justify-between">
-                      {/* ZONE A: Top Banner Zone (Fixed 150px height as requested) */}
-                      <div className="relative p-3.5 h-[150px] shrink-0 flex items-center justify-between overflow-hidden">
-                        {bgImage ? (
-                          <>
-                            <img
-                              src={bgImage}
-                              alt={title || 'Featured'}
-                              className="absolute inset-0 w-full h-full object-cover object-center"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/75 to-transparent pointer-events-none" />
-                          </>
+                    {/* The Card inside Food Details Modal (Exact match with Image 2) */}
+                    <div className="relative overflow-hidden rounded-2xl border border-[#F59E0B]/50 shadow-xl bg-[#140D07] min-h-[290px]">
+                      {/* Background */}
+                      {bgImage ? (
+                        <>
+                          <img
+                            src={bgImage}
+                            alt={title || 'Featured'}
+                            className="absolute inset-0 w-full h-full object-cover object-center"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/80 to-transparent pointer-events-none z-10" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/40 pointer-events-none z-10" />
+                        </>
+                      ) : (
+                        <>
+                          <div className="absolute inset-0 bg-gradient-to-br from-[#231409] via-[#170c04] to-[#0d0703]" />
+                          <div className="absolute -right-8 -bottom-8 w-44 h-44 rounded-full bg-[#F59E0B]/15 blur-3xl pointer-events-none" />
+                          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/60 to-transparent pointer-events-none z-10" />
+                        </>
+                      )}
+
+                      {/* Food cutout on bottom right */}
+                      <div className="absolute right-0 bottom-0 w-44 h-40 z-15 flex items-end justify-end pointer-events-none pr-1 pb-1">
+                        {foodImage ? (
+                          <img
+                            src={foodImage}
+                            alt={title}
+                            className="w-full h-full object-contain drop-shadow-[0_16px_32px_rgba(0,0,0,0.9)] scale-105"
+                          />
                         ) : (
-                          <>
-                            <div className="absolute inset-0 bg-gradient-to-br from-[#231409] via-[#170c04] to-[#0d0703]" />
-                            <div className="absolute -right-8 -bottom-8 w-44 h-44 rounded-full bg-[#F59E0B]/15 blur-3xl pointer-events-none" />
-                            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/50 to-transparent pointer-events-none" />
-                          </>
-                        )}
-
-                        <div className="z-10 flex-1 pr-2">
-                          <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B]/50 bg-black/40 text-[#F59E0B] text-[9px] font-black uppercase tracking-wider mb-2 w-fit">
-                            {badgeText || 'WEEKEND SPECIAL'}
+                          <div className="w-14 h-14 rounded-full bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 m-2">
+                            <Utensils className="w-5 h-5" />
                           </div>
-                          <h4 className="text-white font-black text-sm tracking-tight leading-snug line-clamp-2 max-w-[150px]">
-                            {title || 'Double Smash Burger Combo'}
-                          </h4>
-                        </div>
-
-                        <div className="z-10 w-24 h-24 shrink-0 flex items-center justify-center">
-                          {foodImage ? (
-                            <img
-                              src={foodImage}
-                              alt={title}
-                              className="w-full h-full object-contain drop-shadow-[0_12px_20px_rgba(0,0,0,0.85)] scale-110"
-                            />
-                          ) : (
-                            <div className="w-14 h-14 rounded-full bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400">
-                              <Utensils className="w-5 h-5" />
-                            </div>
-                          )}
-                        </div>
+                        )}
                       </div>
 
-                      {/* ZONE B: Bottom Included Items Zone (Fixed 130px height as requested) */}
-                      <div className="h-[130px] shrink-0 flex flex-col justify-between bg-[#121316] border-t border-white/5 p-3 z-10 relative overflow-hidden">
-                        <div className="space-y-1">
-                          {includedType === 'description' && subtitle ? (
-                            <p className="text-slate-300 text-[11px] leading-relaxed line-clamp-3">
-                              {subtitle}
-                            </p>
-                          ) : (
-                            <div>
-                              <p className="text-[10px] font-semibold text-slate-300 mb-1">
-                                {includedHeading || 'Combo includes'}
+                      {/* Left Content (Z-index 20) */}
+                      <div className="relative z-20 p-3.5 flex flex-col justify-between h-full min-h-[290px] max-w-[65%]">
+                        <div className="space-y-1.5">
+                          <div className="inline-flex items-center px-2 py-0.5 rounded-full border border-[#F59E0B] bg-black/40 text-[#F59E0B] text-[9px] font-black uppercase tracking-wider w-fit">
+                            {badgeText || 'DHAMAKA OFFER'}
+                          </div>
+                          <h4 className="text-white font-black text-base tracking-tight leading-snug">
+                            {title || 'Double Smash Burger Combo'}
+                          </h4>
+
+                          <div className="pt-1 space-y-1">
+                            {includedType === 'description' && subtitle ? (
+                              <p className="text-slate-300 text-[11px] leading-relaxed line-clamp-3">
+                                {subtitle}
                               </p>
-                              <div className="space-y-0.5">
-                                {displayItems.slice(0, MAX_INCLUDED_ITEMS).map((item, idx) => (
-                                  <div key={idx} className="flex items-center gap-1.5 text-[11px] font-medium text-slate-200">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] shrink-0 shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
-                                    <span className="line-clamp-1">{item}</span>
-                                  </div>
-                                ))}
+                            ) : (
+                              <div>
+                                <p className="text-[10px] font-bold text-white mb-1">
+                                  {includedHeading || 'Combo includes'}
+                                </p>
+                                <div className="space-y-0.5">
+                                  {displayItems.slice(0, MAX_INCLUDED_ITEMS).map((item, idx) => (
+                                    <div key={idx} className="flex items-center gap-1.5 text-[11px] font-medium text-slate-200">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] shrink-0 shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
+                                      <span className="line-clamp-1">{item}</span>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
 
-                        <div className="pt-1 mt-auto">
+                        <div className="pt-2 mt-auto">
                           <span className="text-[#F59E0B] font-black text-xl tracking-tight tabular-nums">
                             {currency}{customPrice || '380'}
                           </span>
