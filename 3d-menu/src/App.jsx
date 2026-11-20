@@ -271,7 +271,7 @@ export default function App() {
   const [categoriesList, setCategoriesList] = useState(getStoredCategories);
   const [subcategoriesList, setSubcategoriesList] = useState(getStoredSubcategories);
   const [featuredSliders, setFeaturedSliders] = useState(getStoredFeaturedSliders);
-  const [restaurantProfile, setRestaurantProfile] = useState(getRestaurantProfile);
+  const [restaurantProfile, setRestaurantProfile] = useState(() => getRestaurantProfile(currentRestoId));
   const [ticketsList, setTicketsList] = useState(getStoredTickets);
   const [chatMessagesList, setChatMessagesList] = useState(getStoredChatMessages);
   const [superAdminConfig, setSuperAdminConfig] = useState(getSuperAdminConfig);
@@ -548,16 +548,18 @@ export default function App() {
 
         if (data.remoteSettings) {
           setRestaurantProfile(data.remoteSettings);
-          saveStoredRestaurantProfile(data.remoteSettings);
+          saveStoredRestaurantProfile(data.remoteSettings, restoId);
         } else if (targetMeta) {
+          const cachedProfile = getRestaurantProfile(restoId);
           setRestaurantProfile(prev => ({
             ...prev,
+            ...cachedProfile,
             restaurant_id: restoId,
             id: `set_${restoId}`,
-            name: targetMeta.name || prev.name,
-            phone: targetMeta.phone || targetMeta.owner_phone || prev.phone,
-            address: targetMeta.address || targetMeta.location || prev.address,
-            currency: targetMeta.currency || prev.currency || '৳'
+            name: targetMeta.name || cachedProfile.name || prev.name,
+            phone: targetMeta.phone || targetMeta.owner_phone || cachedProfile.phone || prev.phone,
+            address: targetMeta.address || targetMeta.location || cachedProfile.address || prev.address,
+            currency: targetMeta.currency || cachedProfile.currency || prev.currency || '৳'
           }));
         }
 
@@ -773,7 +775,7 @@ export default function App() {
       if (isMounted && liveSettings) {
         setRestaurantProfile(prev => {
           const merged = { ...prev, ...liveSettings };
-          if (currentRestoId === 'resto_001') saveStoredRestaurantProfile(merged);
+          saveStoredRestaurantProfile(merged, currentRestoId);
           return merged;
         });
       }
@@ -1129,10 +1131,22 @@ export default function App() {
   };
 
   const handleUpdateSubcategory = (updatedSub) => {
+    const existing = subcategoriesList.find(s => s.id === updatedSub.id);
+    const oldName = existing?.name;
+    const newName = updatedSub.name?.trim();
+
     const updated = subcategoriesList.map(s => s.id === updatedSub.id ? updatedSub : s);
     setSubcategoriesList(updated);
     if (currentRestoId === 'resto_001') saveStoredSubcategories(updated);
     syncSubcategoryToSupabase(updatedSub, currentRestoId);
+
+    // If subcategory name changed, update any foods assigned to this subcategory
+    if (oldName && newName && oldName !== newName) {
+      const updatedFoods = foodsList.map(f => f.subcategory === oldName ? { ...f, subcategory: newName } : f);
+      setFoodsList(updatedFoods);
+      if (currentRestoId === 'resto_001') saveStoredFoods(updatedFoods);
+      updatedFoods.filter(f => f.subcategory === newName).forEach(f => syncFoodToSupabase(f, currentRestoId));
+    }
   };
 
   const handleDeleteCategory = (catName) => {
@@ -1199,10 +1213,24 @@ export default function App() {
     if (currentRestoId === 'resto_001') saveStoredFeaturedSliders(updated);
     await syncSliderToSupabase(newSlide, currentRestoId);
 
-    // If published and active, broadcast push notification to all followers
-    if (newSlide.isActive !== false) {
+    // If editing existing slider and autoNotification is turned ON and slider is active, broadcast push notification
+    if (exists && newSlide.autoNotification && newSlide.isActive !== false) {
       await handleBroadcastSliderNotification(newSlide);
     }
+    // Note: Creating a new featured slider does NOT automatically send notifications!
+  };
+
+  const handleToggleAutoNotification = (slideId) => {
+    const updated = featuredSliders.map(s => {
+      if (s.id === slideId) {
+        const toggled = { ...s, autoNotification: !s.autoNotification };
+        syncSliderToSupabase(toggled, currentRestoId);
+        return toggled;
+      }
+      return s;
+    });
+    setFeaturedSliders(updated);
+    if (currentRestoId === 'resto_001') saveStoredFeaturedSliders(updated);
   };
 
   const handleDeleteFeaturedSlider = (slideId) => {
@@ -1227,7 +1255,8 @@ export default function App() {
 
   const handleSaveRestaurantProfile = (updatedProfile) => {
     setRestaurantProfile(updatedProfile);
-    if (currentRestoId === 'resto_001') saveRestaurantProfile(updatedProfile);
+    saveRestaurantProfile(updatedProfile, currentRestoId);
+    saveStoredRestaurantProfile(updatedProfile, currentRestoId);
     syncSettingsToSupabase(updatedProfile, currentRestoId);
   };
 
@@ -2151,7 +2180,9 @@ export default function App() {
   const cardSubtotal = currentItemTotalPrice;
 
   // Dynamic VAT calculation from restaurantProfile (configured via Settings)
-  const vatEnabled = restaurantProfile?.vatEnabled !== false;
+  const vatEnabled = restaurantProfile?.vatEnabled !== undefined
+    ? Boolean(restaurantProfile.vatEnabled)
+    : (restaurantProfile?.vat_enabled !== undefined ? Boolean(restaurantProfile.vat_enabled) : true);
   const vatType = restaurantProfile?.vatType || 'percentage';
   const vatRate = Number(restaurantProfile?.vatRate ?? 5.0);
   const isVatActive = adminConfig.breakdown.enableVat && vatEnabled;
@@ -2162,7 +2193,9 @@ export default function App() {
   );
 
   // Dynamic Service Charge calculation from restaurantProfile (configured via Settings)
-  const serviceChargeEnabled = restaurantProfile?.serviceChargeEnabled !== false;
+  const serviceChargeEnabled = restaurantProfile?.serviceChargeEnabled !== undefined
+    ? Boolean(restaurantProfile.serviceChargeEnabled)
+    : (restaurantProfile?.service_charge_enabled !== undefined ? Boolean(restaurantProfile.service_charge_enabled) : true);
   const serviceChargeType = restaurantProfile?.serviceChargeType || 'flat';
   const serviceChargeRate = Number(restaurantProfile?.serviceChargeRate ?? 2.0);
   const isServiceChargeActive = adminConfig.breakdown.enableServiceFee && serviceChargeEnabled;
@@ -2999,6 +3032,7 @@ export default function App() {
           onAddFeaturedSlider={handleAddFeaturedSlider}
           onDeleteFeaturedSlider={handleDeleteFeaturedSlider}
           onToggleFeaturedSlider={handleToggleFeaturedSlider}
+          onToggleAutoNotification={handleToggleAutoNotification}
           onBroadcastSliderNotification={handleBroadcastSliderNotification}
           onSaveRestaurantProfile={handleSaveRestaurantProfile}
           onAddTicket={handleAddTicket}
@@ -4171,11 +4205,11 @@ export default function App() {
                       </>
                     )}
 
-                    {/* Table Service Charge */}
+                    {/* Service Charge */}
                     {isServiceChargeActive && (
                       <>
                         <div className="flex justify-between items-center text-slate-300 py-0.5">
-                          <span className="font-medium">Table Service Charge ({serviceChargeType === 'percentage' ? `${serviceChargeRate}%` : `${currency}${formatPrice(serviceChargeRate)}`})</span>
+                          <span className="font-medium">Service Charge ({serviceChargeType === 'percentage' ? `${serviceChargeRate}%` : `${currency}${formatPrice(serviceChargeRate)}`})</span>
                           <span className="tabular-nums font-bold text-white">{currency}{formatPrice(selectedListServiceFee)}</span>
                         </div>
                         {/* Divider Line before Grand Total */}

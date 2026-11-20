@@ -1157,6 +1157,7 @@ export const fetchRemoteData = async (restaurantId = 'resto_001') => {
         let parsedIncludedType = 'list';
         let parsedIncludedHeading = 'Combo includes';
         let parsedIncludedItems = [];
+        let parsedAutoNotification = false;
 
         if (typeof sl.image === 'string' && sl.image.startsWith('{"')) {
           try {
@@ -1166,6 +1167,7 @@ export const fetchRemoteData = async (restaurantId = 'resto_001') => {
             parsedIncludedType = parsed.includedType || 'list';
             parsedIncludedHeading = parsed.includedHeading || 'Combo includes';
             parsedIncludedItems = Array.isArray(parsed.includedItems) ? parsed.includedItems : [];
+            parsedAutoNotification = Boolean(parsed.autoNotification);
           } catch (e) {}
         }
 
@@ -1194,6 +1196,7 @@ export const fetchRemoteData = async (restaurantId = 'resto_001') => {
           bgImage: parsedBgImage,
           isPng: sl.is_png,
           isActive: sl.is_active,
+          autoNotification: parsedAutoNotification,
           displayOrder: sl.display_order
         };
       });
@@ -1460,28 +1463,43 @@ export const defaultRestaurantProfile = {
   serviceChargeRate: 2.0
 };
 
-export const getRestaurantProfile = () => {
+export const getRestaurantProfile = (restaurantId = 'resto_001') => {
   try {
-    const data = localStorage.getItem(PROFILE_KEY);
-    if (data) return { ...defaultRestaurantProfile, ...JSON.parse(data) };
+    const targetKey = restaurantId ? `${PROFILE_KEY}_${restaurantId}` : null;
+    const raw = (targetKey && localStorage.getItem(targetKey)) || localStorage.getItem(PROFILE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        ...defaultRestaurantProfile,
+        ...parsed,
+        vatEnabled: parsed.vatEnabled !== undefined ? Boolean(parsed.vatEnabled) : (parsed.vat_enabled !== undefined ? Boolean(parsed.vat_enabled) : true),
+        serviceChargeEnabled: parsed.serviceChargeEnabled !== undefined ? Boolean(parsed.serviceChargeEnabled) : (parsed.service_charge_enabled !== undefined ? Boolean(parsed.service_charge_enabled) : true)
+      };
+    }
   } catch (e) {
     console.error('Error reading restaurant profile:', e);
   }
   return defaultRestaurantProfile;
 };
 
-export const saveStoredRestaurantProfile = (profile) => {
+export const saveStoredRestaurantProfile = (profile, restaurantId) => {
+  if (!profile) return;
   try {
+    const targetId = restaurantId || profile?.restaurant_id || profile?.restaurantId;
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    if (targetId) {
+      localStorage.setItem(`${PROFILE_KEY}_${targetId}`, JSON.stringify(profile));
+    }
   } catch (e) {
     console.error('Error saving stored restaurant profile:', e);
   }
 };
 
-export const saveRestaurantProfile = (profile) => {
+export const saveRestaurantProfile = (profile, restaurantId) => {
+  if (!profile) return;
   try {
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
-    syncSettingsToSupabase(profile);
+    saveStoredRestaurantProfile(profile, restaurantId);
+    syncSettingsToSupabase(profile, restaurantId);
   } catch (e) {
     console.error('Error saving restaurant profile:', e);
   }
@@ -1498,10 +1516,10 @@ export const mapSettingsRow = (row) => {
     phone: row.phone,
     currency: row.currency,
     tableCount: row.table_count,
-    vatEnabled: row.vat_enabled !== false,
+    vatEnabled: row.vat_enabled === false ? false : (row.vat_enabled !== undefined ? Boolean(row.vat_enabled) : true),
     vatType: row.vat_type || 'percentage',
     vatRate: Number(row.vat_rate ?? 5.0),
-    serviceChargeEnabled: row.service_charge_enabled !== false,
+    serviceChargeEnabled: row.service_charge_enabled === false ? false : (row.service_charge_enabled !== undefined ? Boolean(row.service_charge_enabled) : true),
     serviceChargeType: row.service_charge_type || 'flat',
     serviceChargeRate: Number(row.service_charge_rate ?? 2.0)
   };
@@ -1570,10 +1588,10 @@ export const syncSettingsToSupabase = async (profile, restaurantId) => {
           phone: current.phone || '',
           currency: current.currency || '৳',
           table_count: Number(current.tableCount || 12),
-          vat_enabled: current.vatEnabled !== false,
+          vat_enabled: current.vatEnabled === false ? false : (current.vat_enabled === false ? false : (current.vatEnabled !== undefined ? Boolean(current.vatEnabled) : true)),
           vat_type: current.vatType || 'percentage',
           vat_rate: Number(current.vatRate ?? 5.0),
-          service_charge_enabled: current.serviceChargeEnabled !== false,
+          service_charge_enabled: current.serviceChargeEnabled === false ? false : (current.service_charge_enabled === false ? false : (current.serviceChargeEnabled !== undefined ? Boolean(current.serviceChargeEnabled) : true)),
           service_charge_type: current.serviceChargeType || 'flat',
           service_charge_rate: Number(current.serviceChargeRate ?? 2.0),
           updated_at: new Date().toISOString()
@@ -1736,7 +1754,8 @@ export const syncSliderToSupabase = async (slider, restaurantId = 'resto_001') =
       bg: slider.bgImage || null,
       includedType: slider.includedType || 'list',
       includedHeading: slider.includedHeading || 'Combo includes',
-      includedItems: Array.isArray(slider.includedItems) ? slider.includedItems : []
+      includedItems: Array.isArray(slider.includedItems) ? slider.includedItems : [],
+      autoNotification: Boolean(slider.autoNotification)
     });
 
     const { data, error } = await supabase.from('featured_sliders').upsert([{

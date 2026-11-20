@@ -187,6 +187,7 @@ export default function RestaurantPanel({
   onAddFeaturedSlider,
   onDeleteFeaturedSlider,
   onToggleFeaturedSlider,
+  onToggleAutoNotification,
   onBroadcastSliderNotification,
   onSaveRestaurantProfile,
   onAddTicket,
@@ -369,10 +370,10 @@ export default function RestaurantPanel({
     confirmPassword: restaurantProfile?.password || 'admin123',
     currency: restaurantProfile?.currency || '৳',
     tableCount: restaurantProfile?.tableCount || 12,
-    vatEnabled: restaurantProfile?.vatEnabled !== false,
+    vatEnabled: restaurantProfile?.vatEnabled !== undefined ? Boolean(restaurantProfile.vatEnabled) : (restaurantProfile?.vat_enabled !== undefined ? Boolean(restaurantProfile.vat_enabled) : true),
     vatType: restaurantProfile?.vatType || 'percentage', // 'percentage' | 'flat'
     vatRate: restaurantProfile?.vatRate !== undefined ? restaurantProfile.vatRate : 5.0,
-    serviceChargeEnabled: restaurantProfile?.serviceChargeEnabled !== false,
+    serviceChargeEnabled: restaurantProfile?.serviceChargeEnabled !== undefined ? Boolean(restaurantProfile.serviceChargeEnabled) : (restaurantProfile?.service_charge_enabled !== undefined ? Boolean(restaurantProfile.service_charge_enabled) : true),
     serviceChargeType: restaurantProfile?.serviceChargeType || 'flat', // 'percentage' | 'flat'
     serviceChargeRate: restaurantProfile?.serviceChargeRate !== undefined ? restaurantProfile.serviceChargeRate : 2.0
   });
@@ -391,10 +392,14 @@ export default function RestaurantPanel({
         phone: restaurantProfile.phone || prev.phone,
         currency: restaurantProfile.currency || prev.currency,
         tableCount: restaurantProfile.tableCount || prev.tableCount,
-        vatEnabled: restaurantProfile.vatEnabled !== undefined ? restaurantProfile.vatEnabled : prev.vatEnabled,
+        vatEnabled: restaurantProfile.vatEnabled !== undefined
+          ? Boolean(restaurantProfile.vatEnabled)
+          : (restaurantProfile.vat_enabled !== undefined ? Boolean(restaurantProfile.vat_enabled) : prev.vatEnabled),
         vatType: restaurantProfile.vatType || prev.vatType,
         vatRate: restaurantProfile.vatRate !== undefined ? restaurantProfile.vatRate : prev.vatRate,
-        serviceChargeEnabled: restaurantProfile.serviceChargeEnabled !== undefined ? restaurantProfile.serviceChargeEnabled : prev.serviceChargeEnabled,
+        serviceChargeEnabled: restaurantProfile.serviceChargeEnabled !== undefined
+          ? Boolean(restaurantProfile.serviceChargeEnabled)
+          : (restaurantProfile.service_charge_enabled !== undefined ? Boolean(restaurantProfile.service_charge_enabled) : prev.serviceChargeEnabled),
         serviceChargeType: restaurantProfile.serviceChargeType || prev.serviceChargeType,
         serviceChargeRate: restaurantProfile.serviceChargeRate !== undefined ? restaurantProfile.serviceChargeRate : prev.serviceChargeRate
       }));
@@ -889,6 +894,42 @@ export default function RestaurantPanel({
     };
     onAddSubcategory && onAddSubcategory(newSub);
     setNewSubcategoryName('');
+  };
+
+  const handleToggleVat = (e) => {
+    e?.preventDefault?.();
+    const nextVatEnabled = !profileForm.vatEnabled;
+    const updated = {
+      ...profileForm,
+      vatEnabled: nextVatEnabled,
+      vatRate: Math.max(0, parseFloat(profileForm.vatRate) || 0),
+      serviceChargeRate: Math.max(0, parseFloat(profileForm.serviceChargeRate) || 0),
+      tableCount: parseInt(profileForm.tableCount, 10) || 12
+    };
+    setProfileForm(updated);
+    if (onSaveRestaurantProfile) {
+      onSaveRestaurantProfile(updated);
+    }
+    setSettingsSuccessMessage(nextVatEnabled ? '✅ Government VAT / Tax is now Active.' : '⚠️ Government VAT / Tax is now Disabled.');
+    setTimeout(() => setSettingsSuccessMessage(''), 4000);
+  };
+
+  const handleToggleServiceCharge = (e) => {
+    e?.preventDefault?.();
+    const nextScEnabled = !profileForm.serviceChargeEnabled;
+    const updated = {
+      ...profileForm,
+      serviceChargeEnabled: nextScEnabled,
+      vatRate: Math.max(0, parseFloat(profileForm.vatRate) || 0),
+      serviceChargeRate: Math.max(0, parseFloat(profileForm.serviceChargeRate) || 0),
+      tableCount: parseInt(profileForm.tableCount, 10) || 12
+    };
+    setProfileForm(updated);
+    if (onSaveRestaurantProfile) {
+      onSaveRestaurantProfile(updated);
+    }
+    setSettingsSuccessMessage(nextScEnabled ? '✅ Restaurant Service Charge is now Active.' : '⚠️ Restaurant Service Charge is now Disabled.');
+    setTimeout(() => setSettingsSuccessMessage(''), 4000);
   };
 
   const handleSaveSettings = (e) => {
@@ -2134,30 +2175,93 @@ export default function RestaurantPanel({
                   {uniqueCategories.map((catName) => {
                     const count = foods.filter(f => f.category === catName).length;
                     const isDefault = catName === 'All';
+                    const isEditing = editingCategory === catName;
+
                     return (
                       <div key={catName} className={`p-4 flex items-center justify-between ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'
                         }`}>
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-[5px] flex items-center justify-center font-bold ${isDark ? 'bg-slate-800 text-orange-400' : 'bg-slate-100 text-orange-600'
+                        <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
+                          <div className={`w-8 h-8 rounded-[5px] flex items-center justify-center font-bold shrink-0 ${isDark ? 'bg-slate-800 text-orange-400' : 'bg-slate-100 text-orange-600'
                             }`}>
                             <Layers className="w-4 h-4" />
                           </div>
-                          <div>
-                            <span className={`font-bold text-sm block ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                              {catName}
-                            </span>
-                            <span className="text-slate-500 text-[11px]">{count} food items currently assigned</span>
-                          </div>
+                          
+                          {isEditing ? (
+                            <div className="flex items-center gap-2 flex-1 max-w-sm">
+                              <input
+                                type="text"
+                                autoFocus
+                                value={editCategoryName}
+                                onChange={(e) => setEditCategoryName(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    if (editCategoryName.trim() && editCategoryName.trim() !== catName) {
+                                      onUpdateCategory && onUpdateCategory(catName, editCategoryName.trim());
+                                    }
+                                    setEditingCategory(null);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingCategory(null);
+                                  }
+                                }}
+                                className={`px-2.5 py-1.5 rounded-[5px] border text-xs sm:text-sm font-semibold w-full focus:outline-none focus:border-orange-500 ${
+                                  isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                                }`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (editCategoryName.trim() && editCategoryName.trim() !== catName) {
+                                    onUpdateCategory && onUpdateCategory(catName, editCategoryName.trim());
+                                  }
+                                  setEditingCategory(null);
+                                }}
+                                className="px-2.5 py-1.5 rounded-[5px] bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs cursor-pointer shadow-xs shrink-0"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingCategory(null)}
+                                className="px-2.5 py-1.5 rounded-[5px] bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-xs cursor-pointer shrink-0"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div>
+                              <span className={`font-bold text-sm block ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                {catName}
+                              </span>
+                              <span className="text-slate-500 text-[11px]">{count} food items currently assigned</span>
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {!isDefault && (
-                            <button
-                              onClick={() => onDeleteCategory && onDeleteCategory(catName)}
-                              className="px-3 py-1 rounded-[5px] text-slate-500 hover:text-red-600 text-xs font-medium cursor-pointer"
-                            >
-                              Delete
-                            </button>
+                          {!isDefault && !isEditing && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingCategory(catName);
+                                  setEditCategoryName(catName);
+                                }}
+                                className={`px-3 py-1 rounded-[5px] text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                                  isDark ? 'text-slate-400 hover:text-orange-400 hover:bg-slate-800' : 'text-slate-600 hover:text-orange-600 hover:bg-slate-100'
+                                }`}
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                                <span>Edit</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onDeleteCategory && onDeleteCategory(catName)}
+                                className="px-3 py-1 rounded-[5px] text-slate-500 hover:text-red-600 text-xs font-medium cursor-pointer"
+                              >
+                                Delete
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -2261,30 +2365,121 @@ export default function RestaurantPanel({
                 <div className={`divide-y text-xs ${isDark ? 'divide-slate-800' : 'divide-slate-200'}`}>
                   {subcategories.map(sub => {
                     const assignedFoods = foods.filter(f => f.subcategory === sub.name).length;
+                    const isEditing = editingSubcategory?.id === sub.id;
+
                     return (
                       <div key={sub.id} className={`p-4 flex items-center justify-between ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'
                         }`}>
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-[5px] flex items-center justify-center font-bold ${isDark ? 'bg-slate-800 text-orange-400' : 'bg-slate-100 text-orange-600'
+                        <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
+                          <div className={`w-8 h-8 rounded-[5px] flex items-center justify-center font-bold shrink-0 ${isDark ? 'bg-slate-800 text-orange-400' : 'bg-slate-100 text-orange-600'
                             }`}>
                             <Tag className="w-4 h-4" />
                           </div>
-                          <div>
-                            <span className={`font-bold text-sm block ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                              {sub.name}
-                            </span>
-                            <span className="text-slate-500 text-[11px]">
-                              Parent: <span className="font-semibold">{sub.category}</span> &bull; {assignedFoods} dishes assigned
-                            </span>
-                          </div>
+
+                          {isEditing ? (
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 max-w-lg">
+                              <select
+                                value={editSubcategoryParent}
+                                onChange={(e) => setEditSubcategoryParent(e.target.value)}
+                                className={`px-2.5 py-1.5 rounded-[5px] border text-xs sm:text-sm font-semibold focus:outline-none focus:border-orange-500 cursor-pointer ${
+                                  isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                                }`}
+                              >
+                                {uniqueCategories.filter(c => c !== 'All').map(c => (
+                                  <option key={c} value={c}>{c}</option>
+                                ))}
+                              </select>
+
+                              <input
+                                type="text"
+                                autoFocus
+                                value={editSubcategoryName}
+                                onChange={(e) => setEditSubcategoryName(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    if (editSubcategoryName.trim()) {
+                                      onUpdateSubcategory && onUpdateSubcategory({
+                                        ...sub,
+                                        category: editSubcategoryParent,
+                                        name: editSubcategoryName.trim()
+                                      });
+                                    }
+                                    setEditingSubcategory(null);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingSubcategory(null);
+                                  }
+                                }}
+                                className={`px-2.5 py-1.5 rounded-[5px] border text-xs sm:text-sm font-semibold flex-1 focus:outline-none focus:border-orange-500 ${
+                                  isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                                }`}
+                              />
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (editSubcategoryName.trim()) {
+                                      onUpdateSubcategory && onUpdateSubcategory({
+                                        ...sub,
+                                        category: editSubcategoryParent,
+                                        name: editSubcategoryName.trim()
+                                      });
+                                    }
+                                    setEditingSubcategory(null);
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-[5px] bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs cursor-pointer shadow-xs"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingSubcategory(null)}
+                                  className="px-2.5 py-1.5 rounded-[5px] bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-xs cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <span className={`font-bold text-sm block ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                {sub.name}
+                              </span>
+                              <span className="text-slate-500 text-[11px]">
+                                Parent: <span className="font-semibold">{sub.category}</span> &bull; {assignedFoods} dishes assigned
+                              </span>
+                            </div>
+                          )}
                         </div>
 
-                        <button
-                          onClick={() => onDeleteSubcategory && onDeleteSubcategory(sub.id)}
-                          className="px-3 py-1 rounded-[5px] text-slate-400 hover:text-red-600 cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {!isEditing && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingSubcategory(sub);
+                                  setEditSubcategoryName(sub.name);
+                                  setEditSubcategoryParent(sub.category);
+                                }}
+                                className={`px-3 py-1 rounded-[5px] text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                                  isDark ? 'text-slate-400 hover:text-orange-400 hover:bg-slate-800' : 'text-slate-600 hover:text-orange-600 hover:bg-slate-100'
+                                }`}
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                                <span>Edit</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onDeleteSubcategory && onDeleteSubcategory(sub.id)}
+                                className="px-3 py-1 rounded-[5px] text-slate-400 hover:text-red-600 cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -2447,16 +2642,33 @@ export default function RestaurantPanel({
                         </div>
                       </div>
                       {/* Controls Footer */}
-                      <div className={`p-3 border-t flex items-center justify-between text-xs ${isDark ? 'bg-[#0B0F19] border-slate-800' : 'bg-slate-50 border-slate-200'
+                      <div className={`p-3 border-t flex flex-wrap items-center justify-between gap-2 text-xs ${isDark ? 'bg-[#0B0F19] border-slate-800' : 'bg-slate-50 border-slate-200'
                         }`}>
-                        <button
-                          onClick={() => onToggleFeaturedSlider && onToggleFeaturedSlider(slide.id)}
-                          className={`flex items-center gap-1.5 font-bold cursor-pointer ${slide.isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => onToggleFeaturedSlider && onToggleFeaturedSlider(slide.id)}
+                            className={`flex items-center gap-1.5 font-bold cursor-pointer ${slide.isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'
+                              }`}
+                          >
+                            {slide.isActive ? <ToggleRight className="w-5 h-5 text-emerald-500" /> : <ToggleLeft className="w-5 h-5" />}
+                            <span>{slide.isActive ? 'Active on Digital Menu' : 'Inactive'}</span>
+                          </button>
+
+                          {/* Auto Notification Toggle */}
+                          <button
+                            type="button"
+                            onClick={() => onToggleAutoNotification && onToggleAutoNotification(slide.id)}
+                            className={`flex items-center gap-1.5 font-bold cursor-pointer px-2 py-0.5 rounded-[5px] border transition-colors ${
+                              slide.autoNotification
+                                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                                : 'bg-slate-200/60 dark:bg-slate-800 text-slate-400 border-slate-300 dark:border-slate-700'
                             }`}
-                        >
-                          {slide.isActive ? <ToggleRight className="w-5 h-5 text-emerald-500" /> : <ToggleLeft className="w-5 h-5" />}
-                          <span>{slide.isActive ? 'Active on Digital Menu' : 'Inactive'}</span>
-                        </button>
+                            title={slide.autoNotification ? 'Auto Notification is ON (will broadcast to followers upon edit/update)' : 'Auto Notification is OFF (silent updates)'}
+                          >
+                            {slide.autoNotification ? <ToggleRight className="w-4 h-4 text-amber-500" /> : <ToggleLeft className="w-4 h-4 text-slate-400" />}
+                            <span className="text-[11px]">Auto Notification</span>
+                          </button>
+                        </div>
 
                         <div className="flex items-center gap-1.5">
                           <button
@@ -2751,12 +2963,13 @@ export default function RestaurantPanel({
                             {/* Active / Inactive Toggle Switch */}
                             <button
                               type="button"
-                              onClick={() => setProfileForm(prev => ({ ...prev, vatEnabled: !prev.vatEnabled }))}
+                              onClick={handleToggleVat}
                               className={`px-3 py-1.5 rounded-[5px] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
                                 profileForm.vatEnabled
                                   ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
                                   : 'bg-slate-200 dark:bg-slate-800 text-slate-500 border border-slate-300 dark:border-slate-700'
                               }`}
+                              title={profileForm.vatEnabled ? 'Click to Disable VAT (Instant Auto-Save)' : 'Click to Activate VAT (Instant Auto-Save)'}
                             >
                               <span className={`w-2 h-2 rounded-full ${profileForm.vatEnabled ? 'bg-emerald-500' : 'bg-slate-400'}`} />
                               <span>{profileForm.vatEnabled ? 'Active' : 'Disabled'}</span>
@@ -2852,12 +3065,13 @@ export default function RestaurantPanel({
                             {/* Active / Inactive Toggle Switch */}
                             <button
                               type="button"
-                              onClick={() => setProfileForm(prev => ({ ...prev, serviceChargeEnabled: !prev.serviceChargeEnabled }))}
+                              onClick={handleToggleServiceCharge}
                               className={`px-3 py-1.5 rounded-[5px] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
                                 profileForm.serviceChargeEnabled
                                   ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
                                   : 'bg-slate-200 dark:bg-slate-800 text-slate-500 border border-slate-300 dark:border-slate-700'
                               }`}
+                              title={profileForm.serviceChargeEnabled ? 'Click to Disable Service Charge (Instant Auto-Save)' : 'Click to Activate Service Charge (Instant Auto-Save)'}
                             >
                               <span className={`w-2 h-2 rounded-full ${profileForm.serviceChargeEnabled ? 'bg-emerald-500' : 'bg-slate-400'}`} />
                               <span>{profileForm.serviceChargeEnabled ? 'Active' : 'Disabled'}</span>
@@ -3804,7 +4018,13 @@ export default function RestaurantPanel({
         onSave={async (slide) => {
           await onAddFeaturedSlider(slide);
           setEditingSlider(null);
-          setSliderSuccessNotice(`🎉 Slider "${slide.title}" published! Push notification broadcasted to all restaurant followers.`);
+          if (editingSlider && editingSlider.autoNotification && slide.isActive !== false) {
+            setSliderSuccessNotice(`🎉 Slider "${slide.title}" updated! Auto notification sent to followers.`);
+          } else if (editingSlider) {
+            setSliderSuccessNotice(`✅ Slider "${slide.title}" updated successfully.`);
+          } else {
+            setSliderSuccessNotice(`🎉 Slider "${slide.title}" created successfully!`);
+          }
           setTimeout(() => setSliderSuccessNotice(''), 6000);
         }}
         foods={foods}
