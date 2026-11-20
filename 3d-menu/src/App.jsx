@@ -3518,9 +3518,9 @@ export default function App() {
               const isDescription = currentFeaturedOffer.includedType === 'description';
 
               return (
-                <div className="mt-3.5 mb-2 relative overflow-hidden rounded-2xl border border-[#F59E0B]/35 bg-[#140D07] shadow-xl shrink-0 h-[290px] flex flex-col justify-between">
-                  {/* ZONE A: Top Banner Zone */}
-                  <div className="relative p-3.5 sm:p-4 h-[125px] shrink-0 flex items-center justify-between overflow-hidden">
+                <div className="mt-3.5 mb-2 relative overflow-hidden rounded-2xl border border-[#F59E0B]/35 bg-[#140D07] shadow-xl shrink-0 h-[280px] flex flex-col justify-between">
+                  {/* ZONE A: Top Banner Zone (Fixed 150px height as requested) */}
+                  <div className="relative p-3.5 sm:p-4 h-[150px] shrink-0 flex items-center justify-between overflow-hidden">
                     {/* Background */}
                     {currentFeaturedOffer.bgImage ? (
                       <>
@@ -3541,17 +3541,17 @@ export default function App() {
 
                     {/* Left: Badge & Title */}
                     <div className="z-10 flex-1 pr-3">
-                      <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B]/50 bg-black/40 text-[#F59E0B] text-[10px] font-black uppercase tracking-wider mb-1.5 w-fit shadow-xs">
+                      <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B]/50 bg-black/40 text-[#F59E0B] text-[10px] font-black uppercase tracking-wider mb-2 w-fit shadow-xs">
                         {currentFeaturedOffer.badge || 'WEEKEND SPECIAL'}
                       </div>
-                      <h3 className="text-white font-black text-lg sm:text-xl tracking-tight leading-snug line-clamp-2 max-w-[200px] sm:max-w-[230px]">
+                      <h3 className="text-white font-black text-lg sm:text-xl tracking-tight leading-snug line-clamp-2 max-w-[200px] sm:max-w-[240px]">
                         {currentFeaturedOffer.title}
                       </h3>
                     </div>
 
                     {/* Right: Food cutout */}
                     {displayHeroImage && (
-                      <div className="z-10 w-24 h-20 sm:w-28 sm:h-24 flex-shrink-0 flex items-center justify-center">
+                      <div className="z-10 w-28 h-28 sm:w-32 sm:h-32 flex-shrink-0 flex items-center justify-center">
                         <img
                           src={displayHeroImage}
                           alt={currentFeaturedOffer.title}
@@ -3561,19 +3561,19 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* ZONE B: Bottom Included Items Zone */}
-                  <div className="flex-1 flex flex-col justify-between bg-[#121316] border-t border-white/5 p-3.5 sm:p-4 z-10 relative overflow-hidden">
-                    <div className="space-y-1.5">
+                  {/* ZONE B: Bottom Included Items Zone (Fixed 130px height as requested) */}
+                  <div className="h-[130px] shrink-0 flex flex-col justify-between bg-[#121316] border-t border-white/5 p-3 sm:p-3.5 z-10 relative overflow-hidden">
+                    <div className="space-y-1">
                       {isDescription && currentFeaturedOffer.subtitle ? (
                         <p className="text-slate-300 text-xs sm:text-sm leading-relaxed line-clamp-3">
                           {currentFeaturedOffer.subtitle}
                         </p>
                       ) : (
                         <div>
-                          <p className="text-[11px] font-semibold text-slate-300 mb-1.5">
+                          <p className="text-[11px] font-semibold text-slate-300 mb-1">
                             {currentFeaturedOffer.includedHeading || 'Combo includes'}
                           </p>
-                          <div className="space-y-1">
+                          <div className="space-y-0.5 sm:space-y-1">
                             {items.slice(0, 4).map((item, idx) => (
                               <div key={idx} className="flex items-center gap-2 text-xs font-medium text-slate-200">
                                 <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] shrink-0 shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
@@ -3586,7 +3586,7 @@ export default function App() {
                     </div>
 
                     {/* Bottom price row - NO Explore button in Food Details modal */}
-                    <div className="pt-2 mt-auto">
+                    <div className="pt-1 mt-auto">
                       <span className="text-[#F59E0B] font-black text-xl sm:text-2xl tracking-tight tabular-nums">
                         {currency}{formatPrice(currentFeaturedOffer.price)}
                       </span>
@@ -4341,12 +4341,15 @@ export default function App() {
       {isMenuOpen && (
         <div
           onClick={() => setIsMenuOpen(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/45 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-5 bg-black/65 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg h-[92vh] sm:h-[88vh] glass-sheet rounded-[32px] p-5 sm:p-7 shadow-2xl animate-[scaleUp_0.25s_cubic-bezier(0.16,1,0.3,1)] flex flex-col overflow-hidden relative"
+            className="w-full max-w-xl mx-auto glass-sheet rounded-t-[32px] sm:rounded-[36px] px-4 sm:px-6 pt-3.5 pb-4 sm:pt-5 sm:pb-6 h-[88vh] sm:h-[86vh] max-h-[92vh] flex flex-col overflow-hidden relative border-t sm:border border-[#F59E0B]/30 shadow-[0_0_60px_rgba(0,0,0,0.85)] animate-[slideUp_0.3s_cubic-bezier(0.16,1,0.3,1)]"
           >
+            {/* Top Sheet Drag Handle on mobile */}
+            <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-2 shrink-0 sm:hidden" />
+
             {/* Modal Top Header */}
             <div className="flex items-center justify-between pb-3.5 sm:pb-4 border-b border-white/10 shrink-0">
               <div className="flex items-center gap-3.5">
@@ -4497,7 +4500,7 @@ export default function App() {
                   onMouseDown={handleCarouselTouchStart}
                   onMouseMove={handleCarouselTouchMove}
                   onMouseUp={handleCarouselTouchEnd}
-                  className="relative overflow-hidden rounded-2xl border border-[#F59E0B]/35 shadow-[0_10px_35px_rgba(0,0,0,0.6)] group h-[290px]"
+                  className="relative overflow-hidden rounded-2xl border border-[#F59E0B]/35 shadow-[0_10px_35px_rgba(0,0,0,0.6)] group h-[280px]"
                 >
                   <div
                     className="flex items-stretch h-full transition-transform duration-700 ease-out will-change-transform"
@@ -4515,8 +4518,8 @@ export default function App() {
                           onClick={() => selectOfferFromCarousel(offer)}
                           className="w-full h-full flex-shrink-0 cursor-pointer select-none overflow-hidden flex flex-col justify-between bg-[#140D07]"
                         >
-                          {/* ZONE A: Top Banner Zone */}
-                          <div className="relative p-3.5 sm:p-4 h-[125px] shrink-0 flex items-center justify-between overflow-hidden">
+                          {/* ZONE A: Top Banner Zone (Fixed 150px height as requested) */}
+                          <div className="relative p-3.5 sm:p-4 h-[150px] shrink-0 flex items-center justify-between overflow-hidden">
                             {/* Background */}
                             {offer.bgImage ? (
                               <>
@@ -4537,39 +4540,39 @@ export default function App() {
 
                             {/* Left: Badge & Title */}
                             <div className="z-10 flex-1 pr-3">
-                              <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B]/50 bg-black/40 text-[#F59E0B] text-[10px] font-black uppercase tracking-wider mb-1.5 w-fit shadow-xs">
+                              <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B]/50 bg-black/40 text-[#F59E0B] text-[10px] font-black uppercase tracking-wider mb-2 w-fit shadow-xs">
                                 {offer.badge || 'WEEKEND SPECIAL'}
                               </div>
-                              <h3 className="text-white font-black text-lg sm:text-xl tracking-tight leading-snug line-clamp-2 max-w-[200px] sm:max-w-[230px]">
+                              <h3 className="text-white font-black text-lg sm:text-xl tracking-tight leading-snug line-clamp-2 max-w-[200px] sm:max-w-[240px]">
                                 {offer.title}
                               </h3>
                             </div>
 
                             {/* Right: Food cutout */}
                             {displayCutout && (
-                              <div className="z-10 w-24 h-20 sm:w-28 sm:h-24 flex-shrink-0 flex items-center justify-center">
+                              <div className="z-10 w-28 h-28 sm:w-32 sm:h-32 flex-shrink-0 flex items-center justify-center">
                                 <img
                                   src={displayCutout}
                                   alt={offer.title}
-                                  className={offer.isPng !== false ? "w-full h-full object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.85)] scale-110" : "w-18 h-18 sm:w-20 sm:h-20 object-cover rounded-full border border-white/30 shadow-md"}
+                                  className={offer.isPng !== false ? "w-full h-full object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.85)] scale-110" : "w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-full border border-white/30 shadow-md"}
                                 />
                               </div>
                             )}
                           </div>
 
-                          {/* ZONE B: Bottom Included Items Zone */}
-                          <div className="flex-1 flex flex-col justify-between bg-[#121316] border-t border-white/5 p-3.5 sm:p-4 z-10 relative overflow-hidden">
-                            <div className="space-y-1.5">
+                          {/* ZONE B: Bottom Included Items Zone (Fixed 130px height as requested) */}
+                          <div className="h-[130px] shrink-0 flex flex-col justify-between bg-[#121316] border-t border-white/5 p-3 sm:p-3.5 z-10 relative overflow-hidden">
+                            <div className="space-y-1">
                               {isDescription && offer.subtitle ? (
                                 <p className="text-slate-300 text-xs sm:text-sm leading-relaxed line-clamp-3">
                                   {offer.subtitle}
                                 </p>
                               ) : (
                                 <div>
-                                  <p className="text-[11px] font-semibold text-slate-300 mb-1.5">
+                                  <p className="text-[11px] font-semibold text-slate-300 mb-1">
                                     {offer.includedHeading || 'Combo includes'}
                                   </p>
-                                  <div className="space-y-1">
+                                  <div className="space-y-0.5 sm:space-y-1">
                                     {items.map((item, idx) => (
                                       <div key={idx} className="flex items-center gap-2 text-xs font-medium text-slate-200">
                                         <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] shrink-0 shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
@@ -4581,7 +4584,7 @@ export default function App() {
                               )}
                             </div>
 
-                            <div className="flex items-center justify-between pt-2 mt-auto">
+                            <div className="flex items-center justify-between pt-1 mt-auto">
                               <span className="text-[#F59E0B] font-black text-xl sm:text-2xl tracking-tight tabular-nums">
                                 {currency}{formatPrice(offer.price)}
                               </span>

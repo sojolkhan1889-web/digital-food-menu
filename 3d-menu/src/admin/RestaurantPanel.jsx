@@ -2550,9 +2550,9 @@ export default function RestaurantPanel({
                         }`}
                     >
                       {/* Realistic Banner Card Inside - Exact Match with Customer 3D Menu */}
-                      <div className="flex-1 flex flex-col justify-between overflow-hidden bg-[#140D07] h-[290px]">
-                        {/* Zone A: Top Banner */}
-                        <div className="p-3.5 sm:p-4 relative flex items-center justify-between h-[125px] shrink-0 overflow-hidden select-none bg-[#140D07]">
+                      <div className="flex-1 flex flex-col justify-between overflow-hidden bg-[#140D07] h-[280px]">
+                        {/* Zone A: Top Banner (Fixed 150px height as requested) */}
+                        <div className="p-3.5 sm:p-4 relative flex items-center justify-between h-[150px] shrink-0 overflow-hidden select-none bg-[#140D07]">
                           {slide.bgImage ? (
                             <>
                               <img
@@ -2571,7 +2571,7 @@ export default function RestaurantPanel({
                           )}
 
                           <div className="z-10 flex-1 pr-3">
-                            <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B]/50 bg-black/40 text-[#F59E0B] text-[10px] font-black uppercase tracking-wider mb-1.5 w-fit">
+                            <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B]/50 bg-black/40 text-[#F59E0B] text-[10px] font-black uppercase tracking-wider mb-2 w-fit">
                               {slide.badge || 'WEEKEND SPECIAL'}
                             </div>
                             <h4 className="text-white font-extrabold text-base sm:text-lg tracking-tight leading-snug line-clamp-2 max-w-[200px]">
@@ -2585,20 +2585,20 @@ export default function RestaurantPanel({
                             const displaySlideImage = linkedFood?.image || slide.image;
                             if (!displaySlideImage) return null;
                             return (
-                              <div className="z-10 w-24 h-20 sm:w-28 sm:h-24 shrink-0 flex items-center justify-center relative">
+                              <div className="z-10 w-28 h-28 sm:w-32 sm:h-32 shrink-0 flex items-center justify-center relative">
                                 <img
                                   src={displaySlideImage}
                                   alt={slide.title}
-                                  className={slide.isPng !== false ? "w-full h-full object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.85)] scale-110" : "w-18 h-18 sm:w-20 sm:h-20 object-cover rounded-full border border-white/20 shadow-2xl"}
+                                  className={slide.isPng !== false ? "w-full h-full object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.85)] scale-110" : "w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-full border border-white/20 shadow-2xl"}
                                 />
                               </div>
                             );
                           })()}
                         </div>
 
-                        {/* Zone B: Bottom Included Items */}
-                        <div className="flex-1 flex flex-col justify-between bg-[#121316] border-t border-white/5 p-3.5 z-10 relative overflow-hidden">
-                          <div className="space-y-1.5">
+                        {/* Zone B: Bottom Included Items (Fixed 130px height as requested) */}
+                        <div className="h-[130px] shrink-0 flex flex-col justify-between bg-[#121316] border-t border-white/5 p-3 sm:p-3.5 z-10 relative overflow-hidden">
+                          <div className="space-y-1">
                             {slide.includedType === 'description' && slide.subtitle ? (
                               <p className="text-slate-300 text-xs leading-relaxed line-clamp-3">
                                 {slide.subtitle}
@@ -2608,7 +2608,7 @@ export default function RestaurantPanel({
                                 <p className="text-[11px] font-semibold text-slate-300 mb-1">
                                   {slide.includedHeading || 'Combo includes'}
                                 </p>
-                                <div className="space-y-1">
+                                <div className="space-y-0.5 sm:space-y-1">
                                   {(() => {
                                     let items = [];
                                     if (Array.isArray(slide.includedItems) && slide.includedItems.length > 0) {
@@ -2631,7 +2631,7 @@ export default function RestaurantPanel({
                             )}
                           </div>
 
-                          <div className="flex items-center justify-between pt-2 mt-auto">
+                          <div className="flex items-center justify-between pt-1 mt-auto">
                             <span className="text-[#F59E0B] font-black text-xl tracking-tight tabular-nums">
                               {currency}{Number(slide.price || 0).toFixed(2)}
                             </span>

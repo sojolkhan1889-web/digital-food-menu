@@ -624,9 +624,9 @@ export default function FeaturedSliderWizard({
                     </div>
 
                     {/* Exact 2-Zone Card matching Image 2 */}
-                    <div className="relative overflow-hidden rounded-2xl border border-[#F59E0B]/35 shadow-xl bg-[#140D07] h-[290px] flex flex-col justify-between">
-                      {/* ZONE A: Top Banner Zone */}
-                      <div className="relative p-3.5 h-[125px] shrink-0 flex items-center justify-between overflow-hidden">
+                    <div className="relative overflow-hidden rounded-2xl border border-[#F59E0B]/35 shadow-xl bg-[#140D07] h-[280px] flex flex-col justify-between">
+                      {/* ZONE A: Top Banner Zone (Fixed 150px height as requested) */}
+                      <div className="relative p-3.5 h-[150px] shrink-0 flex items-center justify-between overflow-hidden">
                         {/* Background */}
                         {bgImage ? (
                           <>
@@ -656,7 +656,7 @@ export default function FeaturedSliderWizard({
                         </div>
 
                         {/* Top Right food cutout */}
-                        <div className="z-10 w-24 h-24 shrink-0 flex items-center justify-center">
+                        <div className="z-10 w-28 h-28 shrink-0 flex items-center justify-center">
                           {foodImage ? (
                             <img
                               src={foodImage}
@@ -671,19 +671,19 @@ export default function FeaturedSliderWizard({
                         </div>
                       </div>
 
-                      {/* ZONE B: Bottom Included Items Zone */}
-                      <div className="flex-1 flex flex-col justify-between bg-[#121316] border-t border-white/5 p-3.5 z-10 relative overflow-hidden">
-                        <div className="space-y-1.5">
+                      {/* ZONE B: Bottom Included Items Zone (Fixed 130px height as requested) */}
+                      <div className="h-[130px] shrink-0 flex flex-col justify-between bg-[#121316] border-t border-white/5 p-3 z-10 relative overflow-hidden">
+                        <div className="space-y-1">
                           {includedType === 'description' && subtitle ? (
                             <p className="text-slate-300 text-xs leading-relaxed line-clamp-3">
                               {subtitle}
                             </p>
                           ) : (
                             <div>
-                              <p className="text-[11px] font-semibold text-slate-300 mb-1.5">
+                              <p className="text-[11px] font-semibold text-slate-300 mb-1">
                                 {includedHeading || 'Combo includes'}
                               </p>
-                              <div className="space-y-1">
+                              <div className="space-y-0.5">
                                 {displayItems.slice(0, MAX_INCLUDED_ITEMS).map((item, idx) => (
                                   <div key={idx} className="flex items-center gap-2 text-xs font-medium text-slate-200">
                                     <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] shrink-0 shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
@@ -695,7 +695,7 @@ export default function FeaturedSliderWizard({
                           )}
                         </div>
 
-                        <div className="flex items-center justify-between pt-2 mt-auto">
+                        <div className="flex items-center justify-between pt-1 mt-auto">
                           <span className="text-[#F59E0B] font-black text-2xl tracking-tight tabular-nums">
                             {currency}{customPrice || '380'}
                           </span>
@@ -749,9 +749,9 @@ export default function FeaturedSliderWizard({
                     </p>
 
                     {/* The 2-Zone Card inside Food Details Modal (Notice: NO Explore combo button!) */}
-                    <div className="relative overflow-hidden rounded-2xl border border-[#F59E0B]/35 shadow-xl bg-[#140D07] h-[290px] flex flex-col justify-between">
-                      {/* ZONE A: Top Banner Zone */}
-                      <div className="relative p-3.5 h-[125px] shrink-0 flex items-center justify-between overflow-hidden">
+                    <div className="relative overflow-hidden rounded-2xl border border-[#F59E0B]/35 shadow-xl bg-[#140D07] h-[280px] flex flex-col justify-between">
+                      {/* ZONE A: Top Banner Zone (Fixed 150px height as requested) */}
+                      <div className="relative p-3.5 h-[150px] shrink-0 flex items-center justify-between overflow-hidden">
                         {bgImage ? (
                           <>
                             <img
@@ -770,7 +770,7 @@ export default function FeaturedSliderWizard({
                         )}
 
                         <div className="z-10 flex-1 pr-2">
-                          <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B]/50 bg-black/40 text-[#F59E0B] text-[9px] font-black uppercase tracking-wider mb-1.5 w-fit">
+                          <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B]/50 bg-black/40 text-[#F59E0B] text-[9px] font-black uppercase tracking-wider mb-2 w-fit">
                             {badgeText || 'WEEKEND SPECIAL'}
                           </div>
                           <h4 className="text-white font-black text-sm tracking-tight leading-snug line-clamp-2 max-w-[150px]">
@@ -778,7 +778,7 @@ export default function FeaturedSliderWizard({
                           </h4>
                         </div>
 
-                        <div className="z-10 w-20 h-20 shrink-0 flex items-center justify-center">
+                        <div className="z-10 w-24 h-24 shrink-0 flex items-center justify-center">
                           {foodImage ? (
                             <img
                               src={foodImage}
@@ -793,19 +793,19 @@ export default function FeaturedSliderWizard({
                         </div>
                       </div>
 
-                      {/* ZONE B: Bottom Included Items Zone */}
-                      <div className="flex-1 flex flex-col justify-between bg-[#121316] border-t border-white/5 p-3.5 z-10 relative overflow-hidden">
-                        <div className="space-y-1.5">
+                      {/* ZONE B: Bottom Included Items Zone (Fixed 130px height as requested) */}
+                      <div className="h-[130px] shrink-0 flex flex-col justify-between bg-[#121316] border-t border-white/5 p-3 z-10 relative overflow-hidden">
+                        <div className="space-y-1">
                           {includedType === 'description' && subtitle ? (
                             <p className="text-slate-300 text-[11px] leading-relaxed line-clamp-3">
                               {subtitle}
                             </p>
                           ) : (
                             <div>
-                              <p className="text-[10px] font-semibold text-slate-300 mb-1.5">
+                              <p className="text-[10px] font-semibold text-slate-300 mb-1">
                                 {includedHeading || 'Combo includes'}
                               </p>
-                              <div className="space-y-1">
+                              <div className="space-y-0.5">
                                 {displayItems.slice(0, MAX_INCLUDED_ITEMS).map((item, idx) => (
                                   <div key={idx} className="flex items-center gap-1.5 text-[11px] font-medium text-slate-200">
                                     <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] shrink-0 shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
@@ -817,7 +817,7 @@ export default function FeaturedSliderWizard({
                           )}
                         </div>
 
-                        <div className="pt-2 mt-auto">
+                        <div className="pt-1 mt-auto">
                           <span className="text-[#F59E0B] font-black text-xl tracking-tight tabular-nums">
                             {currency}{customPrice || '380'}
                           </span>
