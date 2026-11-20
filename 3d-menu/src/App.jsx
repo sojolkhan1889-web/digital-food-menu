@@ -31,6 +31,7 @@ import {
   RefreshCw,
   Receipt,
   ArrowLeft,
+  ArrowRight,
   Bell,
   AlertTriangle,
   Info,
@@ -519,35 +520,35 @@ export default function App() {
       if (data) {
         if (data.remoteFoods && data.remoteFoods.length > 0) {
           setFoodsList(data.remoteFoods);
-          if (restoId === 'resto_001') saveStoredFoods(data.remoteFoods);
+          saveStoredFoods(data.remoteFoods);
         } else if (restoId !== 'resto_001') {
           setFoodsList([]);
         }
 
         if (data.remoteCategories && data.remoteCategories.length > 0) {
           setCategoriesList(data.remoteCategories);
-          if (restoId === 'resto_001') saveStoredCategories(data.remoteCategories);
+          saveStoredCategories(data.remoteCategories);
         } else if (restoId !== 'resto_001') {
           setCategoriesList([]);
         }
 
         if (data.remoteSubcategories) {
           setSubcategoriesList(data.remoteSubcategories);
-          if (restoId === 'resto_001') saveStoredSubcategories(data.remoteSubcategories);
+          saveStoredSubcategories(data.remoteSubcategories);
         } else if (restoId !== 'resto_001') {
           setSubcategoriesList([]);
         }
 
         if (data.remoteSliders) {
           setFeaturedSliders(data.remoteSliders);
-          if (restoId === 'resto_001') saveStoredFeaturedSliders(data.remoteSliders);
+          saveStoredFeaturedSliders(data.remoteSliders);
         } else if (restoId !== 'resto_001') {
           setFeaturedSliders([]);
         }
 
         if (data.remoteSettings) {
           setRestaurantProfile(data.remoteSettings);
-          if (restoId === 'resto_001') saveStoredRestaurantProfile(data.remoteSettings);
+          saveStoredRestaurantProfile(data.remoteSettings);
         } else if (targetMeta) {
           setRestaurantProfile(prev => ({
             ...prev,
@@ -742,15 +743,13 @@ export default function App() {
     };
   }, [activeRestaurant?.id]);
 
-  // Fast hydration of high-res cached foods from IndexedDB on startup (runs in 1-5ms, only for resto_001)
+  // Fast hydration of high-res cached foods from IndexedDB on startup (runs in 1-5ms)
   useEffect(() => {
-    if (currentRestoId === 'resto_001') {
-      loadFoodsFromIndexedDB().then(idbFoods => {
-        if (idbFoods && idbFoods.length >= 8) {
-          setFoodsList(idbFoods);
-        }
-      });
-    }
+    loadFoodsFromIndexedDB().then(idbFoods => {
+      if (idbFoods && idbFoods.length > 0) {
+        setFoodsList(prev => prev.length === 0 ? idbFoods : prev);
+      }
+    });
   }, [currentRestoId]);
 
   // Fetch latest cloud data from Supabase whenever activeRestaurant changes
@@ -1029,16 +1028,40 @@ export default function App() {
       updated = [savedFood, ...foodsList];
     }
     setFoodsList(updated);
-    if (currentRestoId === 'resto_001') saveStoredFoods(updated);
+    saveStoredFoods(updated);
 
     // Sync to Supabase scoped to current restaurant
     syncFoodToSupabase(savedFood, currentRestoId);
+
+    // Immediately update any featured slider linked to this food item so the new image reflects instantly
+    setFeaturedSliders(prev => {
+      let changed = false;
+      const next = prev.map(s => {
+        if (String(s.foodId) === String(savedFood.id)) {
+          changed = true;
+          return {
+            ...s,
+            image: savedFood.image,
+            foodTitle: savedFood.title
+          };
+        }
+        return s;
+      });
+      if (changed) {
+        saveStoredFeaturedSliders(next);
+        next.filter(s => String(s.foodId) === String(savedFood.id)).forEach(s => syncSliderToSupabase(s, currentRestoId));
+      }
+      return next;
+    });
+
+    // If currently viewing this food on 3D home stage, immediately update its active preview
+    setSelectedFeaturedDish(prev => prev && String(prev.id) === String(savedFood.id) ? { ...prev, ...savedFood } : prev);
 
     // If new category, add to categories list and sync
     if (savedFood.category && !categoriesList.includes(savedFood.category)) {
       const updatedCats = Array.from(new Set([...categoriesList, savedFood.category]));
       setCategoriesList(updatedCats);
-      if (currentRestoId === 'resto_001') saveStoredCategories(updatedCats);
+      saveStoredCategories(updatedCats);
       syncCategoryToSupabase(savedFood.category, currentRestoId);
     }
 
@@ -1352,7 +1375,9 @@ export default function App() {
         ...targetFood,
         price: (targetSlide && targetSlide.price !== undefined) ? targetSlide.price : targetFood.price,
         promoBadge: (targetSlide && targetSlide.badge) ? targetSlide.badge : 'FEATURED SPECIAL',
-        promoTitle: (targetSlide && targetSlide.title) ? targetSlide.title : targetFood.title
+        promoTitle: (targetSlide && targetSlide.title) ? targetSlide.title : targetFood.title,
+        isFeaturedSpecial: true,
+        featuredOffer: targetSlide || null
       };
       setSelectedPortion(0);
       setSelectedFeaturedDish(promoFood);
@@ -1991,6 +2016,38 @@ export default function App() {
   };
 
   // Real-time Portion & Addon Calculation
+  const hasAvailablePortions = Boolean(
+    (adminConfig?.breakdown?.enablePortions ?? true) &&
+    activeFood?.customizable?.portions &&
+    activeFood.customizable.portions.length > 0
+  );
+  const hasAvailableAddons = Boolean(
+    (adminConfig?.breakdown?.enableAddons ?? true) &&
+    activeFood?.customizable?.addons &&
+    activeFood.customizable.addons.length > 0
+  );
+  const hasCustomOptions = hasAvailablePortions || hasAvailableAddons;
+
+  // Active Featured Special Offer if customer clicked on a Featured Special slider
+  const currentFeaturedOffer = activeFood?.featuredOffer ||
+    (selectedFeaturedDish && (String(selectedFeaturedDish.id) === String(activeFood?.id) || selectedFeaturedDish.title === activeFood?.title) ? selectedFeaturedDish.featuredOffer : null) ||
+    null;
+
+  // Helper to extract combo included items list with fallback
+  const getSliderIncludedItems = (slider) => {
+    if (Array.isArray(slider?.includedItems) && slider.includedItems.length > 0) {
+      return slider.includedItems.filter(Boolean);
+    }
+    if (slider?.subtitle) {
+      const lines = slider.subtitle
+        .split(/\n|\+/)
+        .map(s => s.trim().replace(/^[-•*]\s*/, ''))
+        .filter(Boolean);
+      if (lines.length > 0) return lines;
+    }
+    return ['Double smash burger', 'Crispy fries', 'Coke • 350 ml', 'Dip sauce • 30 ml'];
+  };
+
   const hasCustomPortions = Boolean(activeFood?.customizable?.portions && activeFood.customizable.portions.length > 0);
   const primaryPortionIdx = selectedPortions[0]?.idx ?? selectedPortion;
   const currentPortion = activeFood?.customizable?.portions?.[primaryPortionIdx] || activeFood?.customizable?.portions?.[0];
@@ -2716,7 +2773,9 @@ export default function App() {
         price: promoPrice,
         oldPrice: originalPrice > promoPrice ? originalPrice : (targetFood.oldPrice || originalPrice),
         tag: targetFood.tag || 'Best Selling', // Preserves ONLY the food's own promotional tag from Menu Builder
-        customizable: promoCustomizable
+        customizable: promoCustomizable,
+        isFeaturedSpecial: true,
+        featuredOffer: offer
       };
 
       setSelectedPortion(0);
@@ -3351,7 +3410,11 @@ export default function App() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xl mx-auto h-[88vh] sm:h-[86vh] max-h-[92vh] glass-sheet rounded-t-[32px] sm:rounded-[36px] px-5 sm:px-6 pt-3.5 pb-3 sm:pt-4 sm:pb-4 flex flex-col overflow-hidden animate-[slideUp_0.3s_cubic-bezier(0.16,1,0.3,1)] relative border-t sm:border border-[#F59E0B]/30 shadow-[0_0_60px_rgba(0,0,0,0.85)]"
+            className={`w-full max-w-xl mx-auto glass-sheet rounded-t-[32px] sm:rounded-[36px] px-5 sm:px-6 pt-3.5 pb-3 sm:pt-4 sm:pb-4 flex flex-col overflow-hidden animate-[slideUp_0.3s_cubic-bezier(0.16,1,0.3,1)] relative border-t sm:border border-[#F59E0B]/30 shadow-[0_0_60px_rgba(0,0,0,0.85)] ${
+              hasCustomOptions
+                ? 'h-[88vh] sm:h-[86vh] max-h-[92vh]'
+                : 'h-auto max-h-[90vh]'
+            }`}
           >
             {/* Top Sheet Drag Handle & Close */}
             <div className="flex items-center justify-between pb-2 shrink-0">
@@ -3366,28 +3429,34 @@ export default function App() {
             </div>
 
             {/* Header: Title, Category & Description */}
-            <div className="pt-1 sm:pt-1.5 pb-3 border-b border-white/10 shrink-0">
+            <div className={`pt-1 sm:pt-1.5 shrink-0 ${(hasCustomOptions && !currentFeaturedOffer) ? 'pb-3 border-b border-white/10' : 'pb-0'}`}>
               <div className="mb-3 sm:mb-3.5">
                 <h2 className="text-white font-black text-xl sm:text-2xl tracking-tight leading-tight">
                   {activeFood.title}
                 </h2>
               </div>
-              <div className="flex items-center gap-2.5 mb-2">
-                {/* TOP RATED / Tag Badge with increased height & luminous border glow */}
-                <span className="px-3 py-1 sm:px-3.5 sm:py-1 rounded-full bg-[#F59E0B]/15 border-2 border-[#F59E0B] text-[#F59E0B] text-[11px] sm:text-xs font-black uppercase tracking-wider shadow-[0_0_14px_rgba(245,158,11,0.5),inset_0_0_8px_rgba(245,158,11,0.25)] flex items-center justify-center shrink-0">
-                  {activeFood.tag}
+              <div className="flex items-center gap-3 mb-2 flex-wrap sm:flex-nowrap">
+                {/* Tag Badge with warm amber border matching image 2 */}
+                <span className="px-3 py-0.5 rounded-full bg-[#F59E0B]/10 border border-[#F59E0B] text-[#F59E0B] text-[11px] sm:text-xs font-bold uppercase tracking-wider flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(245,158,11,0.25)]">
+                  {activeFood.tag || 'POPULAR'}
                 </span>
 
-                {/* Category Text with increased font size */}
-                <span className="text-xs sm:text-[13px] text-slate-300 font-semibold tracking-wide">
+                {/* Divider Line 1 */}
+                <span className="text-slate-600 text-sm font-light select-none" aria-hidden="true">|</span>
+
+                {/* Category Text */}
+                <span className="text-xs sm:text-[13px] text-slate-300 font-medium tracking-wide">
                   {activeFood.category}
                 </span>
 
-                {/* Rating with formatted Review Count (k for thousands, M for 10 lakh+) */}
+                {/* Divider Line 2 */}
+                <span className="text-slate-600 text-sm font-light select-none" aria-hidden="true">|</span>
+
+                {/* Rating with formatted Review Count */}
                 <span className="text-xs sm:text-[13px] text-[#F59E0B] font-bold flex items-center gap-1 shrink-0">
-                  <Star className="w-3.5 h-3.5 fill-[#F59E0B]" />
+                  <Star className="w-3.5 h-3.5 fill-[#F59E0B] text-[#F59E0B]" />
                   <span>{activeFood.rating?.toFixed(1) || '4.9'}</span>
-                  <span className="text-slate-400 font-medium text-[11px] sm:text-xs ml-0.5">
+                  <span className="text-slate-400 font-normal text-xs sm:text-[13px] ml-0.5">
                     ({formatReviewCount(activeFood.ratingCount || activeFood.reviewsCount || activeFood.reviews || (activeFood.id ? (activeFood.id * 540 + 1200) : 1240))})
                   </span>
                 </span>
@@ -3397,15 +3466,101 @@ export default function App() {
               </p>
             </div>
 
-            {/* Scrollable Customization Body with Spacious Height */}
-            <div
-              ref={detailScrollContainerRef}
-              className="flex-1 min-h-0 overflow-y-auto pt-3 pb-0 space-y-4 pr-1 no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-            >
+            {/* Featured Special Prominent Offer Banner (Displayed ONLY when a customer taps a Featured Special slider, as in Image 2) */}
+            {currentFeaturedOffer && (() => {
+              const linkedFood = foodsList.find(f => String(f.id) === String(currentFeaturedOffer.foodId || currentFeaturedOffer.id));
+              const displayHeroImage = activeFood?.image || linkedFood?.image || currentFeaturedOffer.image;
+              const items = getSliderIncludedItems(currentFeaturedOffer);
+              const isDescription = currentFeaturedOffer.includedType === 'description';
 
-              {/* 1. CHOOSE PORTIONS */}
-              {adminConfig.breakdown.enablePortions && activeFood.customizable?.portions && (
-                <div>
+              return (
+                <div className="mt-3.5 mb-2 relative overflow-hidden rounded-2xl border border-[#F59E0B]/35 bg-[#140D07] shadow-xl shrink-0 h-[290px] flex flex-col justify-between">
+                  {/* ZONE A: Top Banner Zone */}
+                  <div className="relative p-3.5 sm:p-4 h-[125px] shrink-0 flex items-center justify-between overflow-hidden">
+                    {/* Background */}
+                    {currentFeaturedOffer.bgImage ? (
+                      <>
+                        <img
+                          src={currentFeaturedOffer.bgImage}
+                          alt={currentFeaturedOffer.title}
+                          className="absolute inset-0 w-full h-full object-cover object-center"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/75 to-transparent sm:via-black/60 pointer-events-none" />
+                      </>
+                    ) : (
+                      <>
+                        <div className="absolute inset-0 bg-gradient-to-br from-[#231409] via-[#170c04] to-[#0d0703]" />
+                        <div className="absolute -right-8 -bottom-8 w-48 h-48 rounded-full bg-[#F59E0B]/15 blur-3xl pointer-events-none" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/50 to-transparent pointer-events-none" />
+                      </>
+                    )}
+
+                    {/* Left: Badge & Title */}
+                    <div className="z-10 flex-1 pr-3">
+                      <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B]/50 bg-black/40 text-[#F59E0B] text-[10px] font-black uppercase tracking-wider mb-1.5 w-fit shadow-xs">
+                        {currentFeaturedOffer.badge || 'WEEKEND SPECIAL'}
+                      </div>
+                      <h3 className="text-white font-black text-lg sm:text-xl tracking-tight leading-snug line-clamp-2 max-w-[200px] sm:max-w-[230px]">
+                        {currentFeaturedOffer.title}
+                      </h3>
+                    </div>
+
+                    {/* Right: Food cutout */}
+                    {displayHeroImage && (
+                      <div className="z-10 w-24 h-20 sm:w-28 sm:h-24 flex-shrink-0 flex items-center justify-center">
+                        <img
+                          src={displayHeroImage}
+                          alt={currentFeaturedOffer.title}
+                          className="w-full h-full object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.85)] scale-110"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ZONE B: Bottom Included Items Zone */}
+                  <div className="flex-1 flex flex-col justify-between bg-[#121316] border-t border-white/5 p-3.5 sm:p-4 z-10 relative overflow-hidden">
+                    <div className="space-y-1.5">
+                      {isDescription && currentFeaturedOffer.subtitle ? (
+                        <p className="text-slate-300 text-xs sm:text-sm leading-relaxed line-clamp-3">
+                          {currentFeaturedOffer.subtitle}
+                        </p>
+                      ) : (
+                        <div>
+                          <p className="text-[11px] font-semibold text-slate-300 mb-1.5">
+                            {currentFeaturedOffer.includedHeading || 'Combo includes'}
+                          </p>
+                          <div className="space-y-1">
+                            {items.slice(0, 4).map((item, idx) => (
+                              <div key={idx} className="flex items-center gap-2 text-xs font-medium text-slate-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] shrink-0 shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
+                                <span className="line-clamp-1">{item}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Bottom price row - NO Explore button in Food Details modal */}
+                    <div className="pt-2 mt-auto">
+                      <span className="text-[#F59E0B] font-black text-xl sm:text-2xl tracking-tight tabular-nums">
+                        {currency}{formatPrice(currentFeaturedOffer.price)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {hasCustomOptions ? (
+              /* Scrollable Customization Body with Spacious Height */
+              <div
+                ref={detailScrollContainerRef}
+                className="flex-1 min-h-0 overflow-y-auto pt-3 pb-0 space-y-4 pr-1 no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {/* 1. CHOOSE PORTIONS */}
+                {hasAvailablePortions && (
+                  <div>
                   <h3 className="text-[11px] font-extrabold tracking-widest uppercase text-[#F59E0B] mb-2.5">
                     CHOOSE PORTIONS
                   </h3>
@@ -3502,7 +3657,7 @@ export default function App() {
               )}
 
               {/* 2. CHOOSE EXTRA ADDON'S */}
-              {adminConfig.breakdown.enableAddons && activeFood.customizable?.addons && activeFood.customizable.addons.length > 0 && (
+              {hasAvailableAddons && (
                 <div>
                   <h3 className="text-[11px] font-extrabold tracking-widest uppercase text-[#F59E0B] mb-2.5">
                     CHOOSE EXTRA ADDON'S
@@ -3588,9 +3743,17 @@ export default function App() {
               {/* Explicit 18px Guaranteed Free Space below the last selection box */}
               <div className="h-[18px] shrink-0" aria-hidden="true" />
             </div>
+          ) : (
+            /* Dynamic compact mode: Exactly 20px gap between food description and bottom Item Total amount, with a centered divider line */
+            <div className="py-[10px] shrink-0" aria-hidden="true">
+              <div className="border-t border-white/10 w-full" />
+            </div>
+          )}
 
-            {/* Bottom Action Bar: Divider Line + Left: Item Total amount & Price, Right: (+) ADD TO LIST Button */}
-            <div className="pt-3.5 pb-2 border-t border-white/10 shrink-0 flex items-center justify-between gap-4">
+          {/* Bottom Action Bar: Left: Item Total amount & Price, Right: (+) ADD TO LIST Button */}
+          <div className={`pb-2 shrink-0 flex items-center justify-between gap-4 ${
+            hasCustomOptions ? 'pt-3.5 border-t border-white/10' : 'pt-0'
+          }`}>
               {/* Left Side: Item Total amount & Digit with Currency */}
               <div className="flex flex-col justify-center min-w-0">
                 <span className="text-[11px] sm:text-xs font-bold tracking-wider uppercase text-slate-400">
@@ -4262,14 +4425,16 @@ export default function App() {
                 </div>
               )}
 
-              {/* Featured Promo Carousel */}
+              {/* Featured Promo Carousel (Re-designed matching Image 1: +30px height, full-bleed offer photo, no arrows, custom dots) */}
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-orange-400 flex items-center gap-1.5">
-                    <Flame className="w-3.5 h-3.5 text-orange-400 fill-orange-400 animate-pulse" />
-                    Featured Specials
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-xs font-black uppercase tracking-widest text-[#F59E0B] flex items-center gap-1.5">
+                    <Flame className="w-3.5 h-3.5 text-[#F59E0B] fill-[#F59E0B]" />
+                    FEATURED SPECIALS
                   </span>
-                  
+                  <span className="text-xs font-bold text-slate-400 tracking-widest tabular-nums">
+                    {String(menuOfferIndex + 1).padStart(2, '0')} / {String(carouselItems.length || 1).padStart(2, '0')}
+                  </span>
                 </div>
 
                 <div
@@ -4288,47 +4453,124 @@ export default function App() {
                   onMouseDown={handleCarouselTouchStart}
                   onMouseMove={handleCarouselTouchMove}
                   onMouseUp={handleCarouselTouchEnd}
-                  className="relative overflow-hidden rounded-2xl border border-white/15 shadow-xl group"
+                  className="relative overflow-hidden rounded-2xl border border-[#F59E0B]/35 shadow-[0_10px_35px_rgba(0,0,0,0.6)] group h-[290px]"
                 >
                   <div
-                    className="flex transition-transform duration-700 ease-out will-change-transform"
+                    className="flex items-stretch h-full transition-transform duration-700 ease-out will-change-transform"
                     style={{ transform: `translateX(-${menuOfferIndex * 100}%)` }}
                   >
-                    {carouselItems.map((offer) => (
-                      <div
-                        key={offer.id}
-                        onClick={() => selectOfferFromCarousel(offer)}
-                        className="w-full flex-shrink-0 bg-gradient-to-r from-orange-600/35 via-red-600/25 to-black/50 p-4.5 sm:p-5 sm:py-5.5 relative flex items-center justify-between min-h-[165px] sm:min-h-[175px] cursor-pointer hover:brightness-110 transition-all select-none"
-                      >
-                        <div className="z-10 flex-1 pr-3">
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-orange-500/30 border border-orange-400/40 text-amber-300 font-black text-[10px] uppercase tracking-wider mb-2">
-                            <Flame className="text-amber-400 w-3 h-3 fill-amber-400" />
-                            <span>{offer.badge || 'FEATURED SPECIAL'}</span>
-                          </div>
-                          <h4 className="text-white font-extrabold text-base sm:text-lg leading-snug">{offer.title}</h4>
-                          {offer.subtitle && (
-                            <p className="text-slate-300 text-xs sm:text-sm mt-1 line-clamp-2 sm:line-clamp-1 leading-tight">
-                              {offer.subtitle}
-                            </p>
-                          )}
-                          <span className="text-orange-400 font-black text-sm sm:text-base mt-2 block">
-                            Explore Dish &bull; {currency}{formatPrice(offer.price)}
-                          </span>
-                        </div>
+                    {carouselItems.map((offer) => {
+                      const linkedFood = foodsList.find(f => String(f.id) === String(offer.foodId || offer.id));
+                      const displayCutout = linkedFood?.image || offer.image;
+                      const items = getSliderIncludedItems(offer).slice(0, 4);
+                      const isDescription = offer.includedType === 'description';
 
-                        <div className="z-10 w-24 h-24 sm:w-28 sm:h-28 flex-shrink-0 flex items-center justify-center">
-                          <img
-                            src={offer.image}
-                            alt={offer.title}
-                            className={offer.isPng !== false ? "w-full h-full object-contain drop-shadow-xl scale-110" : "w-20 h-20 sm:w-22 sm:h-22 object-cover rounded-full border border-white/30 shadow-md"}
-                          />
+                      return (
+                        <div
+                          key={offer.id}
+                          onClick={() => selectOfferFromCarousel(offer)}
+                          className="w-full h-full flex-shrink-0 cursor-pointer select-none overflow-hidden flex flex-col justify-between bg-[#140D07]"
+                        >
+                          {/* ZONE A: Top Banner Zone */}
+                          <div className="relative p-3.5 sm:p-4 h-[125px] shrink-0 flex items-center justify-between overflow-hidden">
+                            {/* Background */}
+                            {offer.bgImage ? (
+                              <>
+                                <img
+                                  src={offer.bgImage}
+                                  alt={offer.title}
+                                  className="absolute inset-0 w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/75 to-transparent sm:via-black/60 pointer-events-none" />
+                              </>
+                            ) : (
+                              <>
+                                <div className="absolute inset-0 bg-gradient-to-br from-[#231409] via-[#170c04] to-[#0d0703]" />
+                                <div className="absolute -right-8 -bottom-8 w-44 h-44 rounded-full bg-[#F59E0B]/15 blur-3xl pointer-events-none" />
+                                <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/50 to-transparent pointer-events-none" />
+                              </>
+                            )}
+
+                            {/* Left: Badge & Title */}
+                            <div className="z-10 flex-1 pr-3">
+                              <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B]/50 bg-black/40 text-[#F59E0B] text-[10px] font-black uppercase tracking-wider mb-1.5 w-fit shadow-xs">
+                                {offer.badge || 'WEEKEND SPECIAL'}
+                              </div>
+                              <h3 className="text-white font-black text-lg sm:text-xl tracking-tight leading-snug line-clamp-2 max-w-[200px] sm:max-w-[230px]">
+                                {offer.title}
+                              </h3>
+                            </div>
+
+                            {/* Right: Food cutout */}
+                            {displayCutout && (
+                              <div className="z-10 w-24 h-20 sm:w-28 sm:h-24 flex-shrink-0 flex items-center justify-center">
+                                <img
+                                  src={displayCutout}
+                                  alt={offer.title}
+                                  className={offer.isPng !== false ? "w-full h-full object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.85)] scale-110" : "w-18 h-18 sm:w-20 sm:h-20 object-cover rounded-full border border-white/30 shadow-md"}
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* ZONE B: Bottom Included Items Zone */}
+                          <div className="flex-1 flex flex-col justify-between bg-[#121316] border-t border-white/5 p-3.5 sm:p-4 z-10 relative overflow-hidden">
+                            <div className="space-y-1.5">
+                              {isDescription && offer.subtitle ? (
+                                <p className="text-slate-300 text-xs sm:text-sm leading-relaxed line-clamp-3">
+                                  {offer.subtitle}
+                                </p>
+                              ) : (
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-300 mb-1.5">
+                                    {offer.includedHeading || 'Combo includes'}
+                                  </p>
+                                  <div className="space-y-1">
+                                    {items.map((item, idx) => (
+                                      <div key={idx} className="flex items-center gap-2 text-xs font-medium text-slate-200">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] shrink-0 shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
+                                        <span className="line-clamp-1">{item}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-between pt-2 mt-auto">
+                              <span className="text-[#F59E0B] font-black text-xl sm:text-2xl tracking-tight tabular-nums">
+                                {currency}{formatPrice(offer.price)}
+                              </span>
+                              <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#F59E0B] hover:bg-[#d97706] active:scale-95 text-black font-black text-xs shadow-md transition-all">
+                                <span>Explore combo</span>
+                                <ArrowRight className="w-3.5 h-3.5 stroke-[2.8]" />
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
-                
+                {/* Dots Pagination Indicator (No left/right arrows as requested) */}
+                <div className="flex items-center justify-center gap-2 mt-3.5">
+                  {carouselItems.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuOfferIndex(idx);
+                      }}
+                      className={`transition-all duration-300 rounded-full cursor-pointer ${
+                        idx === menuOfferIndex
+                          ? 'w-7 h-2 bg-[#F59E0B] shadow-[0_0_8px_rgba(245,158,11,0.6)]'
+                          : 'w-2 h-2 bg-white/20 hover:bg-white/40'
+                      }`}
+                      aria-label={`Go to slide ${idx + 1}`}
+                    />
+                  ))}
+                </div>
               </div>
 
               {/* Categories Section with Large, Readable Buttons */}

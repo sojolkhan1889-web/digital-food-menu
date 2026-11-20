@@ -7,6 +7,7 @@ import foodGif from '../assets/Food.gif';
 import iceCreamPng from '../assets/ice_cream.png';
 import kacchiBiryaniPng from '../assets/kacchi_biryani.png';
 import coffeePng from '../assets/coffee.png';
+import burgerComboJpg from '../assets/burger_combo.jpg';
 
 export const initialFoods = [
   {
@@ -262,17 +263,17 @@ export const initialFoods = [
   {
     id: 'food_hb_01',
     restaurant_id: 'resto_002',
-    title: 'Double Beef Smash Burger',
-    tag: 'Chef Special',
+    title: 'Double Smash Burger Combo',
+    tag: 'Best Seller',
     rating: 4.9,
-    ratingCount: 88,
-    category: 'Main Course',
+    ratingCount: 142,
+    category: 'Smash Burgers',
     subcategory: 'Smash Burgers',
     price: 380,
     oldPrice: 420,
-    description: 'Crispy caramelized double smash patties with double American cheese, grilled onions, and house pickle sauce on a buttered brioche bun.',
+    description: 'Two smashed beef patties with caramelized onions, cheddar cheese and signature smash sauce.',
     ingredients: ['Prime Beef Smash Patties', 'Melted American Cheese', 'Caramelized Onions', 'Brioche Bun'],
-    image: burgerPng,
+    image: burgerComboJpg,
     isPng: true,
     is_published: true,
     status: 'published',

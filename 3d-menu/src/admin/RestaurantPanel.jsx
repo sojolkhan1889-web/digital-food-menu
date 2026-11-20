@@ -2351,43 +2351,99 @@ export default function RestaurantPanel({
                   return (
                     <div
                       key={slide.id}
-                      className={`rounded-[5px] border overflow-hidden flex flex-col justify-between ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-300 shadow-sm'
+                      className={`rounded-2xl border overflow-hidden flex flex-col justify-between ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-300 shadow-sm'
                         }`}
                     >
                       {/* Realistic Banner Card Inside - Exact Match with Customer 3D Menu */}
-                      <div className="p-5 bg-gradient-to-r from-[#220b05] via-[#140602] to-[#0a0301] border-b border-orange-950/40 relative flex items-center justify-between min-h-[145px] overflow-hidden select-none">
-                        {/* Ambient warm radial glow matching digital menu */}
-                        <div className="absolute left-0 top-0 bottom-0 w-2/3 bg-radial from-orange-600/25 to-transparent blur-xl pointer-events-none" />
-
-                        <div className="z-10 flex-1 pr-4">
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-[5px] bg-orange-950/80 border border-orange-500/50 text-amber-300 font-black text-[10px] uppercase tracking-wider mb-2">
-                            <Flame className="w-3 h-3 text-amber-400 fill-amber-400" />
-                            <span>{slide.badge}</span>
-                          </div>
-                          <h4 className="text-white font-extrabold text-lg sm:text-xl tracking-tight leading-tight line-clamp-1">
-                            {slide.title}
-                          </h4>
-                          {slide.subtitle && (
-                            <p className="text-slate-300 text-xs sm:text-sm mt-1.5 line-clamp-2 leading-snug max-w-sm">
-                              {slide.subtitle}
-                            </p>
+                      <div className="flex-1 flex flex-col justify-between overflow-hidden bg-[#140D07] h-[290px]">
+                        {/* Zone A: Top Banner */}
+                        <div className="p-3.5 sm:p-4 relative flex items-center justify-between h-[125px] shrink-0 overflow-hidden select-none bg-[#140D07]">
+                          {slide.bgImage ? (
+                            <>
+                              <img
+                                src={slide.bgImage}
+                                alt={slide.title}
+                                className="absolute inset-0 w-full h-full object-cover object-center"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/75 to-transparent pointer-events-none" />
+                            </>
+                          ) : (
+                            <>
+                              <div className="absolute inset-0 bg-gradient-to-br from-[#231409] via-[#170c04] to-[#0d0703]" />
+                              <div className="absolute -right-8 -bottom-8 w-44 h-44 rounded-full bg-[#F59E0B]/15 blur-3xl pointer-events-none" />
+                              <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/50 to-transparent pointer-events-none" />
+                            </>
                           )}
-                          <span className="text-orange-400 font-black text-sm sm:text-base mt-2.5 block">
-                            Explore Dish &bull; {currency}{Number(slide.price || 0).toFixed(2)}
-                          </span>
+
+                          <div className="z-10 flex-1 pr-3">
+                            <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B]/50 bg-black/40 text-[#F59E0B] text-[10px] font-black uppercase tracking-wider mb-1.5 w-fit">
+                              {slide.badge || 'WEEKEND SPECIAL'}
+                            </div>
+                            <h4 className="text-white font-extrabold text-base sm:text-lg tracking-tight leading-snug line-clamp-2 max-w-[200px]">
+                              {slide.title}
+                            </h4>
+                          </div>
+
+                          {/* Floating Food Preview Image with Drop Shadow */}
+                          {(() => {
+                            const linkedFood = foods.find(f => String(f.id) === String(slide.foodId || slide.id));
+                            const displaySlideImage = linkedFood?.image || slide.image;
+                            if (!displaySlideImage) return null;
+                            return (
+                              <div className="z-10 w-24 h-20 sm:w-28 sm:h-24 shrink-0 flex items-center justify-center relative">
+                                <img
+                                  src={displaySlideImage}
+                                  alt={slide.title}
+                                  className={slide.isPng !== false ? "w-full h-full object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.85)] scale-110" : "w-18 h-18 sm:w-20 sm:h-20 object-cover rounded-full border border-white/20 shadow-2xl"}
+                                />
+                              </div>
+                            );
+                          })()}
                         </div>
 
-                        {/* Floating Food Preview Image with Drop Shadow */}
-                        <div className="z-10 w-28 h-28 sm:w-36 sm:h-36 shrink-0 flex items-center justify-center relative">
-                          {slide.image ? (
-                            <img
-                              src={slide.image}
-                              alt={slide.title}
-                              className={slide.isPng !== false ? "max-h-28 max-w-full object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.8)] scale-110" : "w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-full border border-white/20 shadow-2xl"}
-                            />
-                          ) : (
-                            <Utensils className="w-10 h-10 text-orange-400" />
-                          )}
+                        {/* Zone B: Bottom Included Items */}
+                        <div className="flex-1 flex flex-col justify-between bg-[#121316] border-t border-white/5 p-3.5 z-10 relative overflow-hidden">
+                          <div className="space-y-1.5">
+                            {slide.includedType === 'description' && slide.subtitle ? (
+                              <p className="text-slate-300 text-xs leading-relaxed line-clamp-3">
+                                {slide.subtitle}
+                              </p>
+                            ) : (
+                              <div>
+                                <p className="text-[11px] font-semibold text-slate-300 mb-1">
+                                  {slide.includedHeading || 'Combo includes'}
+                                </p>
+                                <div className="space-y-1">
+                                  {(() => {
+                                    let items = [];
+                                    if (Array.isArray(slide.includedItems) && slide.includedItems.length > 0) {
+                                      items = slide.includedItems.filter(Boolean);
+                                    } else if (slide.subtitle) {
+                                      items = slide.subtitle.split(/\n|\+/).map(s => s.trim().replace(/^[-•*]\s*/, '')).filter(Boolean);
+                                    }
+                                    if (items.length === 0) {
+                                      items = ['Double smash burger', 'Crispy fries', 'Coke • 350 ml', 'Dip sauce • 30 ml'];
+                                    }
+                                    return items.slice(0, 4).map((item, idx) => (
+                                      <div key={idx} className="flex items-center gap-2 text-xs font-medium text-slate-200">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] shrink-0 shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
+                                        <span className="line-clamp-1">{item}</span>
+                                      </div>
+                                    ));
+                                  })()}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 mt-auto">
+                            <span className="text-[#F59E0B] font-black text-xl tracking-tight tabular-nums">
+                              {currency}{Number(slide.price || 0).toFixed(2)}
+                            </span>
+                            <span className="text-xs text-slate-400 font-medium">
+                              Explore combo
+                            </span>
+                          </div>
                         </div>
                       </div>
                       {/* Controls Footer */}

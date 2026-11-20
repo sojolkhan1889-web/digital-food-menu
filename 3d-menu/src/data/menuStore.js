@@ -170,7 +170,7 @@ export const loadFoodsFromIndexedDB = async () => {
       const req = store.getAll();
       req.onsuccess = () => {
         const items = req.result;
-        if (Array.isArray(items) && items.length >= 8) {
+        if (Array.isArray(items) && items.length > 0) {
           const cleaned = items.filter(f => String(f.title || '').trim().toLowerCase() !== 'kacchi');
           resolve(cleaned.map(mapFoodItem));
         } else {
@@ -185,13 +185,24 @@ export const loadFoodsFromIndexedDB = async () => {
 };
 
 export const resolveFoodImage = (image, fallback) => {
+  if (!image) return fallback?.image || '/burger_hd.png';
+  const clean = String(image).trim();
+  // Valid Base64 Data URL, Blob, or external HTTP/HTTPS URL
+  if (clean.startsWith('data:image/') || clean.startsWith('blob:') || clean.startsWith('http://') || clean.startsWith('https://')) {
+    return clean;
+  }
+  // Fast resolution for combo image and standard public assets
+  if (clean.includes('double_smash') || clean.includes('burger_combo')) {
+    return '/burger_combo.jpg';
+  }
+  if (clean.startsWith('/burger_combo.jpg') || clean.startsWith('/assets/') || clean.startsWith('/models/')) {
+    return clean;
+  }
   if (fallback?.image) {
-    if (!image || (typeof image === 'string' && image.startsWith('/src/assets/'))) {
+    if (clean.startsWith('/src/assets/')) {
       return fallback.image;
     }
   }
-  if (!image) return fallback?.image || '/burger_hd.png';
-  const clean = String(image).trim();
   if (clean.startsWith('/src/assets/')) {
     return clean.replace('/src/assets/', '/');
   }
@@ -276,22 +287,25 @@ export const saveStoredFoods = (foods) => {
   // Asynchronously cache to IndexedDB (supports unlimited storage for high-res images)
   saveFoodsToIndexedDB(filtered);
 
-  // Safely save to localStorage (strip massive base64 strings to prevent QuotaExceededError)
+  // Safely save to localStorage
   try {
-    const safePayload = filtered.map(item => {
-      if (item.image && typeof item.image === 'string' && item.image.startsWith('data:') && item.image.length > 50000) {
-        const fallback = initialFoods.find(f => String(f.id) === String(item.id) || f.title === item.title);
-        return {
-          ...item,
-          image: fallback ? fallback.image : item.image.slice(0, 50000)
-        };
-      }
-      return item;
-    });
-    localStorage.setItem(FOODS_KEY, JSON.stringify(safePayload));
+    localStorage.setItem(FOODS_KEY, JSON.stringify(filtered));
     localStorage.setItem(FOODS_VERSION_KEY, CURRENT_FOODS_VERSION);
   } catch (e) {
     console.warn('Quota safe save fallback triggered:', e);
+    try {
+      const safePayload = filtered.map(item => {
+        if (item.image && typeof item.image === 'string' && item.image.startsWith('data:') && item.image.length > 250000) {
+          const fallback = initialFoods.find(f => String(f.id) === String(item.id) || f.title === item.title);
+          return {
+            ...item,
+            image: fallback ? fallback.image : item.image
+          };
+        }
+        return item;
+      });
+      localStorage.setItem(FOODS_KEY, JSON.stringify(safePayload));
+    } catch (e2) {}
   }
 };
 
@@ -968,13 +982,7 @@ export const showBrowserNotification = async (title, options = {}) => {
 export const syncFoodToSupabase = async (food, restaurantId) => {
   try {
     const isPub = food.is_published !== false && food.status !== 'unpublished' && food.status !== 'draft';
-    let imageToSync = food.image || null;
-    if (typeof imageToSync === 'string' && imageToSync.startsWith('data:') && imageToSync.length > 250000) {
-      const fallback = initialFoods.find(f => String(f.id) === String(food.id) || f.title === food.title);
-      if (fallback?.image && !fallback.image.startsWith('data:')) {
-        imageToSync = `/src/assets/${food.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}.png`;
-      }
-    }
+    const imageToSync = food.image || null;
     const payload = {
       id: String(food.id),
       restaurant_id: restaurantId || food.restaurant_id || food.restaurantId || 'resto_001',
@@ -1144,15 +1152,46 @@ export const fetchRemoteData = async (restaurantId = 'resto_001') => {
     if (slidersRes.data && slidersRes.data.length > 0) {
       remoteSliders = slidersRes.data.map(sl => {
         const fallbackFood = initialFoods.find(f => String(f.id) === String(sl.food_id) || f.title === sl.food_title);
+        let parsedImage = sl.image;
+        let parsedBgImage = null;
+        let parsedIncludedType = 'list';
+        let parsedIncludedHeading = 'Combo includes';
+        let parsedIncludedItems = [];
+
+        if (typeof sl.image === 'string' && sl.image.startsWith('{"')) {
+          try {
+            const parsed = JSON.parse(sl.image);
+            parsedImage = parsed.cutout || sl.image;
+            parsedBgImage = parsed.bg || null;
+            parsedIncludedType = parsed.includedType || 'list';
+            parsedIncludedHeading = parsed.includedHeading || 'Combo includes';
+            parsedIncludedItems = Array.isArray(parsed.includedItems) ? parsed.includedItems : [];
+          } catch (e) {}
+        }
+
+        if (parsedIncludedItems.length === 0 && sl.subtitle) {
+          const lines = sl.subtitle
+            .split(/\n|\+/)
+            .map(s => s.trim().replace(/^[-•*]\s*/, ''))
+            .filter(Boolean);
+          if (lines.length > 0) {
+            parsedIncludedItems = lines;
+          }
+        }
+
         return {
           id: sl.id,
           badge: sl.badge,
           title: sl.title,
           subtitle: sl.subtitle,
+          includedType: parsedIncludedType,
+          includedHeading: parsedIncludedHeading,
+          includedItems: parsedIncludedItems,
           foodId: sl.food_id,
           foodTitle: sl.food_title,
           price: Number(sl.price || 0),
-          image: resolveFoodImage(sl.image, fallbackFood),
+          image: resolveFoodImage(parsedImage, fallbackFood),
+          bgImage: parsedBgImage,
           isPng: sl.is_png,
           isActive: sl.is_active,
           displayOrder: sl.display_order
@@ -1621,6 +1660,9 @@ export const initialFeaturedSliders = [
     badge: 'CHEF SPECIAL',
     title: 'Double Flame Cheeseburger',
     subtitle: 'Flame-grilled Angus patty with melted Wisconsin cheddar & secret sauce',
+    includedType: 'list',
+    includedHeading: 'Combo includes',
+    includedItems: ['Flame-grilled Angus patty', 'Melted Wisconsin cheddar', 'Secret burger sauce'],
     foodId: 1,
     foodTitle: 'Double Flame Cheeseburger',
     price: 15.99,
@@ -1634,6 +1676,9 @@ export const initialFeaturedSliders = [
     badge: 'WOOD-FIRED CRUST',
     title: 'Artisan Wood-Fired Pizza',
     subtitle: 'San Marzano tomatoes, fresh buffalo mozzarella & aromatic sweet basil',
+    includedType: 'list',
+    includedHeading: 'Combo includes',
+    includedItems: ['San Marzano tomato base', 'Fresh buffalo mozzarella', 'Aromatic sweet basil', 'Extra virgin olive oil'],
     foodId: 2,
     foodTitle: 'Artisan Wood-Fired Pizza',
     price: 18.50,
@@ -1647,6 +1692,9 @@ export const initialFeaturedSliders = [
     badge: 'SWEET DELIGHT',
     title: 'Royal Pistachio Kunafa',
     subtitle: 'Golden kataifi pastry soaked in rose syrup & crushed Turkish pistachios',
+    includedType: 'list',
+    includedHeading: 'Dessert includes',
+    includedItems: ['Crisp golden kataifi', 'Warm stretchy sweet cheese', 'Rose-cardamom syrup', 'Crushed Turkish pistachios'],
     foodId: 5,
     foodTitle: 'Royal Pistachio Kunafa',
     price: 12.50,
@@ -1681,12 +1729,15 @@ export const saveStoredFeaturedSliders = (sliders) => {
 export const syncSliderToSupabase = async (slider, restaurantId = 'resto_001') => {
   try {
     let sliderImg = slider.image || null;
-    if (typeof sliderImg === 'string' && sliderImg.startsWith('data:') && sliderImg.length > 250000) {
-      const fallback = initialFoods.find(f => String(f.id) === String(slider.foodId) || f.title === slider.foodTitle || f.title === slider.title);
-      if (fallback?.image && !fallback.image.startsWith('data:')) {
-        sliderImg = `/src/assets/${(slider.foodTitle || slider.title || 'food').toLowerCase().replace(/[^a-z0-9]/g, '_')}.png`;
-      }
-    }
+
+    // Bundle cutout, bg, and included fields into image JSON payload so Supabase preserves everything
+    sliderImg = JSON.stringify({
+      cutout: sliderImg,
+      bg: slider.bgImage || null,
+      includedType: slider.includedType || 'list',
+      includedHeading: slider.includedHeading || 'Combo includes',
+      includedItems: Array.isArray(slider.includedItems) ? slider.includedItems : []
+    });
 
     const { data, error } = await supabase.from('featured_sliders').upsert([{
       id: String(slider.id),
