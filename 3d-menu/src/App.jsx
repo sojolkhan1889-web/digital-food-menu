@@ -4471,17 +4471,17 @@ export default function App() {
                   </div>
 
                   {isFollowing ? (
-                    <div className="px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full border border-amber-500/80 bg-amber-500/10 text-amber-400 font-bold text-xs sm:text-sm flex items-center gap-1.5 shrink-0 shadow-[0_0_12px_rgba(245,158,11,0.25)] select-none animate-in fade-in duration-300">
+                    <div className="px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full border border-[#ff6900]/80 bg-[#ff6900]/10 text-[#ff6900] font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-1.5 shrink-0 shadow-[0_0_12px_rgba(255,105,0,0.25)] select-none animate-in fade-in duration-300">
                       <Check className="w-3.5 h-3.5 stroke-[3]" />
-                      <span>Following</span>
+                      <span>FOLLOWING</span>
                     </div>
                   ) : (
                     <button
                       type="button"
                       onClick={handleFollowRestaurant}
-                      className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-amber-500 hover:bg-amber-400 active:scale-95 text-black font-black text-xs sm:text-sm shadow-md transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                      className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-[#ff6900] hover:bg-[#e05d00] active:scale-95 text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-md transition-all cursor-pointer flex items-center gap-1 shrink-0"
                     >
-                      <span>+ Follow</span>
+                      <span>+ FOLLOW</span>
                     </button>
                   )}
                 </div>
@@ -4561,33 +4561,35 @@ export default function App() {
                             </div>
                           )}
 
-                          {/* Left Content: Badge, Title & Price */}
-                          <div className="relative z-20 h-full p-4 sm:p-5 flex flex-col justify-between max-w-[62%] sm:max-w-[58%]">
+                          {/* Left Content: Badge, Title, Price & Explore Combo Button */}
+                          <div className="relative z-20 h-full p-4 sm:p-5 flex flex-col justify-between max-w-[58%] sm:max-w-[55%]">
                             <div className="space-y-1.5">
                               {/* Badge */}
-                              <div className="inline-flex items-center px-3 py-1 rounded-full border border-[#F59E0B] bg-black/40 text-[#F59E0B] text-[10px] sm:text-[11px] font-bold uppercase tracking-wider w-fit shadow-xs">
+                              <div className="inline-flex items-center px-3 py-0.5 sm:py-1 rounded-full border border-[#F59E0B] bg-black/40 text-[#F59E0B] text-[10px] sm:text-[11px] font-bold uppercase tracking-wider w-fit shadow-xs">
                                 {offer.badge || 'DHAMAKA OFFER'}
                               </div>
 
                               {/* Main Title */}
-                              <h3 className="text-white font-black text-xl sm:text-2xl tracking-tight leading-tight line-clamp-2">
+                              <h3 className="text-white font-black text-lg sm:text-xl tracking-tight leading-snug line-clamp-2">
                                 {offer.title}
                               </h3>
                             </div>
 
-                            {/* Bottom Price */}
-                            <div className="pt-2 mt-auto">
-                              <span className="text-[#F59E0B] font-black text-2xl sm:text-3xl tracking-tight tabular-nums">
+                            {/* Bottom Price & Explore Combo Button */}
+                            <div className="pt-1.5 mt-auto space-y-2">
+                              <span className="text-[#F59E0B] font-black text-2xl sm:text-3xl tracking-tight tabular-nums block leading-none">
                                 {currency}{formatPrice(offer.price)}
                               </span>
-                            </div>
-                          </div>
-
-                          {/* Explore Combo Button on Bottom-Right (matching Image 1) */}
-                          <div className="absolute right-3.5 sm:right-5 bottom-3.5 sm:bottom-4 z-20">
-                            <div className="inline-flex items-center gap-1.5 px-4 py-2 sm:px-5 sm:py-2.5 rounded-full bg-[#F59E0B] hover:bg-[#d97706] active:scale-95 text-black font-extrabold text-xs sm:text-sm shadow-md transition-all cursor-pointer">
-                              <span>Explore combo</span>
-                              <ArrowRight className="w-3.5 h-3.5 stroke-[2.8]" />
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  selectOfferFromCarousel(offer);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full bg-[#F59E0B] hover:bg-[#d97706] active:scale-95 text-black font-black text-xs shadow-md transition-all cursor-pointer w-fit"
+                              >
+                                <span>Explore combo</span>
+                                <ArrowRight className="w-3.5 h-3.5 stroke-[2.8]" />
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -4618,8 +4620,8 @@ export default function App() {
 
               {/* Categories Section with Large, Readable Buttons */}
               <div>
-                <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2.5">
-                  Browse Categories
+                <h4 className="text-[12px] font-black uppercase tracking-widest text-slate-400 mb-2.5">
+                  Menu Categories
                 </h4>
                 <div className="space-y-2.5">
                   {dynamicCategories.map((cat, idx) => {
@@ -4646,7 +4648,7 @@ export default function App() {
                           </div>
                           <div className="text-left">
                             <span className={`text-sm sm:text-base font-bold block ${isSelected ? 'text-white' : 'text-slate-200'}`}>
-                              {cat.name}
+                              {(cat.name === 'All Items' || cat.name === 'All' || cat.name.toLowerCase() === 'all items') ? 'ALL ITEMS' : cat.name}
                             </span>
                             <span className="text-[11px] text-slate-400">
                               {count} {count > 1 ? 'Items available' : 'Item available'}

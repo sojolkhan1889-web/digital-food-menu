@@ -2586,8 +2586,8 @@ export default function RestaurantPanel({
                           );
                         })()}
 
-                        {/* Left Content (Z-index 20) */}
-                        <div className="relative z-20 h-full p-4 flex flex-col justify-between max-w-[62%]">
+                        {/* Left Content: Badge, Title, Price & Explore Combo */}
+                        <div className="relative z-20 h-full p-4 flex flex-col justify-between max-w-[58%]">
                           <div className="space-y-1.5">
                             <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B] bg-black/40 text-[#F59E0B] text-[10px] font-black uppercase tracking-wider w-fit">
                               {slide.badge || 'DHAMAKA OFFER'}
@@ -2597,18 +2597,14 @@ export default function RestaurantPanel({
                             </h4>
                           </div>
 
-                          <div className="pt-2 mt-auto">
-                            <span className="text-[#F59E0B] font-black text-2xl tracking-tight tabular-nums">
+                          <div className="pt-2 mt-auto space-y-2">
+                            <span className="text-[#F59E0B] font-black text-2xl tracking-tight tabular-nums block leading-none">
                               {currency}{Number(slide.price || 0).toFixed(2)}
                             </span>
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#F59E0B]/20 border border-[#F59E0B]/40 text-[#F59E0B] text-xs font-bold w-fit">
+                              Explore combo →
+                            </span>
                           </div>
-                        </div>
-
-                        {/* Bottom-right Explore text */}
-                        <div className="absolute right-3.5 bottom-3.5 z-20">
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#F59E0B]/20 border border-[#F59E0B]/40 text-[#F59E0B] text-xs font-bold">
-                            Explore combo →
-                          </span>
                         </div>
                       </div>
                       {/* Controls Footer */}
