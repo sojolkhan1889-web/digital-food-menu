@@ -4016,14 +4016,20 @@ export default function RestaurantPanel({
           setEditingSlider(null);
         }}
         onSave={async (slide) => {
-          await onAddFeaturedSlider(slide);
+          const isEditMode = Boolean(editingSlider);
+          const wasAutoNotifOn = Boolean(slide.autoNotification ?? editingSlider?.autoNotification);
+          const finalSlide = {
+            ...slide,
+            autoNotification: wasAutoNotifOn
+          };
+          await onAddFeaturedSlider(finalSlide);
           setEditingSlider(null);
-          if (editingSlider && editingSlider.autoNotification && slide.isActive !== false) {
-            setSliderSuccessNotice(`🎉 Slider "${slide.title}" updated! Auto notification sent to followers.`);
-          } else if (editingSlider) {
-            setSliderSuccessNotice(`✅ Slider "${slide.title}" updated successfully.`);
+          if (isEditMode && wasAutoNotifOn && finalSlide.isActive !== false) {
+            setSliderSuccessNotice(`🔔 Push notification broadcasted to all followers for "${finalSlide.title}"!`);
+          } else if (isEditMode) {
+            setSliderSuccessNotice(`✅ Slider "${finalSlide.title}" updated successfully.`);
           } else {
-            setSliderSuccessNotice(`🎉 Slider "${slide.title}" created successfully!`);
+            setSliderSuccessNotice(`🎉 Slider "${finalSlide.title}" created successfully!`);
           }
           setTimeout(() => setSliderSuccessNotice(''), 6000);
         }}

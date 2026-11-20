@@ -270,7 +270,7 @@ export default function App() {
   const [foodsList, setFoodsList] = useState(getStoredFoods);
   const [categoriesList, setCategoriesList] = useState(getStoredCategories);
   const [subcategoriesList, setSubcategoriesList] = useState(getStoredSubcategories);
-  const [featuredSliders, setFeaturedSliders] = useState(getStoredFeaturedSliders);
+  const [featuredSliders, setFeaturedSliders] = useState(() => getStoredFeaturedSliders(currentRestoId));
   const [restaurantProfile, setRestaurantProfile] = useState(() => getRestaurantProfile(currentRestoId));
   const [ticketsList, setTicketsList] = useState(getStoredTickets);
   const [chatMessagesList, setChatMessagesList] = useState(getStoredChatMessages);
@@ -541,7 +541,7 @@ export default function App() {
 
         if (data.remoteSliders) {
           setFeaturedSliders(data.remoteSliders);
-          saveStoredFeaturedSliders(data.remoteSliders);
+          saveStoredFeaturedSliders(data.remoteSliders, restoId);
         } else if (restoId !== 'resto_001') {
           setFeaturedSliders([]);
         }
@@ -1202,20 +1202,30 @@ export default function App() {
   };
 
   const handleAddFeaturedSlider = async (newSlide) => {
-    const exists = featuredSliders.some(s => String(s.id) === String(newSlide.id));
+    const existingSlide = featuredSliders.find(s => String(s.id) === String(newSlide.id));
+    const exists = Boolean(existingSlide);
+    const resolvedAutoNotification = newSlide.autoNotification !== undefined
+      ? Boolean(newSlide.autoNotification)
+      : Boolean(existingSlide?.autoNotification);
+
+    const mergedSlide = {
+      ...newSlide,
+      autoNotification: resolvedAutoNotification
+    };
+
     let updated;
     if (exists) {
-      updated = featuredSliders.map(s => String(s.id) === String(newSlide.id) ? newSlide : s);
+      updated = featuredSliders.map(s => String(s.id) === String(newSlide.id) ? mergedSlide : s);
     } else {
-      updated = [newSlide, ...featuredSliders];
+      updated = [mergedSlide, ...featuredSliders];
     }
     setFeaturedSliders(updated);
-    if (currentRestoId === 'resto_001') saveStoredFeaturedSliders(updated);
-    await syncSliderToSupabase(newSlide, currentRestoId);
+    saveStoredFeaturedSliders(updated, currentRestoId);
+    await syncSliderToSupabase(mergedSlide, currentRestoId);
 
     // If editing existing slider and autoNotification is turned ON and slider is active, broadcast push notification
-    if (exists && newSlide.autoNotification && newSlide.isActive !== false) {
-      await handleBroadcastSliderNotification(newSlide);
+    if (exists && resolvedAutoNotification && mergedSlide.isActive !== false) {
+      await handleBroadcastSliderNotification(mergedSlide);
     }
     // Note: Creating a new featured slider does NOT automatically send notifications!
   };
@@ -1230,13 +1240,13 @@ export default function App() {
       return s;
     });
     setFeaturedSliders(updated);
-    if (currentRestoId === 'resto_001') saveStoredFeaturedSliders(updated);
+    saveStoredFeaturedSliders(updated, currentRestoId);
   };
 
   const handleDeleteFeaturedSlider = (slideId) => {
     const updated = featuredSliders.filter(s => s.id !== slideId);
     setFeaturedSliders(updated);
-    if (currentRestoId === 'resto_001') saveStoredFeaturedSliders(updated);
+    saveStoredFeaturedSliders(updated, currentRestoId);
     deleteSliderFromSupabase(slideId, currentRestoId);
   };
 
@@ -1250,7 +1260,7 @@ export default function App() {
       return s;
     });
     setFeaturedSliders(updated);
-    if (currentRestoId === 'resto_001') saveStoredFeaturedSliders(updated);
+    saveStoredFeaturedSliders(updated, currentRestoId);
   };
 
   const handleSaveRestaurantProfile = (updatedProfile) => {

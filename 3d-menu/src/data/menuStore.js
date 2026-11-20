@@ -1723,9 +1723,10 @@ export const initialFeaturedSliders = [
   }
 ];
 
-export const getStoredFeaturedSliders = () => {
+export const getStoredFeaturedSliders = (restaurantId) => {
   try {
-    const data = localStorage.getItem(FEATURED_SLIDERS_KEY);
+    const targetKey = restaurantId ? `${FEATURED_SLIDERS_KEY}_${restaurantId}` : null;
+    const data = (targetKey && localStorage.getItem(targetKey)) || localStorage.getItem(FEATURED_SLIDERS_KEY);
     if (data) {
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -1736,9 +1737,13 @@ export const getStoredFeaturedSliders = () => {
   return initialFeaturedSliders;
 };
 
-export const saveStoredFeaturedSliders = (sliders) => {
+export const saveStoredFeaturedSliders = (sliders, restaurantId) => {
   try {
+    const targetId = restaurantId || 'resto_001';
     localStorage.setItem(FEATURED_SLIDERS_KEY, JSON.stringify(sliders));
+    if (targetId) {
+      localStorage.setItem(`${FEATURED_SLIDERS_KEY}_${targetId}`, JSON.stringify(sliders));
+    }
   } catch (e) {
     console.error('Error saving featured sliders:', e);
   }

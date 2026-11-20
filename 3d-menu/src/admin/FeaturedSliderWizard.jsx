@@ -14,7 +14,8 @@ import {
   Tag,
   ListChecks,
   Eye,
-  Star
+  Star,
+  Bell
 } from 'lucide-react';
 import { compressImage } from '../lib/imageCompressor';
 
@@ -47,6 +48,7 @@ export default function FeaturedSliderWizard({
   const [bgImage, setBgImage] = useState('');
   const [isUploadingBg, setIsUploadingBg] = useState(false);
   const [isPng, setIsPng] = useState(true);
+  const [autoNotification, setAutoNotification] = useState(false);
 
   // Preview tab: 'slider' (Menu slider) or 'details' (Food details)
   const [previewTab, setPreviewTab] = useState('slider');
@@ -88,6 +90,7 @@ export default function FeaturedSliderWizard({
       setFoodImage(linkedFood?.image || editingSlider.image || '');
       setBgImage(editingSlider.bgImage || editingSlider.bg_image || '');
       setIsPng(editingSlider.isPng !== false);
+      setAutoNotification(Boolean(editingSlider.autoNotification));
     } else {
       // New slider: if burger or first food exists, auto-select for convenience
       const defaultFood = foods.find(f => /burger|combo/i.test(f.title)) || foods[0];
@@ -116,6 +119,7 @@ export default function FeaturedSliderWizard({
       ]);
       setSubtitle('Two smashed beef patties with caramelized onions, cheddar cheese and signature smash sauce.');
       setBgImage('');
+      setAutoNotification(false);
     }
   };
 
@@ -209,6 +213,7 @@ export default function FeaturedSliderWizard({
       bgImage: bgImage ? bgImage.trim() : '',
       isPng: isPng,
       isActive: publishState,
+      autoNotification: Boolean(autoNotification || editingSlider?.autoNotification),
       displayOrder: editingSlider ? (editingSlider.displayOrder || Date.now()) : Date.now()
     };
 
@@ -848,15 +853,33 @@ export default function FeaturedSliderWizard({
         <div className={`px-6 py-4 border-t flex items-center justify-between shrink-0 ${
           isDark ? 'border-slate-800/80 bg-[#0A0F1D]' : 'border-slate-200 bg-slate-50/70'
         }`}>
-          <button
-            type="button"
-            onClick={handleClose}
-            className={`px-4 py-2 rounded-lg border text-xs font-semibold cursor-pointer transition-colors ${
-              isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'
-            }`}
-          >
-            Cancel
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleClose}
+              className={`px-4 py-2 rounded-lg border text-xs font-semibold cursor-pointer transition-colors ${
+                isDark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              Cancel
+            </button>
+
+            {editingSlider && (
+              <button
+                type="button"
+                onClick={() => setAutoNotification(prev => !prev)}
+                className={`px-3 py-2 rounded-lg border text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+                  autoNotification
+                    ? 'bg-amber-500/15 text-amber-500 border-amber-500/40'
+                    : isDark ? 'border-slate-700 bg-slate-800/80 text-slate-400' : 'border-slate-300 bg-slate-100 text-slate-500'
+                }`}
+                title={autoNotification ? 'Auto notification enabled: will broadcast to followers upon update' : 'Auto notification disabled: silent update'}
+              >
+                <Bell className={`w-3.5 h-3.5 ${autoNotification ? 'text-amber-500' : 'text-slate-400'}`} />
+                <span>Auto Notification: {autoNotification ? 'ON' : 'OFF'}</span>
+              </button>
+            )}
+          </div>
 
           <div className="flex items-center gap-2.5">
             <button
