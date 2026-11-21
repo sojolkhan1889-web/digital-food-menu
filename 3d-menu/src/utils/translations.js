@@ -346,8 +346,11 @@ export const translateFoodTitle = (foodOrTitle, lang = 'en') => {
 
   // 1. If explicit native or Bengali name exists on the food object, ALWAYS prioritize it
   if (isObj) {
-    if (lang === 'bn' && (foodOrTitle.title_bn || foodOrTitle.name_bn)) {
-      return foodOrTitle.title_bn || foodOrTitle.name_bn;
+    if (lang === 'bn' && (foodOrTitle.featuredOffer?.title_bn || foodOrTitle.featuredOffer?.title_native)) {
+      return foodOrTitle.featuredOffer.title_bn || foodOrTitle.featuredOffer.title_native;
+    }
+    if (lang === 'bn' && (foodOrTitle.title_bn || foodOrTitle.name_bn || foodOrTitle.promoTitle_bn)) {
+      return foodOrTitle.title_bn || foodOrTitle.name_bn || foodOrTitle.promoTitle_bn;
     }
     if (foodOrTitle.name_native || foodOrTitle.title_native) {
       return foodOrTitle.name_native || foodOrTitle.title_native;

@@ -4003,6 +4003,7 @@ export default function RestaurantPanel({
         foods={foods}
         editingSlider={editingSlider}
         currency={currency}
+        restaurant={restaurantProfile}
         theme={theme}
       />
 

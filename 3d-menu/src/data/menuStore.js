@@ -1173,7 +1173,12 @@ export const fetchRemoteData = async (restaurantId = 'resto_001') => {
         let parsedBgImage = null;
         let parsedIncludedType = 'list';
         let parsedIncludedHeading = 'Combo includes';
+        let parsedIncludedHeadingNative = null;
         let parsedIncludedItems = [];
+        let parsedIncludedItemsNative = null;
+        let parsedBadgeNative = null;
+        let parsedTitleNative = null;
+        let parsedSubtitleNative = null;
         let parsedAutoNotification = false;
 
         if (typeof sl.image === 'string' && sl.image.startsWith('{"')) {
@@ -1183,7 +1188,12 @@ export const fetchRemoteData = async (restaurantId = 'resto_001') => {
             parsedBgImage = parsed.bg || null;
             parsedIncludedType = parsed.includedType || 'list';
             parsedIncludedHeading = parsed.includedHeading || 'Combo includes';
+            parsedIncludedHeadingNative = parsed.includedHeading_native || parsed.includedHeading_bn || null;
             parsedIncludedItems = Array.isArray(parsed.includedItems) ? parsed.includedItems : [];
+            parsedIncludedItemsNative = Array.isArray(parsed.includedItems_native) ? parsed.includedItems_native : (Array.isArray(parsed.includedItems_bn) ? parsed.includedItems_bn : null);
+            parsedBadgeNative = parsed.badge_native || parsed.badge_bn || null;
+            parsedTitleNative = parsed.title_native || parsed.title_bn || null;
+            parsedSubtitleNative = parsed.subtitle_native || parsed.subtitle_bn || null;
             parsedAutoNotification = Boolean(parsed.autoNotification);
           } catch (e) {}
         }
@@ -1201,11 +1211,21 @@ export const fetchRemoteData = async (restaurantId = 'resto_001') => {
         return {
           id: sl.id,
           badge: sl.badge,
+          badge_native: parsedBadgeNative || sl.badge_native || sl.badge_bn,
+          badge_bn: parsedBadgeNative || sl.badge_bn || sl.badge_native,
           title: sl.title,
+          title_native: parsedTitleNative || sl.title_native || sl.title_bn,
+          title_bn: parsedTitleNative || sl.title_bn || sl.title_native,
           subtitle: sl.subtitle,
+          subtitle_native: parsedSubtitleNative || sl.subtitle_native || sl.subtitle_bn,
+          subtitle_bn: parsedSubtitleNative || sl.subtitle_bn || sl.subtitle_native,
           includedType: parsedIncludedType,
           includedHeading: parsedIncludedHeading,
+          includedHeading_native: parsedIncludedHeadingNative,
+          includedHeading_bn: parsedIncludedHeadingNative,
           includedItems: parsedIncludedItems,
+          includedItems_native: parsedIncludedItemsNative,
+          includedItems_bn: parsedIncludedItemsNative,
           foodId: sl.food_id,
           foodTitle: sl.food_title,
           price: Number(sl.price || 0),
@@ -1693,11 +1713,21 @@ export const initialFeaturedSliders = [
   {
     id: 'slide_1',
     badge: 'CHEF SPECIAL',
+    badge_native: 'শেফ স্পেশাল',
+    badge_bn: 'শেফ স্পেশাল',
     title: 'Double Flame Cheeseburger',
+    title_native: 'ডাবল ফ্লেম চিজবার্গার',
+    title_bn: 'ডাবল ফ্লেম চিজবার্গার',
     subtitle: 'Flame-grilled Angus patty with melted Wisconsin cheddar & secret sauce',
+    subtitle_native: 'ফ্লেম-গ্রিলড অ্যাঙ্গাস প্যাটি, মেল্টেড উইসকনসিন চেডার ও সিক্রেট সস দিয়ে তৈরি',
+    subtitle_bn: 'ফ্লেম-গ্রিলড অ্যাঙ্গাস প্যাটি, মেল্টেড উইসকনসিন চেডার ও সিক্রেট সস দিয়ে তৈরি',
     includedType: 'list',
     includedHeading: 'Combo includes',
+    includedHeading_native: 'কম্বোতে যা থাকছে',
+    includedHeading_bn: 'কম্বোতে যা থাকছে',
     includedItems: ['Flame-grilled Angus patty', 'Melted Wisconsin cheddar', 'Secret burger sauce'],
+    includedItems_native: ['ফ্লেম-গ্রিলড অ্যাঙ্গাস প্যাটি', 'মেল্টেড উইসকনসিন চেডার', 'সিক্রেট বার্গার সস'],
+    includedItems_bn: ['ফ্লেম-গ্রিলড অ্যাঙ্গাস প্যাটি', 'মেল্টেড উইসকনসিন চেডার', 'সিক্রেট বার্গার সস'],
     foodId: 1,
     foodTitle: 'Double Flame Cheeseburger',
     price: 15.99,
@@ -1709,11 +1739,21 @@ export const initialFeaturedSliders = [
   {
     id: 'slide_2',
     badge: 'WOOD-FIRED CRUST',
+    badge_native: 'উড-ফায়ার্ড ক্রাস্ট',
+    badge_bn: 'উড-ফায়ার্ড ক্রাস্ট',
     title: 'Artisan Wood-Fired Pizza',
+    title_native: 'আর্টিসান উড-ফায়ার্ড পিৎজা',
+    title_bn: 'আর্টিসান উড-ফায়ার্ড পিৎজা',
     subtitle: 'San Marzano tomatoes, fresh buffalo mozzarella & aromatic sweet basil',
+    subtitle_native: 'সান মারজানো টমেটো, ফ্রেশ বাফেলো মোজারেলা ও অ্যারোমেটিক সুইট বেসিল',
+    subtitle_bn: 'সান মারজানো টমেটো, ফ্রেশ বাফেলো মোজারেলা ও অ্যারোমেটিক সুইট বেসিল',
     includedType: 'list',
     includedHeading: 'Combo includes',
+    includedHeading_native: 'কম্বোতে যা থাকছে',
+    includedHeading_bn: 'কম্বোতে যা থাকছে',
     includedItems: ['San Marzano tomato base', 'Fresh buffalo mozzarella', 'Aromatic sweet basil', 'Extra virgin olive oil'],
+    includedItems_native: ['সান মারজানো টমেটো বেস', 'তাজা বাফেলো মোজারেলা', 'সুগন্ধি মিষ্টি তুলসী', 'এক্সট্রা ভার্জিন অলিভ অয়েল'],
+    includedItems_bn: ['সান মারজানো টমেটো বেস', 'তাজা বাফেলো মোজারেলা', 'সুগন্ধি মিষ্টি তুলসী', 'এক্সট্রা ভার্জিন অলিভ অয়েল'],
     foodId: 2,
     foodTitle: 'Artisan Wood-Fired Pizza',
     price: 18.50,
@@ -1725,11 +1765,21 @@ export const initialFeaturedSliders = [
   {
     id: 'slide_3',
     badge: 'SWEET DELIGHT',
+    badge_native: 'মিষ্টি উৎসব',
+    badge_bn: 'মিষ্টি উৎসব',
     title: 'Royal Pistachio Kunafa',
+    title_native: 'রয়্যাল পেস্তা কুনাফা',
+    title_bn: 'রয়্যাল পেস্তা কুনাফা',
     subtitle: 'Golden kataifi pastry soaked in rose syrup & crushed Turkish pistachios',
+    subtitle_native: 'গোলাপের সিরাপে ভেজানো সোনালী কাতাইফি প্যাস্ট্রি এবং ক্রাশ করা তুর্কি পেস্তা',
+    subtitle_bn: 'গোলাপের সিরাপে ভেজানো সোনালী কাতাইফি প্যাস্ট্রি এবং ক্রাশ করা তুর্কি পেস্তা',
     includedType: 'list',
     includedHeading: 'Dessert includes',
+    includedHeading_native: 'মিষ্টান্নে যা থাকছে',
+    includedHeading_bn: 'মিষ্টান্নে যা থাকছে',
     includedItems: ['Crisp golden kataifi', 'Warm stretchy sweet cheese', 'Rose-cardamom syrup', 'Crushed Turkish pistachios'],
+    includedItems_native: ['মচমচে সোনালী কাতাইফি', 'গরম স্ট্রেচি মিষ্টি চিজ', 'গোলাপ-এলাচ সিরাপ', 'গুঁড়া করা তুর্কি পেস্তা বাদাম'],
+    includedItems_bn: ['মচমচে সোনালী কাতাইফি', 'গরম স্ট্রেচি মিষ্টি চিজ', 'গোলাপ-এলাচ সিরাপ', 'গুঁড়া করা তুর্কি পেস্তা বাদাম'],
     foodId: 5,
     foodTitle: 'Royal Pistachio Kunafa',
     price: 12.50,
@@ -1770,13 +1820,23 @@ export const syncSliderToSupabase = async (slider, restaurantId = 'resto_001') =
   try {
     let sliderImg = slider.image || null;
 
-    // Bundle cutout, bg, and included fields into image JSON payload so Supabase preserves everything
+    // Bundle cutout, bg, and all native/English included fields into image JSON payload so Supabase preserves everything
     sliderImg = JSON.stringify({
       cutout: sliderImg,
       bg: slider.bgImage || null,
       includedType: slider.includedType || 'list',
       includedHeading: slider.includedHeading || 'Combo includes',
+      includedHeading_native: slider.includedHeading_native || slider.includedHeading_bn || null,
+      includedHeading_bn: slider.includedHeading_bn || slider.includedHeading_native || null,
       includedItems: Array.isArray(slider.includedItems) ? slider.includedItems : [],
+      includedItems_native: Array.isArray(slider.includedItems_native) ? slider.includedItems_native : (Array.isArray(slider.includedItems_bn) ? slider.includedItems_bn : null),
+      includedItems_bn: Array.isArray(slider.includedItems_bn) ? slider.includedItems_bn : (Array.isArray(slider.includedItems_native) ? slider.includedItems_native : null),
+      badge_native: slider.badge_native || slider.badge_bn || null,
+      badge_bn: slider.badge_bn || slider.badge_native || null,
+      title_native: slider.title_native || slider.title_bn || null,
+      title_bn: slider.title_bn || slider.title_native || null,
+      subtitle_native: slider.subtitle_native || slider.subtitle_bn || null,
+      subtitle_bn: slider.subtitle_bn || slider.subtitle_native || null,
       autoNotification: Boolean(slider.autoNotification)
     });
 

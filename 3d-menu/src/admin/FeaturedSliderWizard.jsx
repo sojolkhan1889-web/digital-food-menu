@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
   Sparkles,
@@ -15,9 +15,11 @@ import {
   ListChecks,
   Eye,
   Star,
-  Bell
+  Bell,
+  Languages
 } from 'lucide-react';
 import { compressImage } from '../lib/imageCompressor';
+import { getRestaurantPrimaryLanguage, toBengaliDigits } from '../utils/translations';
 
 export default function FeaturedSliderWizard({
   isOpen,
@@ -26,32 +28,49 @@ export default function FeaturedSliderWizard({
   foods = [],
   editingSlider = null,
   currency = '$',
+  restaurant = null,
   theme = 'light'
 }) {
   const isDark = theme === 'dark';
 
-  // Form State
+  // Dynamic primary native language for the registered restaurant country (e.g. বাংলা)
+  const nativeLang = useMemo(() => {
+    return getRestaurantPrimaryLanguage(restaurant || { currency });
+  }, [restaurant, currency]);
+
+  // Form State - English & Native Language (বাংলা)
   const [selectedFoodId, setSelectedFoodId] = useState('');
   const [badgeText, setBadgeText] = useState('Weekend Special');
+  const [badgeTextNative, setBadgeTextNative] = useState('উইকেন্ড স্পেশাল');
   const [title, setTitle] = useState('');
+  const [titleNative, setTitleNative] = useState('');
   const [customPrice, setCustomPrice] = useState('');
   const [includedType, setIncludedType] = useState('list'); // 'list' or 'description'
   const [includedHeading, setIncludedHeading] = useState('Combo includes');
+  const [includedHeadingNative, setIncludedHeadingNative] = useState('কম্বোতে যা থাকছে');
   const [includedItems, setIncludedItems] = useState([
     'Double smash burger',
     'Crispy fries',
     'Coke · 350 ml',
     'Dip sauce · 30 ml'
   ]);
+  const [includedItemsNative, setIncludedItemsNative] = useState([
+    'ডাবল স্ম্যাশ বার্গার',
+    'ক্রিস্পি ফ্রাইস',
+    'কোক • ৩৫০ মিলি',
+    'ডিপ সস • ৩০ মিলি'
+  ]);
   const [subtitle, setSubtitle] = useState('');
+  const [subtitleNative, setSubtitleNative] = useState('');
   const [foodImage, setFoodImage] = useState('');
   const [bgImage, setBgImage] = useState('');
   const [isUploadingBg, setIsUploadingBg] = useState(false);
   const [isPng, setIsPng] = useState(true);
   const [autoNotification, setAutoNotification] = useState(false);
 
-  // Preview tab: 'slider' (Menu slider) or 'details' (Food details)
+  // Preview tab & language: 'slider' | 'details' and 'en' | 'bn'
   const [previewTab, setPreviewTab] = useState('slider');
+  const [previewLang, setPreviewLang] = useState('bn');
 
   const MAX_INCLUDED_ITEMS = 4;
 
@@ -63,14 +82,23 @@ export default function FeaturedSliderWizard({
       const linkedFood = foods.find(f => String(f.id) === String(editingSlider.foodId));
       setSelectedFoodId(String(editingSlider.foodId || ''));
       setBadgeText(editingSlider.badge || 'Weekend Special');
+      setBadgeTextNative(editingSlider.badge_native || editingSlider.badge_bn || '');
       setTitle(editingSlider.title || '');
+      setTitleNative(editingSlider.title_native || editingSlider.title_bn || '');
       setCustomPrice(String(editingSlider.price !== undefined ? editingSlider.price : ''));
       setIncludedType(editingSlider.includedType || 'list');
       setIncludedHeading(editingSlider.includedHeading || 'Combo includes');
+      setIncludedHeadingNative(editingSlider.includedHeading_native || editingSlider.includedHeading_bn || '');
       
       let items = [];
+      let itemsNative = [];
       if (Array.isArray(editingSlider.includedItems) && editingSlider.includedItems.length > 0) {
-        items = editingSlider.includedItems.filter(Boolean);
+        items = editingSlider.includedItems.map(it => typeof it === 'object' && it ? (it.en || it.text || '') : String(it)).filter(Boolean);
+        if (Array.isArray(editingSlider.includedItems_native) || Array.isArray(editingSlider.includedItems_bn)) {
+          itemsNative = (editingSlider.includedItems_native || editingSlider.includedItems_bn || []).map(String);
+        } else {
+          itemsNative = editingSlider.includedItems.map(it => typeof it === 'object' && it ? (it.native || it.textNative || it.text_bn || '') : '');
+        }
       } else if (editingSlider.subtitle) {
         items = editingSlider.subtitle
           .split(/\n|\+/)
@@ -84,9 +112,17 @@ export default function FeaturedSliderWizard({
           'Coke · 350 ml',
           'Dip sauce · 30 ml'
         ];
+        itemsNative = [
+          'ডাবল স্ম্যাশ বার্গার',
+          'ক্রিস্পি ফ্রাইস',
+          'কোক • ৩৫০ মিলি',
+          'ডিপ সস • ৩০ মিলি'
+        ];
       }
       setIncludedItems(items.slice(0, MAX_INCLUDED_ITEMS));
+      setIncludedItemsNative(itemsNative.slice(0, MAX_INCLUDED_ITEMS));
       setSubtitle(editingSlider.subtitle || '');
+      setSubtitleNative(editingSlider.subtitle_native || editingSlider.subtitle_bn || '');
       setFoodImage(linkedFood?.image || editingSlider.image || '');
       setBgImage(editingSlider.bgImage || editingSlider.bg_image || '');
       setIsPng(editingSlider.isPng !== false);
@@ -97,27 +133,39 @@ export default function FeaturedSliderWizard({
       if (defaultFood) {
         setSelectedFoodId(String(defaultFood.id));
         setBadgeText('Weekend Special');
+        setBadgeTextNative('উইকেন্ড স্পেশাল');
         setTitle(defaultFood.title || 'Double Smash Burger Combo');
+        setTitleNative(defaultFood.title_bn || defaultFood.name_bn || defaultFood.name_native || 'ডাবল স্ম্যাশ বার্গার কম্বো');
         setCustomPrice(String(defaultFood.price || 380));
         setFoodImage(defaultFood.image || '');
         setIsPng(defaultFood.isPng !== false);
       } else {
         setSelectedFoodId('');
         setBadgeText('Weekend Special');
+        setBadgeTextNative('উইকেন্ড স্পেশাল');
         setTitle('Double Smash Burger Combo');
+        setTitleNative('ডাবল স্ম্যাশ বার্গার কম্বো');
         setCustomPrice('380');
         setFoodImage('');
         setIsPng(true);
       }
       setIncludedType('list');
       setIncludedHeading('Combo includes');
+      setIncludedHeadingNative('কম্বোতে যা থাকছে');
       setIncludedItems([
         'Double smash burger',
         'Crispy fries',
         'Coke · 350 ml',
         'Dip sauce · 30 ml'
       ]);
+      setIncludedItemsNative([
+        'ডাবল স্ম্যাশ বার্গার',
+        'ক্রিস্পি ফ্রাইস',
+        'কোক • ৩৫০ মিলি',
+        'ডিপ সস • ৩০ মিলি'
+      ]);
       setSubtitle('Two smashed beef patties with caramelized onions, cheddar cheese and signature smash sauce.');
+      setSubtitleNative('দুটি স্ম্যাশড বিফ প্যাটি, ক্যারামেলাইজড পেঁয়াজ, চেডার চিজ এবং স্পেশাল স্ম্যাশ সস দিয়ে তৈরি।');
       setBgImage('');
       setAutoNotification(false);
     }
@@ -133,6 +181,7 @@ export default function FeaturedSliderWizard({
     setSelectedFoodId(String(foodId));
     if (!foodId) {
       setTitle('');
+      setTitleNative('');
       setCustomPrice('');
       setFoodImage('');
       return;
@@ -140,12 +189,16 @@ export default function FeaturedSliderWizard({
     const found = foods.find(f => String(f.id) === String(foodId));
     if (found) {
       setTitle(found.title || '');
+      setTitleNative(found.title_bn || found.name_bn || found.name_native || '');
       const regularPrice = Number(found.oldPrice || found.price || 0);
       setCustomPrice(String(found.price !== undefined && found.price !== null ? found.price : regularPrice));
       setFoodImage(found.image || '');
       setIsPng(found.isPng !== false);
       if (found.description && includedType === 'description') {
         setSubtitle(found.description);
+        if (found.description_bn || found.description_native) {
+          setSubtitleNative(found.description_bn || found.description_native);
+        }
       }
     }
   };
@@ -153,14 +206,25 @@ export default function FeaturedSliderWizard({
   const handleAddItem = () => {
     if (includedItems.length >= MAX_INCLUDED_ITEMS) return;
     setIncludedItems(prev => [...prev, '']);
+    setIncludedItemsNative(prev => [...prev, '']);
   };
 
   const handleUpdateItem = (index, value) => {
     setIncludedItems(prev => prev.map((item, i) => (i === index ? value : item)));
   };
 
+  const handleUpdateItemNative = (index, value) => {
+    setIncludedItemsNative(prev => {
+      const next = [...prev];
+      while (next.length <= index) next.push('');
+      next[index] = value;
+      return next;
+    });
+  };
+
   const handleRemoveItem = (index) => {
     setIncludedItems(prev => prev.filter((_, i) => i !== index));
+    setIncludedItemsNative(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleBgUpload = async (e) => {
@@ -197,15 +261,30 @@ export default function FeaturedSliderWizard({
     const linkedFood = foods.find(f => String(f.id) === String(selectedFoodId));
     const finalFoodImg = foodImage || linkedFood?.image || '';
     const cleanItems = includedItems.map(s => s.trim()).filter(Boolean).slice(0, MAX_INCLUDED_ITEMS);
+    const cleanItemsNative = includedItemsNative.map(s => (s || '').trim()).slice(0, cleanItems.length);
 
     const slideToSave = {
       id: editingSlider ? editingSlider.id : `slide_${Date.now()}`,
       badge: badgeText.trim() || 'Weekend Special',
+      badge_native: badgeTextNative.trim() || undefined,
+      badge_bn: badgeTextNative.trim() || undefined,
       title: title.trim() || 'Double Smash Burger Combo',
+      title_native: titleNative.trim() || undefined,
+      title_bn: titleNative.trim() || undefined,
       subtitle: includedType === 'description' ? subtitle.trim() : cleanItems.join(' + '),
+      subtitle_native: includedType === 'description'
+        ? (subtitleNative.trim() || undefined)
+        : (cleanItemsNative.filter(Boolean).length > 0 ? cleanItemsNative.join(' + ') : undefined),
+      subtitle_bn: includedType === 'description'
+        ? (subtitleNative.trim() || undefined)
+        : (cleanItemsNative.filter(Boolean).length > 0 ? cleanItemsNative.join(' + ') : undefined),
       includedType: includedType,
       includedHeading: includedHeading.trim() || 'Combo includes',
+      includedHeading_native: includedHeadingNative.trim() || undefined,
+      includedHeading_bn: includedHeadingNative.trim() || undefined,
       includedItems: cleanItems.length > 0 ? cleanItems : ['Double smash burger', 'Crispy fries', 'Coke · 350 ml', 'Dip sauce · 30 ml'],
+      includedItems_native: cleanItemsNative.length > 0 ? cleanItemsNative : undefined,
+      includedItems_bn: cleanItemsNative.length > 0 ? cleanItemsNative : undefined,
       foodId: selectedFoodId,
       foodTitle: title.trim(),
       price: Number(customPrice || 0),
@@ -231,6 +310,39 @@ export default function FeaturedSliderWizard({
   const canSave = title.trim() !== '' && selectedFoodId !== '';
   const effectiveItems = includedItems.filter(s => s.trim() !== '');
   const displayItems = effectiveItems.length > 0 ? effectiveItems : ['Double smash burger', 'Crispy fries', 'Coke · 350 ml', 'Dip sauce · 30 ml'];
+
+  const isBnPreview = previewLang === 'bn';
+  const previewBadge = isBnPreview
+    ? (badgeTextNative.trim() || badgeText.trim() || 'উইকেন্ড স্পেশাল')
+    : (badgeText.trim() || 'Weekend Special');
+
+  const previewTitle = isBnPreview
+    ? (titleNative.trim() || title.trim() || 'ডাবল স্ম্যাশ বার্গার কম্বো')
+    : (title.trim() || 'Double Smash Burger Combo');
+
+  const previewHeading = isBnPreview
+    ? (includedHeadingNative.trim() || includedHeading.trim() || 'কম্বোতে যা থাকছে')
+    : (includedHeading.trim() || 'Combo includes');
+
+  const previewSubtitle = isBnPreview
+    ? (subtitleNative.trim() || subtitle.trim() || 'দুটি স্ম্যাশড বিফ প্যাটি, ক্যারামেলাইজড পেঁয়াজ ও সিক্রেট সস দিয়ে তৈরি।')
+    : (subtitle.trim() || 'Two smashed beef patties with caramelized onions, cheddar cheese and signature smash sauce.');
+
+  const effectiveItemsNative = includedItems.map((enItem, idx) => {
+    const nat = (includedItemsNative[idx] || '').trim();
+    if (nat) return nat;
+    return enItem.trim();
+  }).filter(Boolean);
+
+  const previewDisplayItems = isBnPreview
+    ? (effectiveItemsNative.length > 0 ? effectiveItemsNative : ['ডাবল স্ম্যাশ বার্গার', 'ক্রিস্পি ফ্রাইস', 'কোক • ৩৫০ মিলি', 'ডিপ সস • ৩০ মিলি'])
+    : displayItems;
+
+  const previewPriceDisplay = isBnPreview
+    ? `${currency}${toBengaliDigits(customPrice || '380')}`
+    : `${currency}${customPrice || '380'}`;
+
+  const previewBtnText = isBnPreview ? 'কম্বো এক্সপ্লোর করুন' : 'Explore combo';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-sm select-auto">
@@ -304,17 +416,32 @@ export default function FeaturedSliderWizard({
                   </span>
                 </div>
 
-                {/* Badge text & Offer price Row */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* Badge text (English & Native) + Offer price Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                   <div>
                     <label className="text-xs font-semibold block mb-1.5 text-slate-700 dark:text-slate-300">
-                      Badge text
+                      Badge text (English)
                     </label>
                     <input
                       type="text"
                       placeholder="e.g. Weekend Special"
                       value={badgeText}
                       onChange={(e) => setBadgeText(e.target.value)}
+                      className={`w-full px-3.5 py-2.5 rounded-lg border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
+                        isDark ? 'bg-[#0A0F1D] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold block mb-1.5 text-slate-700 dark:text-slate-300">
+                      Badge text ({nativeLang.nativeName}) <span className="text-[10px] text-slate-400 font-normal">(ঐচ্ছিক)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="যেমন: উইকেন্ড স্পেশাল, ধামাকা অফার"
+                      value={badgeTextNative}
+                      onChange={(e) => setBadgeTextNative(e.target.value)}
                       className={`w-full px-3.5 py-2.5 rounded-lg border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
                         isDark ? 'bg-[#0A0F1D] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
                       }`}
@@ -338,21 +465,38 @@ export default function FeaturedSliderWizard({
                   </div>
                 </div>
 
-                {/* Main title */}
-                <div>
-                  <label className="text-xs font-semibold block mb-1.5 text-slate-700 dark:text-slate-300">
-                    Main title <span className="text-orange-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Double Smash Burger Combo"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className={`w-full px-3.5 py-2.5 rounded-lg border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
-                      isDark ? 'bg-[#0A0F1D] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
-                    }`}
-                  />
+                {/* Main title (English & Native) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="text-xs font-semibold block mb-1.5 text-slate-700 dark:text-slate-300">
+                      Main title (English) <span className="text-orange-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Double Smash Burger Combo"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      className={`w-full px-3.5 py-2.5 rounded-lg border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
+                        isDark ? 'bg-[#0A0F1D] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold block mb-1.5 text-slate-700 dark:text-slate-300">
+                      Main title ({nativeLang.nativeName}) <span className="text-[10px] text-slate-400 font-normal">(ঐচ্ছিক)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="যেমন: ডাবল স্ম্যাশ বার্গার কম্বো"
+                      value={titleNative}
+                      onChange={(e) => setTitleNative(e.target.value)}
+                      className={`w-full px-3.5 py-2.5 rounded-lg border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
+                        isDark ? 'bg-[#0A0F1D] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                      }`}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -408,41 +552,70 @@ export default function FeaturedSliderWizard({
 
                 {includedType === 'list' ? (
                   <div className="space-y-3 pt-1">
-                    <div>
-                      <label className="text-xs font-semibold block mb-1 text-slate-700 dark:text-slate-300">
-                        Section heading
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Combo includes"
-                        value={includedHeading}
-                        onChange={(e) => setIncludedHeading(e.target.value)}
-                        className={`w-full px-3.5 py-2 rounded-lg border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
-                          isDark ? 'bg-[#0A0F1D] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
-                        }`}
-                      />
+                    {/* Section heading (English & Native) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="text-xs font-semibold block mb-1 text-slate-700 dark:text-slate-300">
+                          Section heading (English)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Combo includes"
+                          value={includedHeading}
+                          onChange={(e) => setIncludedHeading(e.target.value)}
+                          className={`w-full px-3.5 py-2 rounded-lg border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
+                            isDark ? 'bg-[#0A0F1D] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                          }`}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold block mb-1 text-slate-700 dark:text-slate-300">
+                          Section heading ({nativeLang.nativeName}) <span className="text-[10px] text-slate-400 font-normal">(ঐচ্ছিক)</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="যেমন: কম্বোতে যা থাকছে"
+                          value={includedHeadingNative}
+                          onChange={(e) => setIncludedHeadingNative(e.target.value)}
+                          className={`w-full px-3.5 py-2 rounded-lg border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
+                            isDark ? 'bg-[#0A0F1D] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                          }`}
+                        />
+                      </div>
                     </div>
 
-                    {/* Dynamic List Items */}
-                    <div className="space-y-2">
+                    {/* Dynamic List Items (English & Native) */}
+                    <div className="space-y-2.5">
                       {includedItems.map((item, idx) => (
                         <div key={idx} className="flex items-center gap-2">
-                          <div className="text-slate-400 hover:text-slate-600 cursor-grab p-1">
+                          <div className="text-slate-400 hover:text-slate-600 cursor-grab p-1 shrink-0">
                             <GripVertical className="w-4 h-4" />
                           </div>
-                          <input
-                            type="text"
-                            placeholder={`e.g. Item ${idx + 1}`}
-                            value={item}
-                            onChange={(e) => handleUpdateItem(idx, e.target.value)}
-                            className={`flex-1 px-3.5 py-2 rounded-lg border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
-                              isDark ? 'bg-[#0A0F1D] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
-                            }`}
-                          />
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 flex-1 min-w-0">
+                            <input
+                              type="text"
+                              placeholder={`Item ${idx + 1} (English) e.g. Crispy fries`}
+                              value={item}
+                              onChange={(e) => handleUpdateItem(idx, e.target.value)}
+                              className={`w-full px-3 py-2 rounded-lg border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
+                                isDark ? 'bg-[#0A0F1D] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                              }`}
+                            />
+                            <input
+                              type="text"
+                              placeholder={`Item ${idx + 1} (${nativeLang.nativeName}) যেমন: ক্রিস্পি ফ্রাইস`}
+                              value={includedItemsNative[idx] || ''}
+                              onChange={(e) => handleUpdateItemNative(idx, e.target.value)}
+                              className={`w-full px-3 py-2 rounded-lg border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
+                                isDark ? 'bg-[#0A0F1D] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                              }`}
+                            />
+                          </div>
                           <button
                             type="button"
                             onClick={() => handleRemoveItem(idx)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
                             title="Remove item"
                           >
                             <X className="w-4 h-4" />
@@ -469,24 +642,40 @@ export default function FeaturedSliderWizard({
                       <span className="text-[11px] text-slate-500 dark:text-slate-400">
                         {includedItems.length >= MAX_INCLUDED_ITEMS
                           ? 'Maximum 4 items reached.'
-                          : 'Maximum 4 items allowed. Each item on a separate line.'}
+                          : 'Maximum 4 items allowed. Each item has English & Native language names.'}
                       </span>
                     </div>
                   </div>
                 ) : (
-                  <div className="pt-1">
-                    <label className="text-xs font-semibold block mb-1 text-slate-700 dark:text-slate-300">
-                      Description text
-                    </label>
-                    <textarea
-                      rows={3}
-                      placeholder="e.g. Flame-grilled Angus patty with melted Wisconsin cheddar & secret sauce..."
-                      value={subtitle}
-                      onChange={(e) => setSubtitle(e.target.value)}
-                      className={`w-full px-3.5 py-2.5 rounded-lg border text-xs sm:text-sm focus:outline-none focus:border-orange-500 transition-colors resize-none ${
-                        isDark ? 'bg-[#0A0F1D] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
-                      }`}
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                    <div>
+                      <label className="text-xs font-semibold block mb-1 text-slate-700 dark:text-slate-300">
+                        Description text (English)
+                      </label>
+                      <textarea
+                        rows={3}
+                        placeholder="e.g. Flame-grilled Angus patty with melted Wisconsin cheddar & secret sauce..."
+                        value={subtitle}
+                        onChange={(e) => setSubtitle(e.target.value)}
+                        className={`w-full px-3.5 py-2.5 rounded-lg border text-xs sm:text-sm focus:outline-none focus:border-orange-500 transition-colors resize-none ${
+                          isDark ? 'bg-[#0A0F1D] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold block mb-1 text-slate-700 dark:text-slate-300">
+                        Description text ({nativeLang.nativeName}) <span className="text-[10px] text-slate-400 font-normal">(ঐচ্ছিক)</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        placeholder="যেমন: দুটি স্ম্যাশড বিফ প্যাটি, ক্যারামেলাইজড পেঁয়াজ ও সিক্রেট সস..."
+                        value={subtitleNative}
+                        onChange={(e) => setSubtitleNative(e.target.value)}
+                        className={`w-full px-3.5 py-2.5 rounded-lg border text-xs sm:text-sm focus:outline-none focus:border-orange-500 transition-colors resize-none ${
+                          isDark ? 'bg-[#0A0F1D] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                        }`}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -570,7 +759,7 @@ export default function FeaturedSliderWizard({
             <div className="lg:col-span-5 flex flex-col space-y-3">
 
               {/* Live Preview Header & Tabs */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <div>
                   <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 dark:text-white">
                     <Eye className="w-3.5 h-3.5 text-orange-500" />
@@ -579,32 +768,64 @@ export default function FeaturedSliderWizard({
                   <p className="text-[10px] text-slate-500 dark:text-slate-400">Updates as you type.</p>
                 </div>
 
-                {/* Tab switch pills */}
-                <div className={`flex items-center p-1 rounded-lg border text-xs ${
-                  isDark ? 'bg-[#0A0F1D] border-slate-800' : 'bg-slate-100 border-slate-200'
-                }`}>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewTab('slider')}
-                    className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                      previewTab === 'slider'
-                        ? 'bg-white dark:bg-[#1A243B] text-orange-600 dark:text-orange-400 shadow-xs'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    Menu slider
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewTab('details')}
-                    className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                      previewTab === 'details'
-                        ? 'bg-white dark:bg-[#1A243B] text-orange-600 dark:text-orange-400 shadow-xs'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    Food details
-                  </button>
+                <div className="flex items-center gap-2">
+                  {/* Language switch toggle: EN vs Native */}
+                  <div className={`flex items-center p-0.5 rounded-lg border text-[11px] ${
+                    isDark ? 'bg-[#0A0F1D] border-slate-800' : 'bg-slate-100 border-slate-200'
+                  }`}>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewLang('en')}
+                      className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
+                        previewLang === 'en'
+                          ? 'bg-white dark:bg-[#1A243B] text-orange-600 dark:text-orange-400 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                      title="Preview English version"
+                    >
+                      EN
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewLang('bn')}
+                      className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
+                        previewLang === 'bn'
+                          ? 'bg-white dark:bg-[#1A243B] text-orange-600 dark:text-orange-400 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                      title={`Preview ${nativeLang.nativeName || 'বাংলা'} version`}
+                    >
+                      {nativeLang.nativeName || 'বাংলা'}
+                    </button>
+                  </div>
+
+                  {/* Tab switch pills */}
+                  <div className={`flex items-center p-1 rounded-lg border text-xs ${
+                    isDark ? 'bg-[#0A0F1D] border-slate-800' : 'bg-slate-100 border-slate-200'
+                  }`}>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab('slider')}
+                      className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                        previewTab === 'slider'
+                          ? 'bg-white dark:bg-[#1A243B] text-orange-600 dark:text-orange-400 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      Menu slider
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab('details')}
+                      className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                        previewTab === 'details'
+                          ? 'bg-white dark:bg-[#1A243B] text-orange-600 dark:text-orange-400 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      Food details
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -618,9 +839,11 @@ export default function FeaturedSliderWizard({
                     <div className="flex items-center justify-between mb-3 px-1 text-xs">
                       <div className="flex items-center gap-1.5 text-[#F59E0B] font-black tracking-wider text-[11px]">
                         <Flame className="w-3.5 h-3.5 fill-[#F59E0B]" />
-                        <span>FEATURED SPECIALS</span>
+                        <span>{isBnPreview ? 'স্পেশাল অফার সমূহ' : 'FEATURED SPECIALS'}</span>
                       </div>
-                      <span className="text-zinc-500 font-bold text-[10px]">01 / 01</span>
+                      <span className="text-zinc-500 font-bold text-[10px]">
+                        {isBnPreview ? '০১ / ০১' : '01 / 01'}
+                      </span>
                     </div>
 
                     {/* Exact Card matching Image 1: 200px unified layout */}
@@ -630,7 +853,7 @@ export default function FeaturedSliderWizard({
                         <>
                           <img
                             src={bgImage}
-                            alt={title || 'Featured'}
+                            alt={previewTitle}
                             className="absolute inset-0 w-full h-full object-cover object-center"
                           />
                           <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/80 to-transparent pointer-events-none z-10" />
@@ -649,7 +872,7 @@ export default function FeaturedSliderWizard({
                         {foodImage ? (
                           <img
                             src={foodImage}
-                            alt={title}
+                            alt={previewTitle}
                             className="w-full h-full object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.85)] scale-110"
                           />
                         ) : (
@@ -663,19 +886,19 @@ export default function FeaturedSliderWizard({
                       <div className="relative z-20 h-full p-4 flex flex-col justify-between max-w-[58%]">
                         <div className="space-y-1.5">
                           <div className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#F59E0B] bg-black/40 text-[#F59E0B] text-[10px] font-black uppercase tracking-wider w-fit">
-                            {badgeText || 'DHAMAKA OFFER'}
+                            {previewBadge}
                           </div>
-                          <h4 className="text-white font-black text-lg tracking-tight leading-snug line-clamp-2">
-                            {title || 'Double Smash Burger Combo'}
+                          <h4 className={`text-white font-black text-lg leading-snug line-clamp-2 ${isBnPreview ? 'tracking-normal [word-spacing:0.18em]' : 'tracking-tight'}`}>
+                            {previewTitle}
                           </h4>
                         </div>
 
                         <div className="pt-2 mt-auto space-y-2">
                           <span className="text-[#F59E0B] font-black text-2xl tracking-tight tabular-nums block leading-none">
-                            {currency}{customPrice || '380'}
+                            {previewPriceDisplay}
                           </span>
                           <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#F59E0B] text-black font-black text-xs shadow-md w-fit">
-                            <span>Explore combo</span>
+                            <span>{previewBtnText}</span>
                             <ArrowRight className="w-3.5 h-3.5 stroke-[2.8]" />
                           </div>
                         </div>
@@ -690,15 +913,15 @@ export default function FeaturedSliderWizard({
                     </div>
 
                     <p className="text-[11px] text-center text-zinc-500 mt-2">
-                      Explore combo opens the selected food item.
+                      {isBnPreview ? 'এক্সপ্লোর করুন বাটনে ক্লিক করলে ফুড বিস্তারিত ওপেন হবে।' : 'Explore combo opens the selected food item.'}
                     </p>
                   </div>
                 ) : (
                   /* TAB 2: FOOD DETAILS MODAL PREVIEW */
                   <div className="space-y-3">
                     <div className="flex items-center justify-between pb-1">
-                      <h4 className="text-white font-black text-base tracking-tight leading-tight line-clamp-1">
-                        {title || 'Double Smash Burger Combo'}
+                      <h4 className={`text-white font-black text-base leading-tight line-clamp-1 ${isBnPreview ? 'tracking-normal [word-spacing:0.18em]' : 'tracking-tight'}`}>
+                        {previewTitle}
                       </h4>
                       <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400">
                         <X className="w-3.5 h-3.5" />
@@ -708,19 +931,19 @@ export default function FeaturedSliderWizard({
                     {/* Tags row */}
                     <div className="flex items-center gap-2 text-[10px]">
                       <span className="px-2 py-0.5 rounded-full border border-orange-500/80 bg-orange-500/10 text-orange-400 font-bold uppercase">
-                        BEST SELLER
+                        {isBnPreview ? 'বেস্ট সেলার' : 'BEST SELLER'}
                       </span>
                       <span className="text-zinc-500">|</span>
-                      <span className="text-zinc-400">Smash Burgers</span>
+                      <span className="text-zinc-400">{isBnPreview ? 'স্ম্যাশ বার্গার' : 'Smash Burgers'}</span>
                       <span className="text-zinc-500">|</span>
                       <span className="flex items-center gap-1 text-zinc-300">
                         <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                        <span>4.9 (142)</span>
+                        <span>{isBnPreview ? `${toBengaliDigits('4.9')} (${toBengaliDigits('142')})` : '4.9 (142)'}</span>
                       </span>
                     </div>
 
                     <p className="text-zinc-400 text-[11px] leading-relaxed line-clamp-2">
-                      Two smashed beef patties with caramelized onions, cheddar cheese and signature smash sauce.
+                      {previewSubtitle}
                     </p>
 
                     {/* The Card inside Food Details Modal (Exact match with Image 2) */}
@@ -730,7 +953,7 @@ export default function FeaturedSliderWizard({
                         <>
                           <img
                             src={bgImage}
-                            alt={title || 'Featured'}
+                            alt={previewTitle}
                             className="absolute inset-0 w-full h-full object-cover object-center"
                           />
                           <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/80 to-transparent pointer-events-none z-10" />
@@ -749,7 +972,7 @@ export default function FeaturedSliderWizard({
                         {foodImage ? (
                           <img
                             src={foodImage}
-                            alt={title}
+                            alt={previewTitle}
                             className="w-full h-full object-contain drop-shadow-[0_16px_32px_rgba(0,0,0,0.9)] scale-105"
                           />
                         ) : (
@@ -763,24 +986,24 @@ export default function FeaturedSliderWizard({
                       <div className="relative z-20 p-3.5 flex flex-col justify-between h-full min-h-[290px] max-w-[65%]">
                         <div className="space-y-1.5">
                           <div className="inline-flex items-center px-2 py-0.5 rounded-full border border-[#F59E0B] bg-black/40 text-[#F59E0B] text-[9px] font-black uppercase tracking-wider w-fit">
-                            {badgeText || 'DHAMAKA OFFER'}
+                            {previewBadge}
                           </div>
-                          <h4 className="text-white font-black text-base tracking-tight leading-snug">
-                            {title || 'Double Smash Burger Combo'}
+                          <h4 className={`text-white font-black text-base leading-snug ${isBnPreview ? 'tracking-normal [word-spacing:0.18em]' : 'tracking-tight'}`}>
+                            {previewTitle}
                           </h4>
 
                           <div className="pt-1 space-y-1">
-                            {includedType === 'description' && subtitle ? (
+                            {includedType === 'description' && previewSubtitle ? (
                               <p className="text-slate-300 text-[11px] leading-relaxed line-clamp-3">
-                                {subtitle}
+                                {previewSubtitle}
                               </p>
                             ) : (
                               <div>
                                 <p className="text-[10px] font-bold text-white mb-1">
-                                  {includedHeading || 'Combo includes'}
+                                  {previewHeading}
                                 </p>
                                 <div className="space-y-0.5">
-                                  {displayItems.slice(0, MAX_INCLUDED_ITEMS).map((item, idx) => (
+                                  {previewDisplayItems.slice(0, MAX_INCLUDED_ITEMS).map((item, idx) => (
                                     <div key={idx} className="flex items-center gap-1.5 text-[11px] font-medium text-slate-200">
                                       <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] shrink-0 shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
                                       <span className="line-clamp-1">{item}</span>
@@ -794,7 +1017,7 @@ export default function FeaturedSliderWizard({
 
                         <div className="pt-2 mt-auto">
                           <span className="text-[#F59E0B] font-black text-xl tracking-tight tabular-nums">
-                            {currency}{customPrice || '380'}
+                            {previewPriceDisplay}
                           </span>
                         </div>
                       </div>
@@ -804,15 +1027,15 @@ export default function FeaturedSliderWizard({
                     <div className="pt-2 border-t border-zinc-800 flex items-center justify-between">
                       <div>
                         <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold block">
-                          ITEM TOTAL AMOUNT
+                          {isBnPreview ? 'আইটেমের মোট মূল্য' : 'ITEM TOTAL AMOUNT'}
                         </span>
                         <span className="text-[#F59E0B] font-black text-base">
-                          {currency}{customPrice || '380'}
+                          {previewPriceDisplay}
                         </span>
                       </div>
                       <div className="px-3.5 py-1.5 rounded-full bg-[#F59E0B] text-black font-black text-[11px] flex items-center gap-1">
                         <Plus className="w-3.5 h-3.5" />
-                        <span>ADD TO ORDER LIST</span>
+                        <span>{isBnPreview ? 'অর্ডার তালিকায় যোগ করুন' : 'ADD TO ORDER LIST'}</span>
                       </div>
                     </div>
                   </div>

@@ -1523,8 +1523,10 @@ export default function App() {
       const promoFood = {
         ...targetFood,
         price: (targetSlide && targetSlide.price !== undefined) ? targetSlide.price : targetFood.price,
-        promoBadge: (targetSlide && targetSlide.badge) ? targetSlide.badge : 'FEATURED SPECIAL',
-        promoTitle: (targetSlide && targetSlide.title) ? targetSlide.title : targetFood.title,
+        promoBadge: (targetSlide && (targetSlide.badge_bn || targetSlide.badge_native || targetSlide.badge)) ? (targetSlide.badge_bn || targetSlide.badge_native || targetSlide.badge) : 'FEATURED SPECIAL',
+        promoTitle: (targetSlide && (targetSlide.title_bn || targetSlide.title_native || targetSlide.title)) ? (targetSlide.title_bn || targetSlide.title_native || targetSlide.title) : targetFood.title,
+        title_bn: targetSlide?.title_bn || targetSlide?.title_native || targetFood.title_bn,
+        name_bn: targetSlide?.title_bn || targetSlide?.title_native || targetFood.name_bn,
         isFeaturedSpecial: true,
         featuredOffer: targetSlide || null
       };
@@ -2183,18 +2185,46 @@ export default function App() {
     null;
 
   // Helper to extract combo included items list with fallback
-  const getSliderIncludedItems = (slider) => {
+  const getSliderIncludedItems = (slider, lang = 'en') => {
+    if (lang === 'bn') {
+      const nativeArr = Array.isArray(slider?.includedItems_bn) && slider.includedItems_bn.length > 0
+        ? slider.includedItems_bn
+        : (Array.isArray(slider?.includedItems_native) && slider.includedItems_native.length > 0 ? slider.includedItems_native : null);
+      if (nativeArr) {
+        const clean = nativeArr.filter(Boolean);
+        if (clean.length > 0) return clean;
+      }
+      if (slider?.subtitle_bn || slider?.subtitle_native) {
+        const lines = (slider.subtitle_bn || slider.subtitle_native)
+          .split(/\n|\+/)
+          .map(s => s.trim().replace(/^[-•*]\s*/, ''))
+          .filter(Boolean);
+        if (lines.length > 0) return lines;
+      }
+    }
+
     if (Array.isArray(slider?.includedItems) && slider.includedItems.length > 0) {
-      return slider.includedItems.filter(Boolean);
+      const items = slider.includedItems.filter(Boolean);
+      if (lang === 'bn') {
+        return items.map(it => translateFoodTitle(it, 'bn'));
+      }
+      return items;
     }
     if (slider?.subtitle) {
       const lines = slider.subtitle
         .split(/\n|\+/)
         .map(s => s.trim().replace(/^[-•*]\s*/, ''))
         .filter(Boolean);
-      if (lines.length > 0) return lines;
+      if (lines.length > 0) {
+        if (lang === 'bn') {
+          return lines.map(it => translateFoodTitle(it, 'bn'));
+        }
+        return lines;
+      }
     }
-    return ['Double smash burger', 'Crispy fries', 'Coke • 350 ml', 'Dip sauce • 30 ml'];
+    return lang === 'bn'
+      ? ['ডাবল স্ম্যাশ বার্গার', 'ক্রিস্পি ফ্রাইস', 'কোক • ৩৫০ মিলি', 'ডিপ সস • ৩০ মিলি']
+      : ['Double smash burger', 'Crispy fries', 'Coke • 350 ml', 'Dip sauce • 30 ml'];
   };
 
   const hasCustomPortions = Boolean(activeFood?.customizable?.portions && activeFood.customizable.portions.length > 0);
@@ -2983,7 +3013,9 @@ export default function App() {
         tag: targetFood.tag || 'Best Selling', // Preserves ONLY the food's own promotional tag from Menu Builder
         customizable: promoCustomizable,
         isFeaturedSpecial: true,
-        featuredOffer: offer
+        featuredOffer: offer,
+        title_bn: offer.title_bn || offer.title_native || targetFood.title_bn,
+        name_bn: offer.title_bn || offer.title_native || targetFood.name_bn
       };
 
       setSelectedPortion(0);
@@ -3710,7 +3742,7 @@ export default function App() {
             {currentFeaturedOffer && (() => {
               const linkedFood = foodsList.find(f => String(f.id) === String(currentFeaturedOffer.foodId || currentFeaturedOffer.id));
               const displayHeroImage = activeFood?.image || linkedFood?.image || currentFeaturedOffer.image;
-              const items = getSliderIncludedItems(currentFeaturedOffer);
+              const items = getSliderIncludedItems(currentFeaturedOffer, customerLanguage);
               const isDescription = currentFeaturedOffer.includedType === 'description';
 
               return (
@@ -3750,30 +3782,38 @@ export default function App() {
                     <div className="space-y-2">
                       {/* Badge */}
                       <div className="inline-flex items-center px-3 py-1 rounded-full border border-[#F59E0B] bg-black/40 text-[#F59E0B] text-[11px] sm:text-xs font-bold uppercase tracking-wider w-fit shadow-xs">
-                        {formatBadgeText(currentFeaturedOffer.badge || 'DHAMAKA OFFER', customerLanguage)}
+                        {customerLanguage === 'bn' && (currentFeaturedOffer.badge_bn || currentFeaturedOffer.badge_native)
+                          ? (currentFeaturedOffer.badge_bn || currentFeaturedOffer.badge_native)
+                          : formatBadgeText(currentFeaturedOffer.badge || 'DHAMAKA OFFER', customerLanguage)}
                       </div>
 
                       {/* Title */}
                       <h3 className={`text-white font-black text-xl sm:text-2xl leading-tight ${customerLanguage === 'bn' ? 'tracking-normal [word-spacing:0.18em] font-bengali' : 'tracking-tight'}`}>
-                        {translateFoodTitle(currentFeaturedOffer.title, customerLanguage)}
+                        {customerLanguage === 'bn' && (currentFeaturedOffer.title_bn || currentFeaturedOffer.title_native)
+                          ? (currentFeaturedOffer.title_bn || currentFeaturedOffer.title_native)
+                          : translateFoodTitle(currentFeaturedOffer.title, customerLanguage)}
                       </h3>
 
                       {/* What's included Section Heading & Items */}
                       <div className="pt-1.5 space-y-1.5">
-                        {isDescription && currentFeaturedOffer.subtitle ? (
+                        {isDescription ? (
                           <p className="text-slate-300 text-xs sm:text-sm leading-relaxed line-clamp-3">
-                            {currentFeaturedOffer.subtitle}
+                            {(customerLanguage === 'bn' && (currentFeaturedOffer.subtitle_bn || currentFeaturedOffer.subtitle_native))
+                              ? (currentFeaturedOffer.subtitle_bn || currentFeaturedOffer.subtitle_native)
+                              : currentFeaturedOffer.subtitle}
                           </p>
                         ) : (
                           <div>
                             <p className="text-xs sm:text-[13px] font-bold text-white mb-1.5">
-                              {currentFeaturedOffer.includedHeading || t('combo_includes', customerLanguage)}
+                              {(customerLanguage === 'bn' && (currentFeaturedOffer.includedHeading_bn || currentFeaturedOffer.includedHeading_native))
+                                ? (currentFeaturedOffer.includedHeading_bn || currentFeaturedOffer.includedHeading_native)
+                                : (currentFeaturedOffer.includedHeading || t('combo_includes', customerLanguage))}
                             </p>
                             <div className="space-y-1">
                               {items.map((item, idx) => (
                                 <div key={idx} className="flex items-center gap-2 text-xs sm:text-[13px] font-medium text-slate-200">
                                   <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] shrink-0 shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
-                                  <span className="line-clamp-1">{translateFoodTitle(item, customerLanguage)}</span>
+                                  <span className="line-clamp-1">{item}</span>
                                 </div>
                               ))}
                             </div>
@@ -4763,12 +4803,16 @@ export default function App() {
                             <div className="space-y-1.5">
                               {/* Badge */}
                               <div className="inline-flex items-center px-3 py-0.5 sm:py-1 rounded-full border border-[#F59E0B] bg-black/40 text-[#F59E0B] text-[10px] sm:text-[11px] font-bold uppercase tracking-wider w-fit shadow-xs">
-                                {formatBadgeText(offer.badge || 'DHAMAKA OFFER', customerLanguage)}
+                                {customerLanguage === 'bn' && (offer.badge_bn || offer.badge_native)
+                                  ? (offer.badge_bn || offer.badge_native)
+                                  : formatBadgeText(offer.badge || 'DHAMAKA OFFER', customerLanguage)}
                               </div>
 
                               {/* Main Title */}
                               <h3 className={`text-white font-black text-lg sm:text-xl leading-snug line-clamp-2 ${customerLanguage === 'bn' ? 'tracking-normal [word-spacing:0.18em] font-bengali' : 'tracking-tight'}`}>
-                                {translateFoodTitle(offer.title, customerLanguage)}
+                                {customerLanguage === 'bn' && (offer.title_bn || offer.title_native)
+                                  ? (offer.title_bn || offer.title_native)
+                                  : translateFoodTitle(offer.title, customerLanguage)}
                               </h3>
                             </div>
 
