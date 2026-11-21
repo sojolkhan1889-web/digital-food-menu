@@ -1029,26 +1029,37 @@ export const deleteFoodFromSupabase = async (foodId) => {
 // --- Categories Management with Supabase Sync ---
 export const getStoredCategories = (restaurantId = null) => {
   try {
-    const key = restaurantId ? `${CATEGORIES_KEY}_${restaurantId}` : null;
-    const data = (key && localStorage.getItem(key)) || localStorage.getItem(CATEGORIES_KEY);
-    if (data) {
-      const parsed = JSON.parse(data);
+    if (restaurantId) {
+      const tenantKey = `${CATEGORIES_KEY}_${restaurantId}`;
+      const tenantData = localStorage.getItem(tenantKey);
+      if (tenantData) {
+        const parsed = JSON.parse(tenantData);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return Array.from(new Set(parsed.filter(c => Boolean(c) && String(c).toLowerCase() !== 'all' && String(c).toLowerCase() !== 'all items')));
+        }
+      }
+    }
+    const globalData = localStorage.getItem(CATEGORIES_KEY);
+    if (globalData) {
+      const parsed = JSON.parse(globalData);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return Array.from(new Set(parsed.filter(c => Boolean(c) && String(c).toLowerCase() !== 'all')));
+        return Array.from(new Set(parsed.filter(c => Boolean(c) && String(c).toLowerCase() !== 'all' && String(c).toLowerCase() !== 'all items')));
       }
     }
   } catch (e) {
     console.error('Error reading categories from storage:', e);
   }
-  return Array.from(new Set(initialCategories.filter(c => Boolean(c) && String(c).toLowerCase() !== 'all')));
+  return Array.from(new Set(initialCategories.filter(c => Boolean(c) && String(c).toLowerCase() !== 'all' && String(c).toLowerCase() !== 'all items')));
 };
 
 export const saveStoredCategories = (categories, restaurantId = null) => {
   try {
-    const unique = Array.from(new Set(categories.filter(c => Boolean(c) && String(c).toLowerCase() !== 'all')));
-    localStorage.setItem(CATEGORIES_KEY, JSON.stringify(unique));
+    const unique = Array.from(new Set(categories.filter(c => Boolean(c) && String(c).toLowerCase() !== 'all' && String(c).toLowerCase() !== 'all items')));
     if (restaurantId) {
       localStorage.setItem(`${CATEGORIES_KEY}_${restaurantId}`, JSON.stringify(unique));
+    }
+    if (!restaurantId || restaurantId === 'resto_001') {
+      localStorage.setItem(CATEGORIES_KEY, JSON.stringify(unique));
     }
   } catch (e) {
     console.error('Error saving categories to storage:', e);
@@ -1085,7 +1096,7 @@ export const saveStoredCategoryTranslations = (translations, restaurantId) => {
   }
 };
 
-export const syncCategoryToSupabase = async (catName, restaurantId = 'resto_001') => {
+export const syncCategoryToSupabase = async (catName, restaurantId = 'resto_001', displayOrder = 10) => {
   try {
     const slug = catName.toLowerCase().replace(/[^a-z0-9]/g, '_');
     const { error } = await supabase.from('categories').upsert([{
@@ -1093,11 +1104,33 @@ export const syncCategoryToSupabase = async (catName, restaurantId = 'resto_001'
       restaurant_id: restaurantId,
       name: catName,
       is_published: true,
-      display_order: 10
+      display_order: Number(displayOrder) || 10
     }]);
     if (error) console.warn('Supabase category sync warning:', error);
   } catch (err) {
     console.warn('Supabase category sync caught:', err);
+  }
+};
+
+export const syncCategoriesOrderToSupabase = async (orderedCategories, restaurantId = 'resto_001') => {
+  try {
+    if (!Array.isArray(orderedCategories) || orderedCategories.length === 0) return;
+    const records = orderedCategories
+      .filter(c => Boolean(c) && c !== 'All' && c !== 'All Items')
+      .map((catName, index) => {
+        const slug = catName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        return {
+          id: `cat_${restaurantId}_${slug}`,
+          restaurant_id: restaurantId,
+          name: catName,
+          is_published: true,
+          display_order: (index + 1) * 10
+        };
+      });
+    const { error } = await supabase.from('categories').upsert(records);
+    if (error) console.warn('Supabase categories batch order sync warning:', error);
+  } catch (err) {
+    console.warn('Supabase categories batch order sync caught:', err);
   }
 };
 
@@ -1189,7 +1222,8 @@ export const fetchRemoteData = async (restaurantId = 'resto_001') => {
     }
 
     if (catsRes.data && catsRes.data.length > 0) {
-      remoteCategories = Array.from(new Set(catsRes.data.map(c => c.name).filter(c => Boolean(c) && String(c).toLowerCase() !== 'all')));
+      const sorted = [...catsRes.data].sort((a, b) => Number(a.display_order ?? 10) - Number(b.display_order ?? 10));
+      remoteCategories = Array.from(new Set(sorted.map(c => c.name).filter(c => Boolean(c) && String(c).toLowerCase() !== 'all' && String(c).toLowerCase() !== 'all items')));
     }
 
     if (subsRes.data && subsRes.data.length > 0) {

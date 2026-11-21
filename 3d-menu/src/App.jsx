@@ -72,6 +72,7 @@ import {
   syncFoodToSupabase,
   deleteFoodFromSupabase,
   syncCategoryToSupabase,
+  syncCategoriesOrderToSupabase,
   deleteCategoryFromSupabase,
   fetchRemoteData,
   getStoredSubcategories,
@@ -640,9 +641,14 @@ export default function App() {
 
         if (data.remoteCategories && data.remoteCategories.length > 0) {
           setCategoriesList(data.remoteCategories);
-          saveStoredCategories(data.remoteCategories);
-        } else if (restoId !== 'resto_001') {
-          setCategoriesList([]);
+          saveStoredCategories(data.remoteCategories, restoId);
+        } else {
+          const localCats = getStoredCategories(restoId);
+          if (localCats && localCats.length > 0) {
+            setCategoriesList(localCats);
+          } else if (restoId !== 'resto_001') {
+            setCategoriesList([]);
+          }
         }
 
         if (data.remoteSubcategories) {
@@ -1176,8 +1182,8 @@ export default function App() {
     if (savedFood.category && !categoriesList.includes(savedFood.category)) {
       const updatedCats = Array.from(new Set([...categoriesList, savedFood.category]));
       setCategoriesList(updatedCats);
-      saveStoredCategories(updatedCats);
-      syncCategoryToSupabase(savedFood.category, currentRestoId);
+      saveStoredCategories(updatedCats, currentRestoId);
+      syncCategoryToSupabase(savedFood.category, currentRestoId, updatedCats.length * 10);
     }
 
     if (!exists) {
@@ -1222,8 +1228,8 @@ export default function App() {
     if (!categoriesList.includes(cleanEn)) {
       const updatedCats = Array.from(new Set([...categoriesList, cleanEn]));
       setCategoriesList(updatedCats);
-      if (currentRestoId === 'resto_001') saveStoredCategories(updatedCats);
-      syncCategoryToSupabase(cleanEn, currentRestoId);
+      saveStoredCategories(updatedCats, currentRestoId);
+      syncCategoryToSupabase(cleanEn, currentRestoId, updatedCats.length * 10);
     }
 
     if (cleanNat) {
@@ -1241,9 +1247,10 @@ export default function App() {
     const cleanNew = newName.trim();
     const cleanNat = (newNameNative !== undefined ? newNameNative : (categoryTranslations[oldName] || '')).trim();
 
+    const oldIndex = categoriesList.indexOf(oldName);
     const updatedCats = categoriesList.map(c => c === oldName ? cleanNew : c);
     setCategoriesList(updatedCats);
-    if (currentRestoId === 'resto_001') saveStoredCategories(updatedCats);
+    saveStoredCategories(updatedCats, currentRestoId);
 
     const updatedFoods = foodsList.map(f => f.category === oldName ? { ...f, category: cleanNew } : f);
     setFoodsList(updatedFoods);
@@ -1267,20 +1274,17 @@ export default function App() {
     saveStoredCategoryTranslations(updatedTranslations, currentRestoId);
 
     deleteCategoryFromSupabase(oldName, currentRestoId);
-    syncCategoryToSupabase(cleanNew, currentRestoId);
+    syncCategoryToSupabase(cleanNew, currentRestoId, (oldIndex >= 0 ? oldIndex + 1 : updatedCats.length) * 10);
   };
 
   const handleReorderCategories = (newOrder) => {
     if (!Array.isArray(newOrder)) return;
     const cleanList = Array.from(new Set(newOrder.filter(c => Boolean(c) && c !== 'All' && c !== 'All Items')));
     setCategoriesList(cleanList);
-    if (currentRestoId === 'resto_001') saveStoredCategories(cleanList);
     saveStoredCategories(cleanList, currentRestoId);
 
-    // Sync sequential display_order to Supabase (10, 20, 30, ...)
-    cleanList.forEach((catName, index) => {
-      syncCategoryToSupabase(catName, currentRestoId, (index + 1) * 10);
-    });
+    // Sync sequential display_order to Supabase (10, 20, 30, ...) in one atomic batch
+    syncCategoriesOrderToSupabase(cleanList, currentRestoId);
   };
 
   const handleUpdateSubcategory = (updatedSub) => {
@@ -1305,8 +1309,9 @@ export default function App() {
   const handleDeleteCategory = (catName) => {
     const updatedCats = categoriesList.filter(c => c !== catName);
     setCategoriesList(updatedCats);
-    if (currentRestoId === 'resto_001') saveStoredCategories(updatedCats);
+    saveStoredCategories(updatedCats, currentRestoId);
     deleteCategoryFromSupabase(catName, currentRestoId);
+    syncCategoriesOrderToSupabase(updatedCats, currentRestoId);
 
     const updatedTranslations = { ...categoryTranslations };
     delete updatedTranslations[catName];
@@ -3146,11 +3151,17 @@ export default function App() {
     const restCategories = Array.from(new Set(categoriesList)).filter(
       c => Boolean(c) && c !== 'All' && c !== 'All Items'
     );
-    return ['All Items', ...restCategories].map(name => ({
+    // Find any additional orphan categories assigned to foods that may not yet be in categoriesList
+    const orphanFoodCats = Array.from(new Set(
+      foodsList.map(f => f.category).filter(c => Boolean(c) && c !== 'All' && c !== 'All Items' && !restCategories.includes(c))
+    ));
+    const allOrderedCategories = [...restCategories, ...orphanFoodCats];
+
+    return ['All Items', ...allOrderedCategories].map(name => ({
       name,
       icon: getCategoryIcon(name)
     }));
-  }, [categoriesList]);
+  }, [categoriesList, foodsList]);
 
   // ========================================================
   // SUPER ADMIN MASTER SAAS PLATFORM VIEW
