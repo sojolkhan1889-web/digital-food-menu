@@ -43,8 +43,12 @@ import {
   Star,
   Pencil,
   ChevronDown,
+  ChevronUp,
   ChevronLeft,
   ChevronRight,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
   PanelLeftClose,
   PanelLeftOpen,
   MapPin,
@@ -187,6 +191,7 @@ export default function RestaurantPanel({
   onAddCategory,
   onDeleteCategory,
   onUpdateCategory,
+  onReorderCategories,
   onAddSubcategory,
   onUpdateSubcategory,
   onDeleteSubcategory,
@@ -443,6 +448,65 @@ export default function RestaurantPanel({
         .map(c => String(c).trim())
     ));
   }, [categories]);
+
+  // Drag-and-drop state for Active Menu Categories
+  const [draggedCategoryIndex, setDraggedCategoryIndex] = useState(null);
+  const [dragOverCategoryIndex, setDragOverCategoryIndex] = useState(null);
+
+  const handleCategoryDragStart = (e, index) => {
+    setDraggedCategoryIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    try {
+      e.dataTransfer.setData('text/plain', String(index));
+    } catch {}
+  };
+
+  const handleCategoryDragOver = (e, index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverCategoryIndex !== index) {
+      setDragOverCategoryIndex(index);
+    }
+  };
+
+  const handleCategoryDragLeave = (e, index) => {
+    if (e.currentTarget.contains(e.relatedTarget)) return;
+    if (dragOverCategoryIndex === index) {
+      setDragOverCategoryIndex(null);
+    }
+  };
+
+  const handleCategoryDrop = (e, targetIndex) => {
+    e.preventDefault();
+    if (draggedCategoryIndex === null || draggedCategoryIndex === targetIndex) {
+      setDraggedCategoryIndex(null);
+      setDragOverCategoryIndex(null);
+      return;
+    }
+    const updated = [...uniqueCategories];
+    const [movedItem] = updated.splice(draggedCategoryIndex, 1);
+    updated.splice(targetIndex, 0, movedItem);
+    setDraggedCategoryIndex(null);
+    setDragOverCategoryIndex(null);
+    if (onReorderCategories) {
+      onReorderCategories(updated);
+    }
+  };
+
+  const handleCategoryDragEnd = () => {
+    setDraggedCategoryIndex(null);
+    setDragOverCategoryIndex(null);
+  };
+
+  const handleMoveCategory = (fromIndex, toIndex) => {
+    if (toIndex < 0 || toIndex >= uniqueCategories.length) return;
+    const updated = [...uniqueCategories];
+    const [movedItem] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, movedItem);
+    if (onReorderCategories) {
+      onReorderCategories(updated);
+    }
+  };
 
   // If activeTab is premium and premium gets disabled, fallback to foods
   useEffect(() => {
@@ -2216,27 +2280,76 @@ export default function RestaurantPanel({
                 </div>
               </div>
 
-              {/* Category List Table */}
+              {/* Category List Table with Drag-and-Drop Reordering */}
               <div className={`rounded-[5px] border overflow-hidden ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-300 shadow-sm'
                 }`}>
-                <div className={`p-4 border-b ${isDark ? 'border-slate-800 bg-[#0B0F19]' : 'border-slate-300 bg-slate-50'}`}>
-                  <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    Active Menu Categories ({uniqueCategories.length})
-                  </h3>
+                <div className={`p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${isDark ? 'border-slate-800 bg-[#0B0F19]' : 'border-slate-300 bg-slate-50'}`}>
+                  <div>
+                    <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      Active Menu Categories ({uniqueCategories.length})
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Drag &amp; drop to reorder. This exact serial order is shown under &apos;All Items&apos; on the customer digital menu.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 self-start sm:self-center">
+                    <span className="text-[10px] font-semibold text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20 inline-flex items-center gap-1">
+                      <GripVertical className="w-3 h-3" /> Drag to Reorder
+                    </span>
+                  </div>
                 </div>
 
                 <div className={`divide-y text-xs ${isDark ? 'divide-slate-800' : 'divide-slate-200'}`}>
-                  {uniqueCategories.map((catName) => {
+                  {uniqueCategories.map((catName, index) => {
                     const count = foods.filter(f => f.category === catName).length;
                     const isDefault = catName === 'All';
                     const isEditing = editingCategory === catName;
+                    const nativeCatName = categoryTranslations?.[catName] || initialCategoryTranslations?.[catName];
+                    const isDragging = draggedCategoryIndex === index;
+                    const isDropTarget = dragOverCategoryIndex === index && draggedCategoryIndex !== index;
 
                     return (
-                      <div key={catName} className={`p-4 flex items-center justify-between ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'
-                        }`}>
-                        <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
-                          <div className={`w-8 h-8 rounded-[5px] flex items-center justify-center font-bold shrink-0 ${isDark ? 'bg-slate-800 text-orange-400' : 'bg-slate-100 text-orange-600'
-                            }`}>
+                      <div
+                        key={catName}
+                        draggable={!isEditing}
+                        onDragStart={(e) => handleCategoryDragStart(e, index)}
+                        onDragOver={(e) => handleCategoryDragOver(e, index)}
+                        onDragLeave={(e) => handleCategoryDragLeave(e, index)}
+                        onDrop={(e) => handleCategoryDrop(e, index)}
+                        onDragEnd={handleCategoryDragEnd}
+                        className={`p-3.5 sm:p-4 flex items-center justify-between transition-all select-none ${
+                          isDragging
+                            ? 'opacity-40 bg-orange-500/15 scale-[0.99] border-y-2 border-dashed border-orange-500'
+                            : isDropTarget
+                              ? 'bg-orange-500/15 border-t-2 border-orange-500 shadow-md'
+                              : isDark
+                                ? 'hover:bg-slate-800/40'
+                                : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 sm:gap-3 flex-1 min-w-0 pr-3 sm:pr-4">
+                          {/* Drag Handle with Grip icon */}
+                          {!isEditing && (
+                            <div
+                              className={`p-1 rounded cursor-grab active:cursor-grabbing transition-colors ${
+                                isDark ? 'text-slate-500 hover:text-orange-400 hover:bg-slate-800' : 'text-slate-400 hover:text-orange-600 hover:bg-slate-200'
+                              }`}
+                              title="Drag to change category order"
+                            >
+                              <GripVertical className="w-4 h-4" />
+                            </div>
+                          )}
+
+                          {/* Serial Number Badge */}
+                          <span className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center shrink-0 ${
+                            isDark ? 'bg-slate-800 text-slate-300 border border-slate-700' : 'bg-slate-100 text-slate-600 border border-slate-300'
+                          }`}>
+                            {index + 1}
+                          </span>
+
+                          <div className={`w-8 h-8 rounded-[5px] flex items-center justify-center font-bold shrink-0 ${
+                            isDark ? 'bg-slate-800 text-orange-400' : 'bg-slate-100 text-orange-600'
+                          }`}>
                             <Layers className="w-4 h-4" />
                           </div>
                           
@@ -2298,9 +2411,47 @@ export default function RestaurantPanel({
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                           {!isDefault && !isEditing && (
                             <>
+                              {/* Quick Move Up/Down Controls */}
+                              <div className={`flex items-center border rounded-[5px] overflow-hidden ${
+                                isDark ? 'border-slate-700 bg-slate-800/80' : 'border-slate-300 bg-slate-100'
+                              }`}>
+                                <button
+                                  type="button"
+                                  disabled={index === 0}
+                                  onClick={() => handleMoveCategory(index, index - 1)}
+                                  className={`p-1 transition-colors ${
+                                    index === 0
+                                      ? 'opacity-25 cursor-not-allowed text-slate-500'
+                                      : isDark
+                                        ? 'text-slate-300 hover:text-orange-400 hover:bg-slate-700 cursor-pointer'
+                                        : 'text-slate-700 hover:text-orange-600 hover:bg-slate-200 cursor-pointer'
+                                  }`}
+                                  title="Move Up"
+                                  aria-label="Move Up"
+                                >
+                                  <ChevronUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={index === uniqueCategories.length - 1}
+                                  onClick={() => handleMoveCategory(index, index + 1)}
+                                  className={`p-1 transition-colors ${
+                                    index === uniqueCategories.length - 1
+                                      ? 'opacity-25 cursor-not-allowed text-slate-500'
+                                      : isDark
+                                        ? 'text-slate-300 hover:text-orange-400 hover:bg-slate-700 cursor-pointer'
+                                        : 'text-slate-700 hover:text-orange-600 hover:bg-slate-200 cursor-pointer'
+                                  }`}
+                                  title="Move Down"
+                                  aria-label="Move Down"
+                                >
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
                               <button
                                 type="button"
                                 onClick={() => {
@@ -2308,7 +2459,7 @@ export default function RestaurantPanel({
                                   setEditCategoryName(catName);
                                   setEditCategoryNameNative(categoryTranslations?.[catName] || initialCategoryTranslations?.[catName] || '');
                                 }}
-                                className={`px-3 py-1 rounded-[5px] text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                                className={`px-2.5 sm:px-3 py-1 rounded-[5px] text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
                                   isDark ? 'text-slate-400 hover:text-orange-400 hover:bg-slate-800' : 'text-slate-600 hover:text-orange-600 hover:bg-slate-100'
                                 }`}
                               >
@@ -2318,7 +2469,7 @@ export default function RestaurantPanel({
                               <button
                                 type="button"
                                 onClick={() => onDeleteCategory && onDeleteCategory(catName)}
-                                className="px-3 py-1 rounded-[5px] text-slate-500 hover:text-red-600 text-xs font-medium cursor-pointer"
+                                className="px-2.5 sm:px-3 py-1 rounded-[5px] text-slate-500 hover:text-red-600 text-xs font-medium cursor-pointer"
                               >
                                 Delete
                               </button>

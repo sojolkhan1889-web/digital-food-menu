@@ -1027,9 +1027,10 @@ export const deleteFoodFromSupabase = async (foodId) => {
 };
 
 // --- Categories Management with Supabase Sync ---
-export const getStoredCategories = () => {
+export const getStoredCategories = (restaurantId = null) => {
   try {
-    const data = localStorage.getItem(CATEGORIES_KEY);
+    const key = restaurantId ? `${CATEGORIES_KEY}_${restaurantId}` : null;
+    const data = (key && localStorage.getItem(key)) || localStorage.getItem(CATEGORIES_KEY);
     if (data) {
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -1042,10 +1043,13 @@ export const getStoredCategories = () => {
   return Array.from(new Set(initialCategories.filter(c => Boolean(c) && String(c).toLowerCase() !== 'all')));
 };
 
-export const saveStoredCategories = (categories) => {
+export const saveStoredCategories = (categories, restaurantId = null) => {
   try {
     const unique = Array.from(new Set(categories.filter(c => Boolean(c) && String(c).toLowerCase() !== 'all')));
     localStorage.setItem(CATEGORIES_KEY, JSON.stringify(unique));
+    if (restaurantId) {
+      localStorage.setItem(`${CATEGORIES_KEY}_${restaurantId}`, JSON.stringify(unique));
+    }
   } catch (e) {
     console.error('Error saving categories to storage:', e);
   }

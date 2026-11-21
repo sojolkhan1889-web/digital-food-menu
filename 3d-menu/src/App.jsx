@@ -299,7 +299,7 @@ export default function App() {
 
   // Dynamic Foods, Categories, Orders, and Payments from Menu Store
   const [foodsList, setFoodsList] = useState(getStoredFoods);
-  const [categoriesList, setCategoriesList] = useState(getStoredCategories);
+  const [categoriesList, setCategoriesList] = useState(() => getStoredCategories(currentRestoId));
   const [categoryTranslations, setCategoryTranslations] = useState(() => getStoredCategoryTranslations(currentRestoId));
   const [subcategoriesList, setSubcategoriesList] = useState(getStoredSubcategories);
   const [featuredSliders, setFeaturedSliders] = useState(() => getStoredFeaturedSliders(currentRestoId));
@@ -1268,6 +1268,19 @@ export default function App() {
 
     deleteCategoryFromSupabase(oldName, currentRestoId);
     syncCategoryToSupabase(cleanNew, currentRestoId);
+  };
+
+  const handleReorderCategories = (newOrder) => {
+    if (!Array.isArray(newOrder)) return;
+    const cleanList = Array.from(new Set(newOrder.filter(c => Boolean(c) && c !== 'All' && c !== 'All Items')));
+    setCategoriesList(cleanList);
+    if (currentRestoId === 'resto_001') saveStoredCategories(cleanList);
+    saveStoredCategories(cleanList, currentRestoId);
+
+    // Sync sequential display_order to Supabase (10, 20, 30, ...)
+    cleanList.forEach((catName, index) => {
+      syncCategoryToSupabase(catName, currentRestoId, (index + 1) * 10);
+    });
   };
 
   const handleUpdateSubcategory = (updatedSub) => {
@@ -3270,6 +3283,7 @@ export default function App() {
           onAddCategory={handleAddCategory}
           onDeleteCategory={handleDeleteCategory}
           onUpdateCategory={handleUpdateCategory}
+          onReorderCategories={handleReorderCategories}
           onAddSubcategory={handleAddSubcategory}
           onUpdateSubcategory={handleUpdateSubcategory}
           onDeleteSubcategory={handleDeleteSubcategory}
