@@ -243,32 +243,6 @@
   gap: 8px;
 }
 
-.restaurant-lang-pill {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  height: 34px;
-  padding: 6px 11px;
-  border-radius: 999px;
-  border: 1.5px solid rgba(255, 255, 255, 0.16);
-  background: rgba(18, 14, 9, 0.95);
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: all 150ms ease;
-  user-select: none;
-}
-
-.restaurant-lang-pill:hover {
-  background: rgba(34, 24, 14, 1);
-  border-color: var(--rh-amber);
-}
-
-.restaurant-lang-pill:active {
-  transform: scale(0.95);
-}
-
 .restaurant-menu {
   min-height: 44px;
   padding: 0;

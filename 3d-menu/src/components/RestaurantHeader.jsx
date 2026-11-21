@@ -124,19 +124,6 @@ export default function RestaurantHeader({
         </div>
 
         <div className="restaurant-actions">
-          {onLanguageClick && (
-            <button
-              type="button"
-              onClick={onLanguageClick}
-              className="restaurant-lang-pill"
-              aria-label="Change Language"
-              title="Change Language"
-            >
-              <Globe className="w-3.5 h-3.5 text-amber-400" />
-              <span>{currentLanguage === 'bn' ? 'বাংলা' : 'EN'}</span>
-            </button>
-          )}
-
           <button
             className="restaurant-menu"
             type="button"

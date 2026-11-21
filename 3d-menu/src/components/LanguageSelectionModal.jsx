@@ -60,11 +60,11 @@ export default function LanguageSelectionModal({
         // Prevent accidental backdrop closing on first-time required prompt
         e.stopPropagation();
       }}
-      className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200 select-none"
+      className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200 select-none"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[340px] sm:max-w-[370px] rounded-[24px] sm:rounded-[28px] bg-[#141217] border border-zinc-800/90 shadow-[0_25px_70px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.08)] p-5 sm:p-6 text-white relative animate-[scaleUp_0.25s_cubic-bezier(0.16,1,0.3,1)]"
+        className="w-full max-w-[340px] sm:max-w-[370px] rounded-[28px] bg-[#0c101c]/80 backdrop-blur-2xl border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.12)] p-5 sm:p-6 text-white relative animate-[scaleUp_0.25s_cubic-bezier(0.16,1,0.3,1)]"
       >
         {!isOtherView ? (
           /* ======================================================== */
@@ -88,29 +88,30 @@ export default function LanguageSelectionModal({
             </div>
 
             {/* Language Options Row: Native Language (Left) & English (Right) */}
+            {/* Fixed border-2 on both states to completely prevent layout shift/shake */}
             <div className="grid grid-cols-2 gap-2.5 sm:gap-3 mb-3">
               {/* Native Language (e.g., বাংলা) */}
               <button
                 type="button"
                 onClick={() => setSelectedCode(nativeLang.code)}
-                className={`p-3.5 sm:p-4 rounded-2xl flex items-center justify-between transition-all cursor-pointer select-none ${
+                className={`p-3.5 sm:p-4 rounded-2xl flex items-center justify-between border-2 transition-colors cursor-pointer select-none backdrop-blur-md ${
                   selectedCode === nativeLang.code
-                    ? 'bg-[#1b1712] border-2 border-[#F59E0B] text-white shadow-[0_0_18px_rgba(245,158,11,0.25)]'
-                    : 'bg-[#1a1722]/80 hover:bg-[#23202e] border border-zinc-700/60 text-slate-200'
+                    ? 'border-[#F59E0B] bg-[#F59E0B]/15 text-white shadow-[0_0_18px_rgba(245,158,11,0.22)]'
+                    : 'border-white/10 hover:border-white/20 bg-white/[0.04] hover:bg-white/[0.08] text-slate-200'
                 }`}
               >
                 <span className="font-bold text-base sm:text-lg">
                   {nativeLang.nativeName || 'বাংলা'}
                 </span>
                 <div
-                  className={`w-4.5 h-4.5 rounded-full flex items-center justify-center transition-all ${
+                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                     selectedCode === nativeLang.code
-                      ? 'border-2 border-[#F59E0B]'
-                      : 'border border-zinc-500'
+                      ? 'border-[#F59E0B]'
+                      : 'border-zinc-500'
                   }`}
                 >
                   {selectedCode === nativeLang.code && (
-                    <div className="w-2 h-2 rounded-full bg-[#F59E0B]" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]" />
                   )}
                 </div>
               </button>
@@ -119,24 +120,24 @@ export default function LanguageSelectionModal({
               <button
                 type="button"
                 onClick={() => setSelectedCode('en')}
-                className={`p-3.5 sm:p-4 rounded-2xl flex items-center justify-between transition-all cursor-pointer select-none ${
+                className={`p-3.5 sm:p-4 rounded-2xl flex items-center justify-between border-2 transition-colors cursor-pointer select-none backdrop-blur-md ${
                   selectedCode === 'en'
-                    ? 'bg-[#1b1712] border-2 border-[#F59E0B] text-white shadow-[0_0_18px_rgba(245,158,11,0.25)]'
-                    : 'bg-[#1a1722]/80 hover:bg-[#23202e] border border-zinc-700/60 text-slate-200'
+                    ? 'border-[#F59E0B] bg-[#F59E0B]/15 text-white shadow-[0_0_18px_rgba(245,158,11,0.22)]'
+                    : 'border-white/10 hover:border-white/20 bg-white/[0.04] hover:bg-white/[0.08] text-slate-200'
                 }`}
               >
                 <span className="font-bold text-base sm:text-lg">
                   English
                 </span>
                 <div
-                  className={`w-4.5 h-4.5 rounded-full flex items-center justify-center transition-all ${
+                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                     selectedCode === 'en'
-                      ? 'border-2 border-[#F59E0B]'
-                      : 'border border-zinc-500'
+                      ? 'border-[#F59E0B]'
+                      : 'border-zinc-500'
                   }`}
                 >
                   {selectedCode === 'en' && (
-                    <div className="w-2 h-2 rounded-full bg-[#F59E0B]" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]" />
                   )}
                 </div>
               </button>

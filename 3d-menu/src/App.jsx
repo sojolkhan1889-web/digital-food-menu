@@ -35,7 +35,8 @@ import {
   Bell,
   AlertTriangle,
   Info,
-  Headphones
+  Headphones,
+  Globe
 } from 'lucide-react';
 
 import foodGif from './assets/Food.gif';
@@ -3311,8 +3312,6 @@ export default function App() {
           brand={isTableMode && tableNumber ? tableNumber : "24 DIGITAL"}
           welcomeText={t('welcome_guest', customerLanguage)}
           menuText={t('menu', customerLanguage)}
-          currentLanguage={customerLanguage}
-          onLanguageClick={() => setIsLanguageModalOpen(true)}
           isFollowing={isFollowing}
           onFollow={handleFollowRestaurant}
           onMenuClick={() => setIsMenuOpen(true)}
@@ -3363,6 +3362,23 @@ export default function App() {
             </div>
           </div>
         ) : null}
+
+        {/* Language Switcher Pill (Top-Right of food stage, aligned with left badge - Matching Image 3) */}
+        <div className="absolute top-4.5 right-4 z-30 pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => setIsLanguageModalOpen(true)}
+            className="h-[34px] min-h-[34px] px-3 sm:px-3.5 rounded-full border-[1.7px] border-[#F59E0B] bg-[#090c0e]/95 hover:bg-[#18130e] active:scale-95 text-white flex items-center justify-center gap-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.5)] transition-all cursor-pointer select-none"
+            aria-label="Change Language"
+            title="Change Language"
+          >
+            <Globe className="w-4 h-4 text-[#F59E0B]" />
+            <span className="font-extrabold text-xs uppercase tracking-wider text-white leading-none">
+              {customerLanguage === 'bn' ? 'বাংলা' : 'EN'}
+            </span>
+            <ChevronDown className="w-3.5 h-3.5 text-white/80 stroke-[2.5]" />
+          </button>
+        </div>
 
         {/* Floating Sparkle Decorative Elements */}
         <div className="absolute top-1/4 left-10 pointer-events-none animate-sparkle-1 text-amber-300/60">
