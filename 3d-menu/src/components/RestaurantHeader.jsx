@@ -130,11 +130,11 @@ export default function RestaurantHeader({
             onClick={onMenuClick}
             aria-label="Open Food Menu"
           >
-            <span className="restaurant-menu-pill">
+            <span className={`restaurant-menu-pill ${currentLanguage === 'bn' ? 'is-bn' : ''}`}>
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M4 6h16M4 12h16M4 18h16" />
               </svg>
-              <span>{menuText}</span>
+              <span className={`restaurant-menu-text ${currentLanguage === 'bn' ? 'is-bn' : ''}`}>{menuText}</span>
             </span>
           </button>
           {rightExtra}

@@ -998,7 +998,16 @@ export const syncFoodToSupabase = async (food, restaurantId) => {
       image: imageToSync,
       is_published: isPub,
       status: food.status || (isPub ? 'published' : 'unpublished'),
-      customizable: food.customizable || null
+      customizable: {
+        ...(food.customizable || {}),
+        title_bn: food.title_bn || food.name_native || food.customizable?.title_bn,
+        name_native: food.name_native || food.title_bn || food.customizable?.name_native,
+        description_bn: food.description_bn || food.description_native || food.customizable?.description_bn,
+        description_native: food.description_native || food.description_bn || food.customizable?.description_native,
+        discountMode: food.discountMode || food.customizable?.discountMode,
+        discountType: food.discountType || food.customizable?.discountType,
+        discountValue: food.discountValue || food.customizable?.discountValue,
+      }
     };
 
     const { error } = await supabase.from('food_items').upsert([payload]);
@@ -1115,6 +1124,9 @@ export const fetchRemoteData = async (restaurantId = 'resto_001') => {
           return {
             id: String(item.id),
             title: item.title,
+            title_bn: item.title_bn || item.customizable?.title_bn || item.customizable?.name_native || (fallback ? fallback.title_bn : undefined),
+            name_bn: item.name_bn || item.customizable?.name_bn || item.customizable?.name_native || (fallback ? fallback.name_bn : undefined),
+            name_native: item.name_native || item.customizable?.name_native || item.customizable?.title_bn,
             tag: item.tag || (fallback ? fallback.tag : 'Best Selling'),
             rating: Number(item.rating || 5.0),
             ratingCount: Number(item.rating_count || (fallback ? fallback.ratingCount : 1)),
@@ -1122,7 +1134,12 @@ export const fetchRemoteData = async (restaurantId = 'resto_001') => {
             subcategory: item.subcategory || (fallback ? fallback.subcategory : undefined),
             price: Number(item.price || 0),
             oldPrice: item.old_price ? Number(item.old_price) : (fallback ? fallback.oldPrice : undefined),
+            discountMode: item.discount_mode || item.discountMode || item.customizable?.discountMode,
+            discountType: item.discount_type || item.discountType || item.customizable?.discountType,
+            discountValue: item.discount_value || item.discountValue || item.customizable?.discountValue,
             description: item.description || (fallback ? fallback.description : ''),
+            description_bn: item.description_bn || item.customizable?.description_bn || item.customizable?.description_native || (fallback ? fallback.description_bn : undefined),
+            description_native: item.description_native || item.customizable?.description_native || item.customizable?.description_bn,
             image: resolveFoodImage(item.image, fallback),
             isPng: true,
             is_published: item.is_published !== false && item.status !== 'unpublished' && item.status !== 'draft',

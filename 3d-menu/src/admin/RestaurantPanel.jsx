@@ -3969,6 +3969,7 @@ export default function RestaurantPanel({
         categories={categories}
         editingFood={editingFood}
         currency={currency}
+        restaurant={restaurantProfile || activeRestaurant}
         theme={theme}
       />
 

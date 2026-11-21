@@ -16,6 +16,7 @@ import {
   Sparkles,
   Loader2
 } from 'lucide-react';
+import { getRestaurantPrimaryLanguage } from '../utils/translations';
 
 export default function AddFoodWizard({
   isOpen,
@@ -24,9 +25,15 @@ export default function AddFoodWizard({
   categories = [],
   editingFood = null,
   currency: propCurrency = '৳',
+  restaurant = null,
   theme = 'light'
 }) {
   const [currentStep, setCurrentStep] = useState(1);
+
+  // Dynamic primary native language for the registered restaurant country
+  const nativeLang = useMemo(() => {
+    return getRestaurantPrimaryLanguage(restaurant || { currency: propCurrency });
+  }, [restaurant, propCurrency]);
 
   // De-duplicate categories for dropdown
   const uniqueCategories = useMemo(() => {
@@ -40,11 +47,13 @@ export default function AddFoodWizard({
     return list;
   }, [categories]);
 
-  // Step 1: Food Details State
+  // Step 1: Food Details State (English + Native Language)
   const [foodName, setFoodName] = useState('');
+  const [foodNameNative, setFoodNameNative] = useState('');
   const [category, setCategory] = useState(uniqueCategories[0] || 'Main Course');
   const [subcategory, setSubcategory] = useState('');
   const [description, setDescription] = useState('');
+  const [descriptionNative, setDescriptionNative] = useState('');
   const [badgeTag, setBadgeTag] = useState('Best Selling');
   const [foodImage, setFoodImage] = useState('');
   const [imagePreview, setImagePreview] = useState('');
@@ -83,9 +92,24 @@ export default function AddFoodWizard({
     setCurrentStep(1);
     if (editingFood) {
       setFoodName(editingFood.title || '');
+      setFoodNameNative(
+        editingFood.title_bn ||
+        editingFood.name_bn ||
+        editingFood.name_native ||
+        editingFood.customizable?.title_bn ||
+        editingFood.customizable?.name_native ||
+        ''
+      );
       setCategory(editingFood.category || uniqueCategories[0] || 'Main Course');
       setSubcategory(editingFood.subcategory || '');
       setDescription(editingFood.description || '');
+      setDescriptionNative(
+        editingFood.description_bn ||
+        editingFood.description_native ||
+        editingFood.customizable?.description_bn ||
+        editingFood.customizable?.description_native ||
+        ''
+      );
       setBadgeTag(editingFood.tag || 'Best Selling');
       setFoodImage(editingFood.image || '');
       setImagePreview(editingFood.image || '');
@@ -101,11 +125,10 @@ export default function AddFoodWizard({
             ? Number(p.oldPrice)
             : (baseOldP > baseP ? (baseOldP + Number(p.extra || 0)) : sellingP);
           const hasDiscount = regularP > sellingP;
-          let mode = 'none';
-          let val = '';
-          if (hasDiscount) {
+          let mode = p.discountMode || (hasDiscount ? 'percent' : 'none');
+          let val = p.discountValue || '';
+          if (hasDiscount && !val) {
             const pct = Math.round(((regularP - sellingP) / regularP) * 100);
-            mode = 'percent';
             val = String(pct);
           }
           return {
@@ -129,7 +152,17 @@ export default function AddFoodWizard({
           setSinglePrice(String(numNew));
           const diff = numOld - numNew;
           const pct = Math.round((diff / numOld) * 100);
-          if (Math.abs(numNew - (numOld * (1 - pct / 100))) < 0.1) {
+          const savedMode = editingFood.discountMode ||
+                            editingFood.discountType ||
+                            editingFood.customizable?.discountMode ||
+                            editingFood.customizable?.discountType;
+          if (savedMode === 'fixed' || savedMode === 'flat') {
+            setDiscountMode('fixed');
+            setDiscountValue(String(editingFood.discountValue || editingFood.customizable?.discountValue || (diff % 1 === 0 ? diff : diff.toFixed(2))));
+          } else if (savedMode === 'percent') {
+            setDiscountMode('percent');
+            setDiscountValue(String(editingFood.discountValue || editingFood.customizable?.discountValue || pct));
+          } else if (Math.abs(numNew - (numOld * (1 - pct / 100))) < 0.1) {
             setDiscountMode('percent');
             setDiscountValue(String(pct));
           } else {
@@ -164,9 +197,11 @@ export default function AddFoodWizard({
       setImageMeta(null);
     } else {
       setFoodName('');
+      setFoodNameNative('');
       setCategory(uniqueCategories[0] || 'Main Course');
       setSubcategory('');
       setDescription('');
+      setDescriptionNative('');
       setBadgeTag('Best Selling');
       setFoodImage('');
       setImagePreview('');
@@ -503,7 +538,35 @@ export default function AddFoodWizard({
             ? Number(singleOldPrice)
             : undefined);
 
-      const customizableData = {};
+      const customizableData = {
+        ...(editingFood?.customizable || {})
+      };
+
+      if (foodNameNative.trim()) {
+        customizableData.title_bn = foodNameNative.trim();
+        customizableData.name_native = foodNameNative.trim();
+      } else {
+        delete customizableData.title_bn;
+        delete customizableData.name_native;
+      }
+
+      if (descriptionNative.trim()) {
+        customizableData.description_bn = descriptionNative.trim();
+        customizableData.description_native = descriptionNative.trim();
+      } else {
+        delete customizableData.description_bn;
+        delete customizableData.description_native;
+      }
+
+      const finalDiscountMode = hasDifferentSizes ? (portions[0]?.discountMode || 'none') : discountMode;
+      const finalDiscountType = hasDifferentSizes
+        ? (portions[0]?.discountMode === 'fixed' ? 'flat' : portions[0]?.discountMode || 'none')
+        : (discountMode === 'fixed' ? 'flat' : discountMode);
+      const finalDiscountVal = hasDifferentSizes ? (portions[0]?.discountValue || '') : discountValue;
+
+      customizableData.discountMode = finalDiscountMode;
+      customizableData.discountType = finalDiscountType;
+      customizableData.discountValue = finalDiscountVal;
 
       if (hasDifferentSizes) {
         customizableData.portions = portions.map(p => {
@@ -513,6 +576,8 @@ export default function AddFoodWizard({
             name: p.name.trim(),
             price: sellingP,
             oldPrice: regularP > sellingP ? regularP : undefined,
+            discountMode: p.discountMode || (regularP > sellingP ? 'percent' : 'none'),
+            discountValue: p.discountValue || '',
             extra: Math.max(0, sellingP - basePriceNum)
           };
         });
@@ -532,6 +597,9 @@ export default function AddFoodWizard({
         ...(editingFood || {}),
         id: editingFood ? editingFood.id : Date.now(),
         title: foodName.trim(),
+        title_bn: foodNameNative.trim() || undefined,
+        name_bn: foodNameNative.trim() || undefined,
+        name_native: foodNameNative.trim() || undefined,
         tag: badgeTag,
         rating: editingFood?.rating ?? 5.0,
         ratingCount: editingFood?.ratingCount ?? 1,
@@ -539,7 +607,12 @@ export default function AddFoodWizard({
         subcategory: subcategory.trim() || undefined,
         price: basePriceNum,
         oldPrice: baseOldPriceNum,
+        discountMode: finalDiscountMode,
+        discountType: finalDiscountType,
+        discountValue: finalDiscountVal,
         description: description.trim() || 'Prepared fresh with premium quality ingredients.',
+        description_bn: descriptionNative.trim() || undefined,
+        description_native: descriptionNative.trim() || undefined,
         ingredients: editingFood?.ingredients || ['Fresh Ingredients', 'Chef Selected Spices', 'Signature Sauce'],
         image: foodImage || editingFood?.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format&fit=crop&q=80',
         isPng: true,
@@ -667,20 +740,46 @@ export default function AddFoodWizard({
                 </p>
               </div>
 
-              {/* Food Name */}
-              <div>
-                <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                  Food Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Kacchi Biryani, Double Flame Cheeseburger..."
-                  value={foodName}
-                  onChange={(e) => setFoodName(e.target.value)}
-                  className={`w-full px-3.5 py-2.5 rounded-[5px] border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
-                    isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
-                  }`}
-                />
+              {/* Food Name (English & Native Language) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    Food Name (English) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Kacchi Biryani, Double Flame Cheeseburger..."
+                    value={foodName}
+                    onChange={(e) => setFoodName(e.target.value)}
+                    className={`w-full px-3.5 py-2.5 rounded-[5px] border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
+                      isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                    }`}
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">Default title for English visitors.</span>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className={`text-xs font-semibold block ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                      Food Name ({nativeLang.name} / {nativeLang.nativeName}) {nativeLang.flag}
+                    </label>
+                    <span className="text-[9.5px] text-amber-500 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                      Native Language
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder={nativeLang.code === 'bn' ? "যেমন: কাচ্চি বিরিয়ানি, ডাবল ফ্লেম চিজবার্গার..." : `e.g. Food title in ${nativeLang.nativeName}...`}
+                    value={foodNameNative}
+                    onChange={(e) => setFoodNameNative(e.target.value)}
+                    className={`w-full px-3.5 py-2.5 rounded-[5px] border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
+                      isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                    }`}
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    {nativeLang.nativeName} ভাষায় মেনু ব্রাউজ করলে এই নাম প্রদর্শিত হবে। (ঐচ্ছিক)
+                  </span>
+                </div>
               </div>
 
               {/* Category & Subcategory */}
@@ -747,20 +846,46 @@ export default function AddFoodWizard({
                 </div>
               </div>
 
-              {/* Food Description */}
-              <div>
-                <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                  Food Description
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="Traditional aromatic kacchi biryani, served with tender meat and potatoes..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className={`w-full px-3.5 py-2.5 rounded-[5px] border text-xs sm:text-sm focus:outline-none focus:border-orange-500 resize-none ${
-                    isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
-                  }`}
-                />
+              {/* Food Description (English & Native Language) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    Food Description (English)
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="Traditional aromatic kacchi biryani, served with tender meat and potatoes..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className={`w-full px-3.5 py-2.5 rounded-[5px] border text-xs sm:text-sm focus:outline-none focus:border-orange-500 resize-none ${
+                      isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                    }`}
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">Description for English visitors.</span>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className={`text-xs font-semibold block ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                      Food Description ({nativeLang.name} / {nativeLang.nativeName}) {nativeLang.flag}
+                    </label>
+                    <span className="text-[9.5px] text-amber-500 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                      Native Language
+                    </span>
+                  </div>
+                  <textarea
+                    rows={2}
+                    placeholder={nativeLang.code === 'bn' ? "যেমন: সুগন্ধি বাসমতী চাল ও নরম খাসির মাংসের ঐতিহ্যবাহী কাচ্চি বিরিয়ানি..." : `Short description in ${nativeLang.nativeName}...`}
+                    value={descriptionNative}
+                    onChange={(e) => setDescriptionNative(e.target.value)}
+                    className={`w-full px-3.5 py-2.5 rounded-[5px] border text-xs sm:text-sm focus:outline-none focus:border-orange-500 resize-none ${
+                      isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                    }`}
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    {nativeLang.nativeName} ভাষায় মেনু ব্রাউজ করলে এই বিবরণ প্রদর্শিত হবে। (ঐচ্ছিক)
+                  </span>
+                </div>
               </div>
 
               {/* Photo Upload with 3D Engine & Resolution Guidelines */}
@@ -1650,6 +1775,11 @@ export default function AddFoodWizard({
                   <div>
                     <h4 className={`font-bold text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>
                       {foodName || 'Food Title'}
+                      {foodNameNative && (
+                        <span className="text-xs font-normal text-amber-500 ml-2 block sm:inline">
+                          ({foodNameNative})
+                        </span>
+                      )}
                     </h4>
                     <p className="text-xs text-orange-600 font-semibold">
                       {category} {subcategory ? `/ ${subcategory}` : ''}
@@ -1657,6 +1787,11 @@ export default function AddFoodWizard({
                     <p className="text-xs text-slate-500 mt-1 line-clamp-2">
                       {description || 'No description provided.'}
                     </p>
+                    {descriptionNative && (
+                      <p className="text-xs text-slate-400 mt-0.5 line-clamp-2 italic">
+                        ↳ {descriptionNative}
+                      </p>
+                    )}
                   </div>
 
                   {/* Portions Interactive Preview */}

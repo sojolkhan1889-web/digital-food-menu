@@ -274,6 +274,13 @@
   transition: background 150ms ease, transform 150ms ease;
 }
 
+.restaurant-menu-pill.is-bn .restaurant-menu-text,
+.restaurant-menu-text.is-bn {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
 .restaurant-menu svg {
   width: 16px;
   height: 16px;

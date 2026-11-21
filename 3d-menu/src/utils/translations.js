@@ -329,45 +329,86 @@ export const formatBadgeText = (badgeText, lang = 'en') => {
 };
 
 /**
- * Translates or localizes food dish titles when browsing in Bengali
+ * Translates or localizes food dish titles when browsing in Bengali / Native Language
  */
 export const translateFoodTitle = (foodOrTitle, lang = 'en') => {
   if (!foodOrTitle) return '';
-  const title = typeof foodOrTitle === 'object'
-    ? (foodOrTitle.title_bn || foodOrTitle.name_bn || foodOrTitle.title || foodOrTitle.name || '')
+  const isObj = typeof foodOrTitle === 'object' && foodOrTitle !== null;
+  const defaultTitle = isObj
+    ? (foodOrTitle.title || foodOrTitle.name || '')
     : String(foodOrTitle);
 
-  if (lang !== 'bn') return typeof foodOrTitle === 'object' ? (foodOrTitle.title || foodOrTitle.name || '') : title;
+  if (lang === 'en') return defaultTitle;
 
-  // If explicit Bengali name exists on the food object
-  if (typeof foodOrTitle === 'object' && (foodOrTitle.title_bn || foodOrTitle.name_bn)) {
-    return foodOrTitle.title_bn || foodOrTitle.name_bn;
+  // 1. If explicit native or Bengali name exists on the food object, ALWAYS prioritize it
+  if (isObj) {
+    if (lang === 'bn' && (foodOrTitle.title_bn || foodOrTitle.name_bn)) {
+      return foodOrTitle.title_bn || foodOrTitle.name_bn;
+    }
+    if (foodOrTitle.name_native || foodOrTitle.title_native) {
+      return foodOrTitle.name_native || foodOrTitle.title_native;
+    }
+    if (foodOrTitle.customizable?.title_bn || foodOrTitle.customizable?.name_native) {
+      return foodOrTitle.customizable.title_bn || foodOrTitle.customizable.name_native;
+    }
   }
 
-  const clean = title.trim();
-  const lower = clean.toLowerCase();
+  // If language is Bengali, check known dictionary translations
+  if (lang === 'bn') {
+    const clean = defaultTitle.trim();
+    const lower = clean.toLowerCase();
 
-  // Known catalog & customer dishes
-  if (lower === 'loaded cheesy beef fries' || lower.includes('cheesy beef fries')) return 'লোডেড চিজি বিফ ফ্রাইস';
-  if (lower === 'double flame cheeseburger') return 'ডাবল ফ্লেম চিজবার্গার';
-  if (lower === 'artisan wood-fired pizza' || lower === 'wood-fired pizza') return 'উড-ফায়ার্ড পিজ্জা';
-  if (lower === 'korean gochujang crisp chicken' || lower.includes('gochujang crisp chicken')) return 'কোরিয়ান ক্রিস্প চিকেন';
-  if (lower === 'double smash burger combo') return 'ডাবল স্ম্যাশ বার্গার কম্বো';
-  if (lower === 'double smash burger') return 'ডাবল স্ম্যাশ বার্গার';
-  if (lower === 'smash burger') return 'স্ম্যাশ বার্গার';
-  if (lower === 'oreo thick shake') return 'ওরিও থিক শেক';
-  if (lower === 'iced caramel macchiato') return 'আইসড ক্যারামেল ম্যাকিয়াটো';
-  if (lower === 'signature kacchi biryani' || lower === 'kacchi biryani') return 'কাচ্চি বিরিয়ানি';
-  if (lower === 'artisan espresso') return 'আর্টিসান এসপ্রেসো';
-  if (lower === 'belgian chocolate sundae') return 'বেলজিয়ান চকলেট সানডে';
-  if (lower === 'crispy fries' || lower === 'french fries') return 'ক্রিস্পি ফ্রাইস';
-  if (lower === 'beef burger') return 'বিফ বার্গার';
-  if (lower === 'chicken burger') return 'চিকেন বার্গার';
-  if (lower.startsWith('coke') || lower.includes('coca cola') || lower.includes('coke •')) return 'কোক • ৩৫০ মিলি';
-  if (lower.includes('pepsi')) return 'পেপসি';
-  if (lower.includes('cold drink') || lower.includes('soft drink')) return 'কোল্ড ড্রিংক';
+    // Known catalog & customer dishes
+    if (lower === 'loaded cheesy beef fries' || lower.includes('cheesy beef fries')) return 'লোডেড চিজি বিফ ফ্রাইস';
+    if (lower === 'spicy zinger crunch burger' || lower.includes('spicy zinger')) return 'স্পাইসি জিঙ্গার ক্রাঞ্চ বার্গার';
+    if (lower === 'double flame cheeseburger') return 'ডাবল ফ্লেম চিজবার্গার';
+    if (lower === 'artisan wood-fired pizza' || lower === 'wood-fired pizza') return 'উড-ফায়ার্ড পিজ্জা';
+    if (lower === 'korean gochujang crisp chicken' || lower.includes('gochujang crisp chicken')) return 'কোরিয়ান ক্রিস্প চিকেন';
+    if (lower === 'double smash burger combo') return 'ডাবল স্ম্যাশ বার্গার কম্বো';
+    if (lower === 'double smash burger') return 'ডাবল স্ম্যাশ বার্গার';
+    if (lower === 'smash burger') return 'স্ম্যাশ বার্গার';
+    if (lower === 'oreo thick shake') return 'ওরিও থিক শেক';
+    if (lower === 'iced caramel macchiato') return 'আইসড ক্যারামেল ম্যাকিয়াটো';
+    if (lower === 'signature kacchi biryani' || lower === 'kacchi biryani') return 'কাচ্চি বিরিয়ানি';
+    if (lower === 'artisan espresso') return 'আর্টিসান এসপ্রেসো';
+    if (lower === 'belgian chocolate sundae') return 'বেলজিয়ান চকলেট সানডে';
+    if (lower === 'crispy fries' || lower === 'french fries') return 'ক্রিস্পি ফ্রাইস';
+    if (lower === 'beef burger') return 'বিফ বার্গার';
+    if (lower === 'chicken burger') return 'চিকেন বার্গার';
+    if (lower.startsWith('coke') || lower.includes('coca cola') || lower.includes('coke •')) return 'কোক • ৩৫০ মিলি';
+    if (lower.includes('pepsi')) return 'পেপসি';
+    if (lower.includes('cold drink') || lower.includes('soft drink')) return 'কোল্ড ড্রিংক';
 
-  return clean;
+    return clean;
+  }
+
+  return defaultTitle;
+};
+
+/**
+ * Translates or localizes food dish descriptions when browsing in Bengali / Native Language
+ */
+export const translateFoodDescription = (foodOrDesc, lang = 'en') => {
+  if (!foodOrDesc) return '';
+  const isObj = typeof foodOrDesc === 'object' && foodOrDesc !== null;
+  const defaultDesc = isObj ? (foodOrDesc.description || '') : String(foodOrDesc);
+
+  if (lang === 'en') return defaultDesc;
+
+  // 1. If explicit native or Bengali description exists on the food object, ALWAYS prioritize it
+  if (isObj) {
+    if (lang === 'bn' && (foodOrDesc.description_bn || foodOrDesc.customizable?.description_bn)) {
+      return foodOrDesc.description_bn || foodOrDesc.customizable?.description_bn;
+    }
+    if (foodOrDesc.description_native || foodOrDesc.customizable?.description_native) {
+      return foodOrDesc.description_native || foodOrDesc.customizable?.description_native;
+    }
+    if (foodOrDesc.description_bn) {
+      return foodOrDesc.description_bn;
+    }
+  }
+
+  return defaultDesc;
 };
 
 /**

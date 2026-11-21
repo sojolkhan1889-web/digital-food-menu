@@ -116,6 +116,7 @@ import {
   getRestaurantPrimaryLanguage,
   formatBadgeText,
   translateFoodTitle,
+  translateFoodDescription,
   toBengaliDigits
 } from './utils/translations';
 
@@ -2210,16 +2211,27 @@ export default function App() {
         return null;
       }
 
+      // Check if portions specify fixed discount mode
+      const isFixedMode = portions[0]?.discountMode === 'fixed' ||
+                          portions[0]?.discountType === 'flat' ||
+                          activeFood.discountMode === 'fixed' ||
+                          activeFood.discountType === 'flat' ||
+                          activeFood.customizable?.discountMode === 'fixed';
+      const firstFlat = discounts[0].flat;
+      const allSameFlat = discounts.every(d => Math.abs(d.flat - firstFlat) < 0.5);
+
+      if (isFixedMode && allSameFlat && firstFlat > 0) {
+        return `FLAT ${currency}${Math.round(firstFlat)} OFF`;
+      }
+
       // 1. Check if all portions have the same percentage discount (e.g. 20% OFF)
       const firstPct = discounts[0].pct;
       const allSamePct = discounts.every(d => Math.abs(d.pct - firstPct) <= 1);
-      if (allSamePct && firstPct > 0) {
+      if (allSamePct && firstPct > 0 && !isFixedMode) {
         return `${firstPct}% OFF`;
       }
 
       // 2. Check if all portions have the same flat discount amount (e.g. ৳50 OFF)
-      const firstFlat = discounts[0].flat;
-      const allSameFlat = discounts.every(d => Math.abs(d.flat - firstFlat) < 0.5);
       if (allSameFlat && firstFlat > 0) {
         return `FLAT ${currency}${Math.round(firstFlat)} OFF`;
       }
@@ -2232,6 +2244,15 @@ export default function App() {
     const selling = Number(activeFood.price || 0);
     const regular = Number(activeFood.oldPrice || 0);
     if (regular > selling && regular > 0) {
+      const isFixed = activeFood.discountMode === 'fixed' ||
+                      activeFood.discountType === 'flat' ||
+                      activeFood.discountType === 'fixed' ||
+                      activeFood.customizable?.discountMode === 'fixed' ||
+                      activeFood.customizable?.discountType === 'flat';
+      if (isFixed) {
+        const flatDiff = Math.round(regular - selling);
+        return `FLAT ${currency}${flatDiff} OFF`;
+      }
       const pct = Math.round(((regular - selling) / regular) * 100);
       if (pct > 0) {
         return `${pct}% OFF`;
@@ -2369,6 +2390,12 @@ export default function App() {
       foodId: activeFood.id,
       restaurantId: currentRestoId,
       title: activeFood.title,
+      title_bn: activeFood.title_bn,
+      name_bn: activeFood.name_bn,
+      name_native: activeFood.name_native,
+      description: activeFood.description,
+      description_bn: activeFood.description_bn,
+      description_native: activeFood.description_native,
       image: activeFood.image,
       isPng: activeFood.isPng,
       tag: activeFood.tag,
@@ -2393,6 +2420,12 @@ export default function App() {
             ...item,
             foodId: activeFood.id || item.foodId,
             title: activeFood.title,
+            title_bn: activeFood.title_bn,
+            name_bn: activeFood.name_bn,
+            name_native: activeFood.name_native,
+            description: activeFood.description,
+            description_bn: activeFood.description_bn,
+            description_native: activeFood.description_native,
             image: activeFood.image,
             isPng: activeFood.isPng,
             tag: activeFood.tag,
@@ -3323,6 +3356,7 @@ export default function App() {
           onFollow={handleFollowRestaurant}
           onMenuClick={() => setIsMenuOpen(true)}
           onLogoClick={() => navigateToAdmin(activeRestaurant)}
+          currentLanguage={customerLanguage}
           rightExtra={
             adminConfig.premiumFeatures.enableCartPage ? (
               <button
@@ -3383,7 +3417,7 @@ export default function App() {
             title="Change Language"
           >
             <Globe className="w-3.5 h-3.5 text-[#F59E0B] shrink-0" />
-            <span className="font-extrabold text-xs uppercase tracking-wider text-white leading-none truncate">
+            <span className={`font-extrabold uppercase tracking-wider text-white leading-none truncate ${customerLanguage === 'bn' ? 'text-[13.5px]' : 'text-xs'}`}>
               {customerLanguage === 'bn' ? 'বাংলা' : 'EN'}
             </span>
             <ChevronDown className="w-3 h-3 text-white/80 stroke-[2.5] shrink-0" />
@@ -3616,7 +3650,7 @@ export default function App() {
                 </span>
               </div>
               <p className="text-slate-300 text-xs sm:text-sm leading-relaxed font-normal">
-                {activeFood.description}
+                {translateFoodDescription(activeFood, customerLanguage)}
               </p>
             </div>
 
