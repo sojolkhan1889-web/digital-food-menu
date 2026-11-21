@@ -108,6 +108,8 @@ import { supabase } from './lib/supabaseClient';
 import { supabaseTableRepository } from './data/supabaseTableRepository';
 import { handleFineDineTableVisit, confirmFineDineTableSession } from './data/dgmSessionStore';
 import RestaurantHeader from './components/RestaurantHeader';
+import LanguageSelectionModal from './components/LanguageSelectionModal';
+import { t, translateCategoryName, getRestaurantPrimaryLanguage } from './utils/translations';
 
 const categories = [
   { name: 'All', icon: Utensils },
@@ -277,6 +279,71 @@ export default function App() {
   const [superAdminConfig, setSuperAdminConfig] = useState(getSuperAdminConfig);
   const [ordersList, setOrdersList] = useState(getStoredOrders);
   const [paymentsList, setPaymentsList] = useState(getStoredPayments);
+
+  // ========================================================
+  // Multi-Language State & Persistence for Customer Digital Menu
+  // 1. Prompts language selection modal on initial customer QR scan
+  // 2. Persists selected language in localStorage scoped to the restaurant
+  // 3. Next time customer scans QR, loads in their chosen language directly
+  // ========================================================
+  const [customerLanguage, setCustomerLanguage] = useState(() => {
+    try {
+      const restoKey = `dgm_customer_lang_${currentRestoId}`;
+      const saved = localStorage.getItem(restoKey) || localStorage.getItem('dgm_customer_lang');
+      if (saved) return saved;
+    } catch (e) {
+      console.warn('Error reading stored customer language:', e);
+    }
+    return 'en';
+  });
+
+  const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(() => {
+    try {
+      const restoKey = `dgm_customer_lang_${currentRestoId}`;
+      const saved = localStorage.getItem(restoKey) || localStorage.getItem('dgm_customer_lang');
+      return !saved;
+    } catch {
+      return false;
+    }
+  });
+
+  const restaurantPrimaryLang = useMemo(() => {
+    return getRestaurantPrimaryLanguage(restaurantProfile, activeRestaurant);
+  }, [restaurantProfile, activeRestaurant]);
+
+  // Keep customerLanguage synced when switching restaurants/tenants
+  useEffect(() => {
+    try {
+      const restoKey = `dgm_customer_lang_${currentRestoId}`;
+      const saved = localStorage.getItem(restoKey);
+      if (saved) {
+        setCustomerLanguage(saved);
+        setIsLanguageModalOpen(false);
+      } else {
+        const globalSaved = localStorage.getItem('dgm_customer_lang');
+        if (globalSaved) {
+          setCustomerLanguage(globalSaved);
+          setIsLanguageModalOpen(false);
+        } else {
+          setIsLanguageModalOpen(true);
+        }
+      }
+    } catch (e) {
+      console.warn('Error syncing restaurant language preference:', e);
+    }
+  }, [currentRestoId]);
+
+  const handleSaveCustomerLanguage = (langCode) => {
+    setCustomerLanguage(langCode);
+    setIsLanguageModalOpen(false);
+    try {
+      localStorage.setItem(`dgm_customer_lang_${currentRestoId}`, langCode);
+      localStorage.setItem('dgm_customer_lang', langCode);
+    } catch (e) {
+      console.error('Error saving customer language preference:', e);
+    }
+  };
+
   const [tableNumber, setTableNumber] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -3242,7 +3309,10 @@ export default function App() {
           name={restaurantProfile?.name || activeRestaurant?.name || 'Monkey Bhai'}
           logoUrl={restaurantProfile?.logo || activeRestaurant?.logo || null}
           brand={isTableMode && tableNumber ? tableNumber : "24 DIGITAL"}
-          welcomeText="Welcome, Our Dear Guest"
+          welcomeText={t('welcome_guest', customerLanguage)}
+          menuText={t('menu', customerLanguage)}
+          currentLanguage={customerLanguage}
+          onLanguageClick={() => setIsLanguageModalOpen(true)}
           isFollowing={isFollowing}
           onFollow={handleFollowRestaurant}
           onMenuClick={() => setIsMenuOpen(true)}
@@ -3390,7 +3460,7 @@ export default function App() {
               {/* Bottom Line: Details + Arrow with tight standard gap and flush right alignment */}
               <div className="flex items-center justify-end mt-2 sm:mt-2.5 -mr-0.5">
                 <span className="text-sm sm:text-[14.5px] font-semibold text-white/90 group-hover:text-amber-400 inline-flex items-center gap-0.5 transition-colors leading-none">
-                  <span>Details</span>
+                  <span>{t('details', customerLanguage)}</span>
                   <ChevronRight className="w-4 h-4 stroke-[2.4] group-hover:translate-x-0.5 transition-transform shrink-0" />
                 </span>
               </div>
@@ -3434,7 +3504,7 @@ export default function App() {
               </div>
 
               <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wider truncate text-white">
-                VIEW YOUR ORDER LIST ({selectedListCount})
+                {t('view_order_list', customerLanguage)} ({selectedListCount})
               </span>
             </div>
 
@@ -3504,7 +3574,7 @@ export default function App() {
 
                 {/* Category Text */}
                 <span className="text-xs sm:text-[13px] text-slate-300 font-medium tracking-wide">
-                  {activeFood.category}
+                  {translateCategoryName(activeFood.category, customerLanguage)}
                 </span>
 
                 {/* Divider Line 2 */}
@@ -3585,7 +3655,7 @@ export default function App() {
                         ) : (
                           <div>
                             <p className="text-xs sm:text-[13px] font-bold text-white mb-1.5">
-                              {currentFeaturedOffer.includedHeading || 'Combo includes'}
+                              {currentFeaturedOffer.includedHeading || t('combo_includes', customerLanguage)}
                             </p>
                             <div className="space-y-1">
                               {items.map((item, idx) => (
@@ -3621,7 +3691,7 @@ export default function App() {
                 {hasAvailablePortions && (
                   <div>
                   <h3 className="text-[11px] font-extrabold tracking-widest uppercase text-[#F59E0B] mb-2.5">
-                    CHOOSE PORTIONS
+                    {t('portion_size', customerLanguage)}
                   </h3>
                   <div className="space-y-2.5">
                     {activeFood.customizable.portions.map((portion, idx) => {
@@ -3719,7 +3789,7 @@ export default function App() {
               {hasAvailableAddons && (
                 <div>
                   <h3 className="text-[11px] font-extrabold tracking-widest uppercase text-[#F59E0B] mb-2.5">
-                    CHOOSE EXTRA ADDON'S
+                    {t('addons', customerLanguage)}
                   </h3>
                   <div className="space-y-2.5">
                     {activeFood.customizable.addons.map((addon) => {
@@ -3816,7 +3886,7 @@ export default function App() {
               {/* Left Side: Item Total amount & Digit with Currency */}
               <div className="flex flex-col justify-center min-w-0">
                 <span className="text-[11px] sm:text-xs font-bold tracking-wider uppercase text-slate-400">
-                  Item Total amount
+                  {t('item_total_amount', customerLanguage)}
                 </span>
                 <span className="text-xl sm:text-2xl font-black text-[#F59E0B] tracking-tight tabular-nums leading-tight">
                   {currency}{formatPrice(currentItemTotalPrice)}
@@ -3832,7 +3902,7 @@ export default function App() {
                     ? 'bg-white/20 text-slate-400 cursor-not-allowed border border-white/10'
                     : 'bg-[#F59E0B] hover:bg-[#d97706] active:scale-95 text-black shadow-[0_0_20px_rgba(245,158,11,0.5)]'
                 }`}
-                aria-label={isItemAlreadyInList ? 'Update Order List' : 'Add To Order List'}
+                aria-label={isItemAlreadyInList ? t('update_order_list', customerLanguage) : t('add_to_order_list', customerLanguage)}
               >
                 {/* Circular Action Icon */}
                 <div className="w-5 h-5 rounded-full bg-black/20 flex items-center justify-center shrink-0">
@@ -3843,7 +3913,7 @@ export default function App() {
                   )}
                 </div>
                 <span className="tracking-wider uppercase font-black">
-                  {isItemAlreadyInList ? 'UPDATE ORDER LIST' : 'ADD TO ORDER LIST'}
+                  {isItemAlreadyInList ? t('update_order_list', customerLanguage) : t('add_to_order_list', customerLanguage)}
                 </span>
               </button>
             </div>
@@ -3910,13 +3980,13 @@ export default function App() {
               <div className="space-y-1">
                 <h3 className="text-white font-bold text-lg sm:text-xl tracking-tight leading-snug">
                   {autoConfirmSource === 'customization'
-                    ? 'Have you ordered this item with the waiter?'
+                    ? t('ordered_with_waiter_single', customerLanguage)
                     : (selectedList.length > 1
-                        ? 'Have you ordered these items with the waiter?'
-                        : 'Have you ordered this item with the waiter?')}
+                        ? t('ordered_with_waiter_multi', customerLanguage)
+                        : t('ordered_with_waiter_single', customerLanguage))}
                 </h3>
                 <p className="text-xs sm:text-[13px] text-slate-300/80 font-normal leading-relaxed">
-                  Please tap an answer below. Your response helps us improve PhoneMenu for everyone! 😊
+                  {t('waiter_prompt_note', customerLanguage)}
                 </p>
               </div>
             </div>
@@ -3928,7 +3998,7 @@ export default function App() {
                 className="w-full py-3.5 px-6 rounded-full bg-white hover:bg-slate-100 active:scale-[0.98] text-black font-bold text-sm sm:text-base tracking-normal flex items-center justify-center gap-2.5 shadow-[0_4px_25px_rgba(255,255,255,0.2)] cursor-pointer transition-all"
               >
                 <CheckCircle2 className="w-5 h-5 text-black stroke-[2.5]" />
-                <span>Yes, I ordered</span>
+                <span>{t('yes_ordered', customerLanguage)}</span>
               </button>
 
               <button
@@ -3936,7 +4006,7 @@ export default function App() {
                 className="w-full py-3 px-6 rounded-full bg-white/[0.05] hover:bg-white/10 active:scale-[0.98] border border-white/15 text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
               >
                 <RotateCcw className="w-4 h-4 text-white" />
-                <span>Not yet — Keep browsing</span>
+                <span>{t('not_yet_keep_browsing', customerLanguage)}</span>
               </button>
             </div>
           </div>
@@ -3970,10 +4040,10 @@ export default function App() {
                 </div>
                 <div>
                   <h2 className="text-white font-black text-lg sm:text-xl tracking-tight leading-tight uppercase">
-                    YOUR ORDER LIST
+                    {t('your_order_list', customerLanguage)}
                   </h2>
                   <p className="text-[11px] text-slate-400 font-medium">
-                    {selectedList.length} dish{selectedList.length !== 1 ? 'es' : ''} in your list
+                    {t('dishes_in_list', customerLanguage, { count: selectedList.length, plural: selectedList.length !== 1 ? 'es' : '' })}
                   </p>
                 </div>
               </div>
@@ -3997,15 +4067,15 @@ export default function App() {
                   <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-slate-400">
                     <Utensils className="w-7 h-7 stroke-[1.5]" />
                   </div>
-                  <p className="text-white font-bold text-sm">No items selected yet</p>
+                  <p className="text-white font-bold text-sm">{t('no_items_selected', customerLanguage)}</p>
                   <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                    Browse our digital menu and tap "+ ADD TO ORDER LIST" on any food item to add it here.
+                    {t('no_items_desc', customerLanguage)}
                   </p>
                   <button
                     onClick={handleDismissSelectedListWithoutPopup}
                     className="mt-2 px-5 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all cursor-pointer"
                   >
-                    Browse Menu
+                    {t('browse_menu', customerLanguage)}
                   </button>
                 </div>
               ) : (
@@ -4205,13 +4275,13 @@ export default function App() {
                     <div className="flex items-center gap-2 pb-1 border-b border-white/5">
                       <Receipt className="w-4 h-4 text-[#F59E0B]" />
                       <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#F59E0B]">
-                        Live Price Summary
+                        {t('live_price_summary', customerLanguage)}
                       </span>
                     </div>
 
                     {/* Subtotal */}
                     <div className="flex justify-between items-center text-slate-300 py-0.5">
-                      <span className="font-medium">Subtotal</span>
+                      <span className="font-medium">{t('subtotal', customerLanguage)}</span>
                       <span className="font-bold text-white tabular-nums">{currency}{formatPrice(selectedListSubtotal)}</span>
                     </div>
 
@@ -4222,7 +4292,7 @@ export default function App() {
                     {isVatActive && (
                       <>
                         <div className="flex justify-between items-center text-slate-300 py-0.5">
-                          <span className="font-medium">VAT ({vatType === 'percentage' ? `${vatRate}%` : `Flat ${currency}${formatPrice(vatRate)}`})</span>
+                          <span className="font-medium">{t('vat', customerLanguage)} ({vatType === 'percentage' ? `${vatRate}%` : `Flat ${currency}${formatPrice(vatRate)}`})</span>
                           <span className="tabular-nums font-bold text-white">{currency}{formatPrice(selectedListVat)}</span>
                         </div>
                         {/* Divider Line between VAT and Table Service Charge */}
@@ -4234,7 +4304,7 @@ export default function App() {
                     {isServiceChargeActive && (
                       <>
                         <div className="flex justify-between items-center text-slate-300 py-0.5">
-                          <span className="font-medium">Service Charge ({serviceChargeType === 'percentage' ? `${serviceChargeRate}%` : `${currency}${formatPrice(serviceChargeRate)}`})</span>
+                          <span className="font-medium">{t('service_charge', customerLanguage)} ({serviceChargeType === 'percentage' ? `${serviceChargeRate}%` : `${currency}${formatPrice(serviceChargeRate)}`})</span>
                           <span className="tabular-nums font-bold text-white">{currency}{formatPrice(selectedListServiceFee)}</span>
                         </div>
                         {/* Divider Line before Grand Total */}
@@ -4244,7 +4314,7 @@ export default function App() {
 
                     {/* Grand Total Price */}
                     <div className="flex justify-between items-center pt-1 text-white font-extrabold text-sm sm:text-base">
-                      <span>Grand Total</span>
+                      <span>{t('grand_total', customerLanguage)}</span>
                       <span className="text-[#F59E0B] font-black text-lg sm:text-xl tabular-nums">
                         {currency}{formatPrice(selectedListGrandTotal)}
                       </span>
@@ -4266,11 +4336,11 @@ export default function App() {
                         <div className="space-y-1">
                           <h3 className="text-white font-bold text-base sm:text-lg tracking-tight leading-snug">
                             {selectedList.length > 1
-                              ? 'Have you ordered these items with the waiter?'
-                              : 'Have you ordered this item with the waiter?'}
+                              ? t('ordered_with_waiter_multi', customerLanguage)
+                              : t('ordered_with_waiter_single', customerLanguage)}
                           </h3>
                           <p className="text-xs sm:text-[13px] text-slate-300/80 font-normal leading-relaxed">
-                            Please tap an answer below. Your response helps us improve PhoneMenu for everyone! 😊
+                            {t('waiter_prompt_note', customerLanguage)}
                           </p>
                         </div>
                       </div>
@@ -4282,7 +4352,7 @@ export default function App() {
                           className="w-full py-3.5 px-6 rounded-full bg-white hover:bg-slate-100 active:scale-[0.98] text-black font-bold text-sm sm:text-base tracking-normal flex items-center justify-center gap-2.5 shadow-[0_4px_25px_rgba(255,255,255,0.2)] cursor-pointer transition-all"
                         >
                           <CheckCircle2 className="w-5 h-5 text-black stroke-[2.5]" />
-                          <span>Yes, I ordered</span>
+                          <span>{t('yes_ordered', customerLanguage)}</span>
                         </button>
 
                         {/* Secondary Glass Dark Button */}
@@ -4291,7 +4361,7 @@ export default function App() {
                           className="w-full py-3 px-6 rounded-full bg-white/[0.05] hover:bg-white/10 active:scale-[0.98] border border-white/15 text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
                         >
                           <RotateCcw className="w-4 h-4 text-white" />
-                          <span>Not yet — Keep browsing</span>
+                          <span>{t('not_yet_keep_browsing', customerLanguage)}</span>
                         </button>
                       </div>
                     </div>
@@ -4299,10 +4369,10 @@ export default function App() {
                     <div className="p-4 sm:p-5 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 space-y-3 shadow-md">
                       <div className="flex items-center gap-2.5 text-emerald-400 font-bold text-sm sm:text-base">
                         <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                        <span>Table Order Confirmed</span>
+                        <span>{t('table_order_confirmed', customerLanguage)}</span>
                       </div>
                       <p className="text-xs sm:text-[13px] text-emerald-200/80 font-normal leading-relaxed">
-                        An order has already been confirmed for {resolvedTableDisplay || tableNumber || 'this table'}. You can continue browsing dishes!
+                        {t('table_confirmed_desc', customerLanguage, { table: resolvedTableDisplay || tableNumber || 'this table' })}
                       </p>
                       <div className="pt-1">
                         <button
@@ -4310,7 +4380,7 @@ export default function App() {
                           onClick={() => setIsSelectedListOpen(false)}
                           className="w-full py-3 px-6 rounded-full bg-white/[0.08] hover:bg-white/15 active:scale-[0.98] border border-white/15 text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition-all"
                         >
-                          <span>Close & Keep Browsing</span>
+                          <span>{t('close_keep_browsing', customerLanguage)}</span>
                         </button>
                       </div>
                     </div>
@@ -4321,7 +4391,7 @@ export default function App() {
                         onClick={() => setIsSelectedListOpen(false)}
                         className="w-full py-3.5 px-6 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:scale-[0.98] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
                       >
-                        <span>Back to Menu</span>
+                        <span>{t('back_to_menu', customerLanguage)}</span>
                       </button>
                     </div>
                   )}
@@ -4341,7 +4411,7 @@ export default function App() {
                 className="absolute bottom-5 left-1/2 -translate-x-1/2 z-30 pointer-events-auto cursor-pointer animate-[bounce_1.5s_infinite]"
               >
                 <div className="px-4 py-1.5 rounded-full bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-[0_4px_25px_rgba(234,88,12,0.7)] border border-orange-400/60 backdrop-blur-md flex items-center gap-1.5 transition-all active:scale-95 select-none">
-                  <span className="text-[11px] font-black uppercase tracking-wider">SCROLL FOR MORE</span>
+                  <span className="text-[11px] font-black uppercase tracking-wider">{t('scroll_for_more', customerLanguage)}</span>
                   <ChevronDown className="w-3.5 h-3.5 text-white animate-pulse" />
                 </div>
               </div>
@@ -4385,7 +4455,7 @@ export default function App() {
                 </div>
                 <div className="flex items-center gap-2 sm:gap-2.5">
                   <h3 className="text-white font-black text-xl sm:text-2xl tracking-tight leading-tight">
-                    Menu & Specials
+                    {t('menu_and_specials', customerLanguage)}
                   </h3>
                   {isFollowing && (
                     <div 
@@ -4397,13 +4467,25 @@ export default function App() {
                   )}
                 </div>
               </div>
-              <button
-                onClick={() => setIsMenuOpen(false)}
-                className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-slate-300 hover:text-white transition-all cursor-pointer"
-                aria-label="Close menu"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsLanguageModalOpen(true)}
+                  className="px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 border border-white/15 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="Change language"
+                  aria-label="Change language"
+                >
+                  <Globe className="w-3.5 h-3.5 text-[#F59E0B]" />
+                  <span>{customerLanguage === 'bn' ? 'বাংলা' : 'EN'}</span>
+                </button>
+                <button
+                  onClick={() => setIsMenuOpen(false)}
+                  className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-slate-300 hover:text-white transition-all cursor-pointer"
+                  aria-label="Close menu"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Scrollable Content Container */}
@@ -4462,10 +4544,10 @@ export default function App() {
                     </div>
                     <div className="min-w-0">
                       <h4 className="text-white font-bold text-sm sm:text-base tracking-tight leading-snug truncate">
-                        {isFollowing ? "You're following" : "Follow this restaurant"}
+                        {isFollowing ? t('following', customerLanguage) : t('follow_restaurant', customerLanguage)}
                       </h4>
                       <p className="text-xs text-slate-400 mt-0.5 truncate">
-                        Get offers & discounts
+                        {isFollowing ? t('following_desc', customerLanguage) : t('follow_desc', customerLanguage)}
                       </p>
                     </div>
                   </div>
@@ -4473,7 +4555,7 @@ export default function App() {
                   {isFollowing ? (
                     <div className="px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full border border-[#ff6900]/80 bg-[#ff6900]/10 text-[#ff6900] font-black text-xs sm:text-sm uppercase tracking-wider flex items-center gap-1.5 shrink-0 shadow-[0_0_12px_rgba(255,105,0,0.25)] select-none animate-in fade-in duration-300">
                       <Check className="w-3.5 h-3.5 stroke-[3]" />
-                      <span>FOLLOWING</span>
+                      <span>{t('following', customerLanguage)}</span>
                     </div>
                   ) : (
                     <button
@@ -4481,7 +4563,7 @@ export default function App() {
                       onClick={handleFollowRestaurant}
                       className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-[#ff6900] hover:bg-[#e05d00] active:scale-95 text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-md transition-all cursor-pointer flex items-center gap-1 shrink-0"
                     >
-                      <span>+ FOLLOW</span>
+                      <span>{t('follow', customerLanguage)}</span>
                     </button>
                   )}
                 </div>
@@ -4492,7 +4574,7 @@ export default function App() {
                 <div className="flex items-center justify-between mb-2.5">
                   <span className="text-xs font-black uppercase tracking-widest text-[#F59E0B] flex items-center gap-1.5">
                     <Flame className="w-3.5 h-3.5 text-[#F59E0B] fill-[#F59E0B]" />
-                    FEATURED SPECIALS
+                    {t('featured_specials', customerLanguage)}
                   </span>
                   <span className="text-xs font-bold text-slate-400 tracking-widest tabular-nums">
                     {String(menuOfferIndex + 1).padStart(2, '0')} / {String(carouselItems.length || 1).padStart(2, '0')}
@@ -4587,7 +4669,7 @@ export default function App() {
                                 }}
                                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full bg-[#F59E0B] hover:bg-[#d97706] active:scale-95 text-black font-black text-xs shadow-md transition-all cursor-pointer w-fit"
                               >
-                                <span>Explore combo</span>
+                                <span>{t('explore_combo', customerLanguage)}</span>
                                 <ArrowRight className="w-3.5 h-3.5 stroke-[2.8]" />
                               </div>
                             </div>
@@ -4621,7 +4703,7 @@ export default function App() {
               {/* Categories Section with Large, Readable Buttons */}
               <div>
                 <h4 className="text-[12px] font-black uppercase tracking-widest text-slate-400 mb-2.5">
-                  Menu Categories
+                  {t('menu_categories', customerLanguage)}
                 </h4>
                 <div className="space-y-2.5">
                   {dynamicCategories.map((cat, idx) => {
@@ -4648,10 +4730,12 @@ export default function App() {
                           </div>
                           <div className="text-left">
                             <span className={`text-sm sm:text-base font-bold block ${isSelected ? 'text-white' : 'text-slate-200'}`}>
-                              {(cat.name === 'All Items' || cat.name === 'All' || cat.name.toLowerCase() === 'all items') ? 'ALL ITEMS' : cat.name}
+                              {(cat.name === 'All Items' || cat.name === 'All' || cat.name.toLowerCase() === 'all items')
+                                ? t('all_items', customerLanguage)
+                                : translateCategoryName(cat.name, customerLanguage)}
                             </span>
                             <span className="text-[11px] text-slate-400">
-                              {count} {count > 1 ? 'Items available' : 'Item available'}
+                              {count} {count > 1 ? t('items_available', customerLanguage) : t('item_available', customerLanguage)}
                             </span>
                           </div>
                         </div>
@@ -5292,6 +5376,16 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* 9. CUSTOMER MULTI-LANGUAGE SELECTION MODAL (Prompted on initial scan) */}
+      <LanguageSelectionModal
+        isOpen={isLanguageModalOpen}
+        onClose={() => setIsLanguageModalOpen(false)}
+        onSelectLanguage={handleSaveCustomerLanguage}
+        currentLanguage={customerLanguage}
+        restaurantPrimaryLanguage={restaurantPrimaryLang}
+        showOtherLanguages={false}
+      />
 
       {/* Keyframe Animations */}
       <style dangerouslySetInnerHTML={{

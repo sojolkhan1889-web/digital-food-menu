@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Utensils } from "lucide-react";
+import { Utensils, Globe } from "lucide-react";
 import "./RestaurantHeader.css";
 
 function FollowIcon() {
@@ -29,11 +29,14 @@ export default function RestaurantHeader({
   logoUrl,
   brand = "24 DIGITAL",
   welcomeText = "Welcome, Our Dear Guest",
+  menuText = "MENU",
   isFollowing = false,
   onFollow,
   onMenuClick,
   onLogoClick,
   rightExtra = null,
+  currentLanguage = "en",
+  onLanguageClick = null,
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -121,6 +124,19 @@ export default function RestaurantHeader({
         </div>
 
         <div className="restaurant-actions">
+          {onLanguageClick && (
+            <button
+              type="button"
+              onClick={onLanguageClick}
+              className="restaurant-lang-pill"
+              aria-label="Change Language"
+              title="Change Language"
+            >
+              <Globe className="w-3.5 h-3.5 text-amber-400" />
+              <span>{currentLanguage === 'bn' ? 'বাংলা' : 'EN'}</span>
+            </button>
+          )}
+
           <button
             className="restaurant-menu"
             type="button"
@@ -131,7 +147,7 @@ export default function RestaurantHeader({
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M4 6h16M4 12h16M4 18h16" />
               </svg>
-              <span>MENU</span>
+              <span>{menuText}</span>
             </span>
           </button>
           {rightExtra}
