@@ -172,11 +172,27 @@ const defaultRestaurantConfig = {
   }
 };
 
+let currentAppLanguage = typeof window !== 'undefined'
+  ? (localStorage.getItem('dgm_customer_lang') || 'en')
+  : 'en';
+
+export const setGlobalAppLanguage = (lang) => {
+  if (lang) {
+    currentAppLanguage = lang;
+  }
+};
+
 // Rounds any price or amount to a whole number / round figure (পূর্ণ সংখ্যা), e.g. 28.63 -> 29
-export const formatPrice = (amount) => {
+// When browsing in Bengali ('bn'), converts digits to Bengali digits (e.g. 250 -> ২৫০)
+export const formatPrice = (amount, lang = null) => {
   const num = Number(amount);
-  if (isNaN(num)) return '0';
-  return Math.round(num).toString();
+  const targetLang = lang || currentAppLanguage;
+  if (isNaN(num)) return targetLang === 'bn' ? '০' : '0';
+  const rounded = Math.round(num).toString();
+  if (targetLang === 'bn') {
+    return toBengaliDigits(rounded);
+  }
+  return rounded;
 };
 
 // Formats review count: under 1,000 -> count, 1,000+ -> 'k', 1,000,000+ (10 lakh) -> 'M'
@@ -355,8 +371,12 @@ export default function App() {
     }
   };
 
+  // Keep formatPrice and localization synced with active customer language
+  setGlobalAppLanguage(customerLanguage);
+
   // Sync document language attribute and font helper class on customer language change
   useEffect(() => {
+    setGlobalAppLanguage(customerLanguage || 'en');
     if (typeof document !== 'undefined') {
       document.documentElement.lang = customerLanguage || 'en';
       if (customerLanguage === 'bn') {
@@ -3590,7 +3610,7 @@ export default function App() {
               </div>
 
               <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wider truncate text-white">
-                {t('view_order_list', customerLanguage)} ({selectedListCount})
+                {t('view_order_list', customerLanguage)} ({customerLanguage === 'bn' ? toBengaliDigits(selectedListCount) : selectedListCount})
               </span>
             </div>
 
@@ -4135,7 +4155,10 @@ export default function App() {
                     {t('your_order_list', customerLanguage)}
                   </h2>
                   <p className="text-[11px] text-slate-400 font-medium">
-                    {t('dishes_in_list', customerLanguage, { count: selectedList.length, plural: selectedList.length !== 1 ? 'es' : '' })}
+                    {t('dishes_in_list', customerLanguage, {
+                      count: customerLanguage === 'bn' ? toBengaliDigits(selectedList.length) : selectedList.length,
+                      plural: selectedList.length !== 1 ? 'es' : ''
+                    })}
                   </p>
                 </div>
               </div>
