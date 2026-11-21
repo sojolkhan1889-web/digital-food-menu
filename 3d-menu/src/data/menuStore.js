@@ -1,6 +1,7 @@
 // Menu Data Store with Local Storage persistence & Supabase Sync capabilities
 import { initialFoods, initialCategories } from './initialFoods';
 import { supabase } from '../lib/supabaseClient';
+import { initialCategoryTranslations } from '../utils/translations';
 
 const FOODS_KEY = 'dgm_restaurant_foods';
 const FOODS_VERSION_KEY = 'dgm_foods_cache_version';
@@ -1050,6 +1051,36 @@ export const saveStoredCategories = (categories) => {
   }
 };
 
+const CATEGORY_TRANSLATIONS_KEY = 'dgm_restaurant_category_i18n';
+
+export const getStoredCategoryTranslations = (restaurantId) => {
+  try {
+    const targetKey = restaurantId ? `${CATEGORY_TRANSLATIONS_KEY}_${restaurantId}` : null;
+    const raw = (targetKey && localStorage.getItem(targetKey)) || localStorage.getItem(CATEGORY_TRANSLATIONS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed === 'object' && parsed !== null) {
+        return { ...initialCategoryTranslations, ...parsed };
+      }
+    }
+  } catch (e) {
+    console.error('Error reading category translations:', e);
+  }
+  return initialCategoryTranslations;
+};
+
+export const saveStoredCategoryTranslations = (translations, restaurantId) => {
+  try {
+    const targetKey = restaurantId ? `${CATEGORY_TRANSLATIONS_KEY}_${restaurantId}` : null;
+    localStorage.setItem(CATEGORY_TRANSLATIONS_KEY, JSON.stringify(translations));
+    if (targetKey) {
+      localStorage.setItem(targetKey, JSON.stringify(translations));
+    }
+  } catch (e) {
+    console.error('Error saving category translations:', e);
+  }
+};
+
 export const syncCategoryToSupabase = async (catName, restaurantId = 'resto_001') => {
   try {
     const slug = catName.toLowerCase().replace(/[^a-z0-9]/g, '_');
@@ -1158,12 +1189,17 @@ export const fetchRemoteData = async (restaurantId = 'resto_001') => {
     }
 
     if (subsRes.data && subsRes.data.length > 0) {
-      remoteSubcategories = subsRes.data.map(s => ({
-        id: s.id,
-        category: s.category_name,
-        name: s.name,
-        displayOrder: s.display_order
-      }));
+      remoteSubcategories = subsRes.data.map(s => {
+        const fallback = initialSubcategories.find(is => is.id === s.id || is.name === s.name);
+        return {
+          id: s.id,
+          category: s.category_name,
+          name: s.name,
+          name_native: s.name_native || s.name_bn || fallback?.name_native || undefined,
+          name_bn: s.name_bn || s.name_native || fallback?.name_bn || undefined,
+          displayOrder: s.display_order
+        };
+      });
     }
 
     if (slidersRes.data && slidersRes.data.length > 0) {
@@ -1651,14 +1687,14 @@ export const syncSettingsToSupabase = async (profile, restaurantId) => {
 const SUBCATEGORIES_KEY = 'dgm_restaurant_subcategories';
 
 export const initialSubcategories = [
-  { id: 'sub_1', category: 'Main Course', name: 'Burgers', displayOrder: 1 },
-  { id: 'sub_2', category: 'Main Course', name: 'Pizza', displayOrder: 2 },
-  { id: 'sub_3', category: 'Main Course', name: 'Biryani & Rice', displayOrder: 3 },
-  { id: 'sub_4', category: 'Appetizers', name: 'Crispy Wings & Finger Food', displayOrder: 4 },
-  { id: 'sub_5', category: 'Beverages', name: 'Chilled Espresso & Cold Coffee', displayOrder: 5 },
-  { id: 'sub_6', category: 'Beverages', name: 'Mocktails & Sodas', displayOrder: 6 },
-  { id: 'sub_7', category: 'Dessert', name: 'Kunafa & Middle Eastern Sweets', displayOrder: 7 },
-  { id: 'sub_8', category: 'Dessert', name: 'Artisan Gelato & Ice Cream', displayOrder: 8 }
+  { id: 'sub_1', category: 'Main Course', name: 'Burgers', name_native: 'বার্গার', name_bn: 'বার্গার', displayOrder: 1 },
+  { id: 'sub_2', category: 'Main Course', name: 'Pizza', name_native: 'পিজ্জা', name_bn: 'পিজ্জা', displayOrder: 2 },
+  { id: 'sub_3', category: 'Main Course', name: 'Biryani & Rice', name_native: 'বিরিয়ানি ও রাইস', name_bn: 'বিরিয়ানি ও রাইস', displayOrder: 3 },
+  { id: 'sub_4', category: 'Appetizers', name: 'Crispy Wings & Finger Food', name_native: 'ক্রিস্পি উইংস ও ফিঙ্গার ফুড', name_bn: 'ক্রিস্পি উইংস ও ফিঙ্গার ফুড', displayOrder: 4 },
+  { id: 'sub_5', category: 'Beverages', name: 'Chilled Espresso & Cold Coffee', name_native: 'কোল্ড কফি ও এসপ্রেসো', name_bn: 'কোল্ড কফি ও এসপ্রেসো', displayOrder: 5 },
+  { id: 'sub_6', category: 'Beverages', name: 'Mocktails & Sodas', name_native: 'মকটেল ও সোডা', name_bn: 'মকটেল ও সোডা', displayOrder: 6 },
+  { id: 'sub_7', category: 'Dessert', name: 'Kunafa & Middle Eastern Sweets', name_native: 'কুনাফা ও মিষ্টান্ন', name_bn: 'কুনাফা ও মিষ্টান্ন', displayOrder: 7 },
+  { id: 'sub_8', category: 'Dessert', name: 'Artisan Gelato & Ice Cream', name_native: 'আর্টিসান জেলাটো ও আইসক্রিম', name_bn: 'আর্টিসান জেলাটো ও আইসক্রিম', displayOrder: 8 }
 ];
 
 export const getStoredSubcategories = () => {

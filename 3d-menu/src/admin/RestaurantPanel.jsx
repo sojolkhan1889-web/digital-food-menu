@@ -90,6 +90,11 @@ import {
   fetchLiveFollowersFromSupabase,
   isSameCalendarDay
 } from '../data/menuStore';
+import {
+  getRestaurantPrimaryLanguage,
+  initialCategoryTranslations,
+  initialSubcategoryTranslations
+} from '../utils/translations';
 
 // Animated count-up component for metrics on page load/refresh
 function AnimatedCounter({ value, duration = 1200 }) {
@@ -166,6 +171,7 @@ export default function RestaurantPanel({
   foods = [],
   categories = [],
   subcategories = [],
+  categoryTranslations = {},
   featuredSliders = [],
   orders = [],
   payments = [],
@@ -199,6 +205,11 @@ export default function RestaurantPanel({
 }) {
   // Super Admin Gated Premium Status: False by default!
   const isPremiumActive = Boolean(superAdminConfig?.enableOrderManagement);
+
+  // Dynamic primary native language for the registered restaurant country
+  const nativeLang = useMemo(() => {
+    return getRestaurantPrimaryLanguage(restaurantProfile || activeRestaurant || { currency: restaurantProfile?.currency || '৳' });
+  }, [restaurantProfile, activeRestaurant]);
 
   // Helper to determine initial active tab from URL query param or hash (Supports Open in New Tab)
   const getInitialActiveTab = () => {
@@ -257,8 +268,10 @@ export default function RestaurantPanel({
   const [editingSlider, setEditingSlider] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
   const [editCategoryName, setEditCategoryName] = useState('');
+  const [editCategoryNameNative, setEditCategoryNameNative] = useState('');
   const [editingSubcategory, setEditingSubcategory] = useState(null);
   const [editSubcategoryName, setEditSubcategoryName] = useState('');
+  const [editSubcategoryNameNative, setEditSubcategoryNameNative] = useState('');
   const [editSubcategoryParent, setEditSubcategoryParent] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isSuperAdminModalOpen, setIsSuperAdminModalOpen] = useState(false);
@@ -345,9 +358,11 @@ export default function RestaurantPanel({
 
   // Categories tab state
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryNameNative, setNewCategoryNameNative] = useState('');
 
   // Sub-categories tab state
   const [newSubcategoryName, setNewSubcategoryName] = useState('');
+  const [newSubcategoryNameNative, setNewSubcategoryNameNative] = useState('');
   const [newSubcategoryParent, setNewSubcategoryParent] = useState(categories[0] || 'Main Course');
 
   // Orders tab state
@@ -879,8 +894,9 @@ export default function RestaurantPanel({
   const handleCreateCategory = (e) => {
     e.preventDefault();
     if (!newCategoryName.trim()) return;
-    onAddCategory(newCategoryName.trim());
+    onAddCategory(newCategoryName.trim(), newCategoryNameNative.trim());
     setNewCategoryName('');
+    setNewCategoryNameNative('');
   };
 
   const handleCreateSubcategory = (e) => {
@@ -890,10 +906,13 @@ export default function RestaurantPanel({
       id: `sub_${Date.now()}`,
       category: newSubcategoryParent,
       name: newSubcategoryName.trim(),
+      name_native: newSubcategoryNameNative.trim() || undefined,
+      name_bn: newSubcategoryNameNative.trim() || undefined,
       displayOrder: Date.now()
     };
     onAddSubcategory && onAddSubcategory(newSub);
     setNewSubcategoryName('');
+    setNewSubcategoryNameNative('');
   };
 
   const handleToggleVat = (e) => {
@@ -2127,36 +2146,71 @@ export default function RestaurantPanel({
                   Categories organize dishes on the 3D Digital Menu (e.g. Main Course, Appetizers, Beverages, Dessert).
                 </p>
 
-                <form onSubmit={handleCreateCategory} className="flex flex-col sm:flex-row gap-3">
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Traditional Biryani, Chef Specials, Mocktails..."
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    className={`flex-1 px-3.5 py-2.5 rounded-[5px] border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 ${isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
-                      }`}
-                  />
-                  <button
-                    type="submit"
-                    className="px-5 py-2.5 rounded-[5px] bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Create Category</span>
-                  </button>
+                <form onSubmit={handleCreateCategory} className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                        Category Name (English) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Traditional Biryani, Chef Specials, Mocktails..."
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        className={`w-full px-3.5 py-2.5 rounded-[5px] border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 ${isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                          }`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                        Category Name ({nativeLang.nativeName})
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={`e.g. ${nativeLang.nativeName === 'বাংলা' ? 'ঐতিহ্যবাহী বিরিয়ানি, শেফ স্পেশাল...' : 'Native Category Name...'}`}
+                        value={newCategoryNameNative}
+                        onChange={(e) => setNewCategoryNameNative(e.target.value)}
+                        className={`w-full px-3.5 py-2.5 rounded-[5px] border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 ${isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                          }`}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-[5px] bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Create Category</span>
+                    </button>
+                  </div>
                 </form>
 
                 <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">
                   <span className="text-[11px] text-slate-500 font-semibold">Quick Suggestions:</span>
-                  {['Main Course', 'Appetizers', 'Beverages', 'Dessert', 'Chef Specials', 'Seafood', 'Snacks'].map(cat => (
+                  {[
+                    { en: 'Main Course', native: 'প্রধান খাবার' },
+                    { en: 'Appetizers', native: 'অ্যাপেটাইজার' },
+                    { en: 'Beverages', native: 'পানীয়' },
+                    { en: 'Dessert', native: 'ডেজার্ট' },
+                    { en: 'Chef Specials', native: 'শেফ স্পেশাল' },
+                    { en: 'Seafood', native: 'সামুদ্রিক খাবার' },
+                    { en: 'Snacks', native: 'স্ন্যাক্স' },
+                    { en: 'Fast Food', native: 'ফাস্ট ফুড' }
+                  ].map(cat => (
                     <button
-                      key={cat}
+                      key={cat.en}
                       type="button"
-                      onClick={() => setNewCategoryName(cat)}
+                      onClick={() => {
+                        setNewCategoryName(cat.en);
+                        setNewCategoryNameNative(cat.native);
+                      }}
                       className={`px-2 py-1 rounded-[5px] text-[11px] border cursor-pointer ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
                         }`}
                     >
-                      + {cat}
+                      + {cat.en} <span className="opacity-70 text-[10px]">({cat.native})</span>
                     </button>
                   ))}
                 </div>
@@ -2187,32 +2241,31 @@ export default function RestaurantPanel({
                           </div>
                           
                           {isEditing ? (
-                            <div className="flex items-center gap-2 flex-1 max-w-sm">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 max-w-xl">
                               <input
                                 type="text"
                                 autoFocus
+                                placeholder="English Category Name"
                                 value={editCategoryName}
                                 onChange={(e) => setEditCategoryName(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    if (editCategoryName.trim() && editCategoryName.trim() !== catName) {
-                                      onUpdateCategory && onUpdateCategory(catName, editCategoryName.trim());
-                                    }
-                                    setEditingCategory(null);
-                                  } else if (e.key === 'Escape') {
-                                    setEditingCategory(null);
-                                  }
-                                }}
-                                className={`px-2.5 py-1.5 rounded-[5px] border text-xs sm:text-sm font-semibold w-full focus:outline-none focus:border-orange-500 ${
+                                className={`px-2.5 py-1.5 rounded-[5px] border text-xs sm:text-sm font-semibold flex-1 focus:outline-none focus:border-orange-500 ${
+                                  isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                                }`}
+                              />
+                              <input
+                                type="text"
+                                placeholder={`Native Name (${nativeLang.nativeName})`}
+                                value={editCategoryNameNative}
+                                onChange={(e) => setEditCategoryNameNative(e.target.value)}
+                                className={`px-2.5 py-1.5 rounded-[5px] border text-xs sm:text-sm font-semibold flex-1 focus:outline-none focus:border-orange-500 ${
                                   isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                                 }`}
                               />
                               <button
                                 type="button"
                                 onClick={() => {
-                                  if (editCategoryName.trim() && editCategoryName.trim() !== catName) {
-                                    onUpdateCategory && onUpdateCategory(catName, editCategoryName.trim());
+                                  if (editCategoryName.trim()) {
+                                    onUpdateCategory && onUpdateCategory(catName, editCategoryName.trim(), editCategoryNameNative.trim());
                                   }
                                   setEditingCategory(null);
                                 }}
@@ -2230,10 +2283,17 @@ export default function RestaurantPanel({
                             </div>
                           ) : (
                             <div>
-                              <span className={`font-bold text-sm block ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                                {catName}
-                              </span>
-                              <span className="text-slate-500 text-[11px]">{count} food items currently assigned</span>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`font-bold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                  {catName}
+                                </span>
+                                {(categoryTranslations?.[catName] || initialCategoryTranslations?.[catName]) && (
+                                  <span className="text-xs font-semibold px-2 py-0.5 rounded-[4px] bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20">
+                                    {categoryTranslations?.[catName] || initialCategoryTranslations?.[catName]}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-slate-500 text-[11px] block mt-0.5">{count} food items currently assigned</span>
                             </div>
                           )}
                         </div>
@@ -2246,6 +2306,7 @@ export default function RestaurantPanel({
                                 onClick={() => {
                                   setEditingCategory(catName);
                                   setEditCategoryName(catName);
+                                  setEditCategoryNameNative(categoryTranslations?.[catName] || initialCategoryTranslations?.[catName] || '');
                                 }}
                                 className={`px-3 py-1 rounded-[5px] text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
                                   isDark ? 'text-slate-400 hover:text-orange-400 hover:bg-slate-800' : 'text-slate-600 hover:text-orange-600 hover:bg-slate-100'
@@ -2291,62 +2352,91 @@ export default function RestaurantPanel({
                   Sub-categories are granular food types (e.g. Biryani, Burgers, Sourdough Pizza, Mocktails). This field is optional for dishes.
                 </p>
 
-                <form onSubmit={handleCreateSubcategory} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                      Parent Category
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={newSubcategoryParent}
-                        onChange={(e) => setNewSubcategoryParent(e.target.value)}
-                        className={`w-full appearance-none pl-3.5 pr-10 py-2.5 rounded-[5px] border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 cursor-pointer ${isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
-                          }`}
-                      >
-                        {uniqueCategories.filter(c => c !== 'All').map(c => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <form onSubmit={handleCreateSubcategory} className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                        Parent Category <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={newSubcategoryParent}
+                          onChange={(e) => setNewSubcategoryParent(e.target.value)}
+                          className={`w-full appearance-none pl-3.5 pr-10 py-2.5 rounded-[5px] border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 cursor-pointer ${isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                            }`}
+                        >
+                          {uniqueCategories.filter(c => c !== 'All').map(c => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="sm:col-span-2 flex flex-col justify-end">
-                    <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                      Sub-Category / Food Type Name
-                    </label>
-                    <div className="flex gap-2">
+                    <div>
+                      <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                        Sub-Category Name (English) <span className="text-red-500">*</span>
+                      </label>
                       <input
                         type="text"
                         required
                         placeholder="e.g. Kacchi Biryani, Double Beef Burger, Cold Brew..."
                         value={newSubcategoryName}
                         onChange={(e) => setNewSubcategoryName(e.target.value)}
-                        className={`flex-1 px-3.5 py-2.5 rounded-[5px] border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 ${isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                        className={`w-full px-3.5 py-2.5 rounded-[5px] border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 ${isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
                           }`}
                       />
-                      <button
-                        type="submit"
-                        className="px-4 py-2.5 rounded-[5px] bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm shrink-0"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>Add Sub-Category</span>
-                      </button>
                     </div>
+
+                    <div>
+                      <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                        Sub-Category Name ({nativeLang.nativeName})
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={`e.g. ${nativeLang.nativeName === 'বাংলা' ? 'কাচ্চি বিরিয়ানি, ডাবল বিফ বার্গার...' : 'Native Subcategory Name...'}`}
+                        value={newSubcategoryNameNative}
+                        onChange={(e) => setNewSubcategoryNameNative(e.target.value)}
+                        className={`w-full px-3.5 py-2.5 rounded-[5px] border text-xs sm:text-sm font-medium focus:outline-none focus:border-orange-500 ${isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                          }`}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-[5px] bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Sub-Category</span>
+                    </button>
                   </div>
                 </form>
 
                 <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">
                   <span className="text-[11px] text-slate-500 font-semibold">Common Food Types:</span>
-                  {['Biryani & Rice', 'Burgers', 'Sourdough Pizza', 'Crispy Chicken', 'Chilled Coffee', 'Mocktails', 'Kunafa & Sweets', 'Artisan Gelato'].map(type => (
+                  {[
+                    { en: 'Biryani & Rice', native: 'বিরিয়ানি ও রাইস' },
+                    { en: 'Burgers', native: 'বার্গার' },
+                    { en: 'Sourdough Pizza', native: 'সাওয়ারডাফ পিজ্জা' },
+                    { en: 'Crispy Chicken', native: 'ক্রিস্পি চিকেন' },
+                    { en: 'Chilled Coffee', native: 'কোল্ড কফি' },
+                    { en: 'Mocktails', native: 'মকটেল' },
+                    { en: 'Kunafa & Sweets', native: 'কুনাফা ও সুইটস' },
+                    { en: 'Artisan Gelato', native: 'আর্টিসান জেলাটো' }
+                  ].map(type => (
                     <button
-                      key={type}
+                      key={type.en}
                       type="button"
-                      onClick={() => setNewSubcategoryName(type)}
+                      onClick={() => {
+                        setNewSubcategoryName(type.en);
+                        setNewSubcategoryNameNative(type.native);
+                      }}
                       className={`px-2 py-1 rounded-[5px] text-[11px] border cursor-pointer ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white' : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
                         }`}
                     >
-                      + {type}
+                      + {type.en} <span className="opacity-70 text-[10px]">({type.native})</span>
                     </button>
                   ))}
                 </div>
@@ -2366,6 +2456,7 @@ export default function RestaurantPanel({
                   {subcategories.map(sub => {
                     const assignedFoods = foods.filter(f => f.subcategory === sub.name).length;
                     const isEditing = editingSubcategory?.id === sub.id;
+                    const nativeSubName = sub.name_native || sub.name_bn || initialSubcategoryTranslations?.[sub.name];
 
                     return (
                       <div key={sub.id} className={`p-4 flex items-center justify-between ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'
@@ -2377,7 +2468,7 @@ export default function RestaurantPanel({
                           </div>
 
                           {isEditing ? (
-                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 max-w-lg">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 max-w-xl">
                               <select
                                 value={editSubcategoryParent}
                                 onChange={(e) => setEditSubcategoryParent(e.target.value)}
@@ -2393,23 +2484,19 @@ export default function RestaurantPanel({
                               <input
                                 type="text"
                                 autoFocus
+                                placeholder="English Name"
                                 value={editSubcategoryName}
                                 onChange={(e) => setEditSubcategoryName(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    if (editSubcategoryName.trim()) {
-                                      onUpdateSubcategory && onUpdateSubcategory({
-                                        ...sub,
-                                        category: editSubcategoryParent,
-                                        name: editSubcategoryName.trim()
-                                      });
-                                    }
-                                    setEditingSubcategory(null);
-                                  } else if (e.key === 'Escape') {
-                                    setEditingSubcategory(null);
-                                  }
-                                }}
+                                className={`px-2.5 py-1.5 rounded-[5px] border text-xs sm:text-sm font-semibold flex-1 focus:outline-none focus:border-orange-500 ${
+                                  isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                                }`}
+                              />
+
+                              <input
+                                type="text"
+                                placeholder={`Native (${nativeLang.nativeName})`}
+                                value={editSubcategoryNameNative}
+                                onChange={(e) => setEditSubcategoryNameNative(e.target.value)}
                                 className={`px-2.5 py-1.5 rounded-[5px] border text-xs sm:text-sm font-semibold flex-1 focus:outline-none focus:border-orange-500 ${
                                   isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                                 }`}
@@ -2423,7 +2510,9 @@ export default function RestaurantPanel({
                                       onUpdateSubcategory && onUpdateSubcategory({
                                         ...sub,
                                         category: editSubcategoryParent,
-                                        name: editSubcategoryName.trim()
+                                        name: editSubcategoryName.trim(),
+                                        name_native: editSubcategoryNameNative.trim() || undefined,
+                                        name_bn: editSubcategoryNameNative.trim() || undefined
                                       });
                                     }
                                     setEditingSubcategory(null);
@@ -2443,10 +2532,17 @@ export default function RestaurantPanel({
                             </div>
                           ) : (
                             <div>
-                              <span className={`font-bold text-sm block ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                                {sub.name}
-                              </span>
-                              <span className="text-slate-500 text-[11px]">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`font-bold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                  {sub.name}
+                                </span>
+                                {nativeSubName && (
+                                  <span className="text-xs font-semibold px-2 py-0.5 rounded-[4px] bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20">
+                                    {nativeSubName}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-slate-500 text-[11px] block mt-0.5">
                                 Parent: <span className="font-semibold">{sub.category}</span> &bull; {assignedFoods} dishes assigned
                               </span>
                             </div>
@@ -2461,6 +2557,7 @@ export default function RestaurantPanel({
                                 onClick={() => {
                                   setEditingSubcategory(sub);
                                   setEditSubcategoryName(sub.name);
+                                  setEditSubcategoryNameNative(sub.name_native || sub.name_bn || initialSubcategoryTranslations?.[sub.name] || '');
                                   setEditSubcategoryParent(sub.category);
                                 }}
                                 className={`px-3 py-1 rounded-[5px] text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${

@@ -418,16 +418,77 @@ export const translateFoodDescription = (foodOrDesc, lang = 'en') => {
   return defaultDesc;
 };
 
+export const initialCategoryTranslations = {
+  'Main Course': 'মেইন কোর্স',
+  'Appetizers': 'অ্যাপেটাইজার',
+  'Beverages': 'পানীয় ও ড্রিংকস',
+  'Dessert': 'ডেজার্ট',
+  'Drinks': 'ড্রিংকস',
+  'Fast Food Items': 'ফাস্ট ফুড আইটেম',
+  'Fast Food': 'ফাস্ট ফুড',
+  'Chef Specials': 'শেফ স্পেশাল',
+  'Seafood': 'সিফুড',
+  'Snacks': 'স্ন্যাকস',
+  'Chinees': 'চাইনিজ',
+  'Chinese': 'চাইনিজ',
+  'Smash Burgers': 'স্ম্যাশ বার্গার'
+};
+
+export const initialSubcategoryTranslations = {
+  'Burgers': 'বার্গার',
+  'Pizza': 'পিজ্জা',
+  'Biryani & Rice': 'বিরিয়ানি ও রাইস',
+  'Crispy Wings & Finger Food': 'ক্রিস্পি উইংস ও ফিঙ্গার ফুড',
+  'Chilled Espresso & Cold Coffee': 'কোল্ড কফি ও এসপ্রেসো',
+  'Mocktails & Sodas': 'মকটেল ও সোডা',
+  'Kunafa & Middle Eastern Sweets': 'কুনাফা ও মিষ্টান্ন',
+  'Artisan Gelato & Ice Cream': 'আর্টিসান জেলাটো ও আইসক্রিম',
+  'Moctail': 'মকটেল',
+  'Mocktail': 'মকটেল',
+  'Mocktails': 'মকটেল',
+  'Sourdough Pizza': 'সাওয়ারডাফ পিজ্জা',
+  'Crispy Chicken': 'ক্রিস্পি চিকেন',
+  'Chilled Coffee': 'কোল্ড কফি',
+  'Kunafa & Sweets': 'কুনাফা ও সুইটস',
+  'Artisan Gelato': 'আর্টিসান জেলাটো'
+};
+
 /**
  * Translates known standard category names dynamically
  */
-export const translateCategoryName = (categoryName, lang = 'en') => {
+export const translateCategoryName = (categoryName, lang = 'en', customTranslations = null) => {
   if (!categoryName) return '';
   if (lang !== 'bn') return categoryName;
 
-  const lower = categoryName.trim().toLowerCase();
+  const clean = categoryName.trim();
+
+  // 1. Direct match in provided custom translations
+  if (customTranslations && customTranslations[clean]) {
+    return customTranslations[clean];
+  }
+
+  // 2. Direct match in stored category translations
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const stored = localStorage.getItem('dgm_restaurant_category_i18n');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed[clean]) return parsed[clean];
+        const lowerKey = Object.keys(parsed).find(k => k.toLowerCase() === clean.toLowerCase());
+        if (lowerKey && parsed[lowerKey]) return parsed[lowerKey];
+      }
+    }
+  } catch (e) {}
+
+  // 3. Check initial catalog translations
+  if (initialCategoryTranslations[clean]) {
+    return initialCategoryTranslations[clean];
+  }
+
+  // 4. Fallback dictionary translations
+  const lower = clean.toLowerCase();
   if (lower === 'all items' || lower === 'all') return 'সব আইটেম';
-  if (lower === 'fast food items' || lower === 'fast food') return 'ফাস্ট ফুড';
+  if (lower === 'fast food items' || lower === 'fast food') return 'ফাস্ট ফুড আইটেম';
   if (lower === 'smash burgers' || lower === 'smash burger' || lower === 'burgers' || lower === 'burger') return 'স্ম্যাশ বার্গার';
   if (lower === 'main course') return 'মেইন কোর্স';
   if (lower === 'appetizers' || lower === 'appetizer' || lower === 'starter' || lower === 'starters') return 'অ্যাপেটাইজার';
@@ -435,6 +496,9 @@ export const translateCategoryName = (categoryName, lang = 'en') => {
   if (lower === 'drinks' || lower === 'drink' || lower === 'soft drinks') return 'ড্রিংকস';
   if (lower === 'dessert' || lower === 'desserts' || lower === 'ice cream') return 'ডেজার্ট';
   if (lower.startsWith('chinee') || lower.startsWith('chine') || lower === 'chinese' || lower === 'chinees' || lower === 'chineese') return 'চাইনিজ';
+  if (lower === 'chef specials' || lower === 'chef special') return 'শেফ স্পেশাল';
+  if (lower === 'seafood') return 'সিফুড';
+  if (lower === 'snacks') return 'স্ন্যাকস';
   if (lower.includes('fries')) return 'ফ্রাইস';
   if (lower.includes('shake')) return 'শেক';
   if (lower.includes('pizza')) return 'পিজ্জা';
@@ -443,7 +507,52 @@ export const translateCategoryName = (categoryName, lang = 'en') => {
   if (lower.includes('beef')) return 'বিফ';
   if (lower.includes('pasta')) return 'পাস্তা';
 
-  return categoryName;
+  return clean;
+};
+
+/**
+ * Translates sub-category / food type names dynamically
+ */
+export const translateSubcategoryName = (subName, lang = 'en', subcategories = null) => {
+  if (!subName) return '';
+  if (lang !== 'bn') return subName;
+
+  const clean = subName.trim();
+
+  // 1. Direct match in provided subcategories array
+  if (Array.isArray(subcategories)) {
+    const found = subcategories.find(s => s && s.name && s.name.toLowerCase() === clean.toLowerCase());
+    if (found && (found.name_native || found.name_bn)) {
+      return found.name_native || found.name_bn;
+    }
+  }
+
+  // 2. Direct match in stored subcategories
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const stored = localStorage.getItem('dgm_restaurant_subcategories');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          const found = parsed.find(s => s && s.name && s.name.toLowerCase() === clean.toLowerCase());
+          if (found && (found.name_native || found.name_bn)) {
+            return found.name_native || found.name_bn;
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 3. Initial Subcategory translations dictionary
+  if (initialSubcategoryTranslations[clean]) {
+    return initialSubcategoryTranslations[clean];
+  }
+
+  const lower = clean.toLowerCase();
+  const lowerKey = Object.keys(initialSubcategoryTranslations).find(k => k.toLowerCase() === lower);
+  if (lowerKey) return initialSubcategoryTranslations[lowerKey];
+
+  return clean;
 };
 
 /**

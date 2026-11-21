@@ -61,6 +61,8 @@ import {
   loadFoodsFromIndexedDB,
   getStoredCategories,
   saveStoredCategories,
+  getStoredCategoryTranslations,
+  saveStoredCategoryTranslations,
   getStoredOrders,
   saveStoredOrders,
   addStoredOrder,
@@ -298,6 +300,7 @@ export default function App() {
   // Dynamic Foods, Categories, Orders, and Payments from Menu Store
   const [foodsList, setFoodsList] = useState(getStoredFoods);
   const [categoriesList, setCategoriesList] = useState(getStoredCategories);
+  const [categoryTranslations, setCategoryTranslations] = useState(() => getStoredCategoryTranslations(currentRestoId));
   const [subcategoriesList, setSubcategoriesList] = useState(getStoredSubcategories);
   const [featuredSliders, setFeaturedSliders] = useState(() => getStoredFeaturedSliders(currentRestoId));
   const [restaurantProfile, setRestaurantProfile] = useState(() => getRestaurantProfile(currentRestoId));
@@ -1211,18 +1214,33 @@ export default function App() {
     if (currentRestoId === 'resto_001') saveStoredFoods(updated);
   };
 
-  const handleAddCategory = (catName) => {
-    if (!categoriesList.includes(catName)) {
-      const updatedCats = Array.from(new Set([...categoriesList, catName]));
+  const handleAddCategory = (catName, catNameNative = '') => {
+    if (!catName) return;
+    const cleanEn = catName.trim();
+    const cleanNat = (catNameNative || '').trim();
+
+    if (!categoriesList.includes(cleanEn)) {
+      const updatedCats = Array.from(new Set([...categoriesList, cleanEn]));
       setCategoriesList(updatedCats);
       if (currentRestoId === 'resto_001') saveStoredCategories(updatedCats);
-      syncCategoryToSupabase(catName, currentRestoId);
+      syncCategoryToSupabase(cleanEn, currentRestoId);
+    }
+
+    if (cleanNat) {
+      const updatedTranslations = {
+        ...categoryTranslations,
+        [cleanEn]: cleanNat
+      };
+      setCategoryTranslations(updatedTranslations);
+      saveStoredCategoryTranslations(updatedTranslations, currentRestoId);
     }
   };
 
-  const handleUpdateCategory = (oldName, newName) => {
-    if (!newName.trim() || oldName === newName) return;
+  const handleUpdateCategory = (oldName, newName, newNameNative) => {
+    if (!newName?.trim() || (oldName === newName && newNameNative === undefined)) return;
     const cleanNew = newName.trim();
+    const cleanNat = (newNameNative !== undefined ? newNameNative : (categoryTranslations[oldName] || '')).trim();
+
     const updatedCats = categoriesList.map(c => c === oldName ? cleanNew : c);
     setCategoriesList(updatedCats);
     if (currentRestoId === 'resto_001') saveStoredCategories(updatedCats);
@@ -1235,6 +1253,18 @@ export default function App() {
     const updatedSubs = subcategoriesList.map(s => s.category === oldName ? { ...s, category: cleanNew } : s);
     setSubcategoriesList(updatedSubs);
     if (currentRestoId === 'resto_001') saveStoredSubcategories(updatedSubs);
+
+    const updatedTranslations = { ...categoryTranslations };
+    if (oldName !== cleanNew) {
+      delete updatedTranslations[oldName];
+    }
+    if (cleanNat) {
+      updatedTranslations[cleanNew] = cleanNat;
+    } else {
+      delete updatedTranslations[cleanNew];
+    }
+    setCategoryTranslations(updatedTranslations);
+    saveStoredCategoryTranslations(updatedTranslations, currentRestoId);
 
     deleteCategoryFromSupabase(oldName, currentRestoId);
     syncCategoryToSupabase(cleanNew, currentRestoId);
@@ -1264,6 +1294,11 @@ export default function App() {
     setCategoriesList(updatedCats);
     if (currentRestoId === 'resto_001') saveStoredCategories(updatedCats);
     deleteCategoryFromSupabase(catName, currentRestoId);
+
+    const updatedTranslations = { ...categoryTranslations };
+    delete updatedTranslations[catName];
+    setCategoryTranslations(updatedTranslations);
+    saveStoredCategoryTranslations(updatedTranslations, currentRestoId);
   };
 
   const handleUpdateOrderStatus = (orderId, newStatus) => {
@@ -3220,6 +3255,7 @@ export default function App() {
           activeRestaurant={activeRestaurant}
           foods={foodsList}
           categories={categoriesList}
+          categoryTranslations={categoryTranslations}
           subcategories={subcategoriesList}
           featuredSliders={featuredSliders}
           orders={ordersList}
@@ -3712,7 +3748,7 @@ export default function App() {
 
                 {/* Category Text */}
                 <span className="text-xs sm:text-[13px] text-slate-300 font-medium tracking-wide">
-                  {translateCategoryName(activeFood.category, customerLanguage)}
+                  {translateCategoryName(activeFood.category, customerLanguage, categoryTranslations)}
                 </span>
 
                 {/* Divider Line 2 */}
@@ -4891,7 +4927,7 @@ export default function App() {
                             <span className={`text-sm sm:text-base font-bold block ${isSelected ? 'text-white' : 'text-slate-200'}`}>
                               {(cat.name === 'All Items' || cat.name === 'All' || cat.name.toLowerCase() === 'all items')
                                 ? t('all_items', customerLanguage)
-                                : translateCategoryName(cat.name, customerLanguage)}
+                                : translateCategoryName(cat.name, customerLanguage, categoryTranslations)}
                             </span>
                             <span className="text-[11px] text-slate-400">
                               {customerLanguage === 'bn' ? toBengaliDigits(count) : count} {count > 1 ? t('items_available', customerLanguage) : t('item_available', customerLanguage)}
