@@ -360,7 +360,7 @@ export const translateFoodTitle = (foodOrTitle, lang = 'en') => {
 
     // Known catalog & customer dishes
     if (lower === 'loaded cheesy beef fries' || lower.includes('cheesy beef fries')) return 'লোডেড চিজি বিফ ফ্রাইস';
-    if (lower === 'spicy zinger crunch burger' || lower.includes('spicy zinger')) return 'স্পাইসি জিঙ্গার ক্রাঞ্চ বার্গার';
+    if (lower === 'spicy zinger crunch burger' || lower.includes('spicy zinger')) return 'স্পাইসি জিঙ্গার ক্রাঞ্চি বার্গার';
     if (lower === 'double flame cheeseburger') return 'ডাবল ফ্লেম চিজবার্গার';
     if (lower === 'artisan wood-fired pizza' || lower === 'wood-fired pizza') return 'উড-ফায়ার্ড পিজ্জা';
     if (lower === 'korean gochujang crisp chicken' || lower.includes('gochujang crisp chicken')) return 'কোরিয়ান ক্রিস্প চিকেন';

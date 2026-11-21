@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'Hind Siliguri', 'Noto Sans Bengali', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 body {
@@ -12,6 +12,21 @@ body {
   color: #F8FAFC;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+/* Bengali typography optimization & inter-word space preservation */
+[lang="bn"],
+.lang-bn,
+.font-bengali,
+:lang(bn) {
+  font-family: 'Hind Siliguri', 'Noto Sans Bengali', var(--font-sans);
+  letter-spacing: normal !important;
+}
+
+.bengali-title {
+  font-family: 'Hind Siliguri', 'Noto Sans Bengali', var(--font-sans);
+  letter-spacing: normal !important;
+  word-spacing: 0.18em !important;
 }
 
 /* Custom sleek scrollbar for admin panels and content */

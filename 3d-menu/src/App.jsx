@@ -353,6 +353,18 @@ export default function App() {
     }
   };
 
+  // Sync document language attribute and font helper class on customer language change
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = customerLanguage || 'en';
+      if (customerLanguage === 'bn') {
+        document.body.classList.add('lang-bn');
+      } else {
+        document.body.classList.remove('lang-bn');
+      }
+    }
+  }, [customerLanguage]);
+
   const [tableNumber, setTableNumber] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -3412,15 +3424,15 @@ export default function App() {
           <button
             type="button"
             onClick={() => setIsLanguageModalOpen(true)}
-            className="w-[88px] min-w-[88px] max-w-[88px] h-[34px] min-h-[34px] px-2 rounded-full border-[1.7px] border-[#F59E0B] bg-[#090c0e]/95 hover:bg-[#18130e] active:scale-95 text-white flex items-center justify-center gap-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.5)] transition-all cursor-pointer select-none box-border"
+            className="w-[88px] min-w-[88px] max-w-[88px] h-[34px] min-h-[34px] px-1 rounded-full border-[1.7px] border-[#F59E0B] bg-[#090c0e]/95 hover:bg-[#18130e] active:scale-95 text-white flex items-center justify-center gap-1 shadow-[0_4px_16px_rgba(0,0,0,0.5)] transition-all cursor-pointer select-none box-border"
             aria-label="Change Language"
             title="Change Language"
           >
             <Globe className="w-3.5 h-3.5 text-[#F59E0B] shrink-0" />
-            <span className={`font-extrabold uppercase tracking-wider text-white leading-none truncate ${customerLanguage === 'bn' ? 'text-[13.5px]' : 'text-xs'}`}>
+            <span className={`leading-none select-none whitespace-nowrap ${customerLanguage === 'bn' ? 'font-bold text-[12px] tracking-normal font-bengali' : 'font-extrabold text-xs uppercase tracking-wider'}`}>
               {customerLanguage === 'bn' ? 'বাংলা' : 'EN'}
             </span>
-            <ChevronDown className="w-3 h-3 text-white/80 stroke-[2.5] shrink-0" />
+            <ChevronDown className="w-2.5 h-2.5 text-white/80 stroke-[2.5] shrink-0" />
           </button>
         </div>
 
@@ -3498,7 +3510,7 @@ export default function App() {
           <div className="flex items-center justify-between gap-3">
             {/* Left Column: Food Title (Wraps to 2 lines if long, category removed) */}
             <div className="min-w-0 flex-1 pr-2">
-              <h2 className="text-white font-bold text-lg sm:text-[20px] tracking-tight leading-snug line-clamp-2">
+              <h2 className={`text-white font-bold text-lg sm:text-[20px] leading-snug line-clamp-2 ${customerLanguage === 'bn' ? 'tracking-normal [word-spacing:0.18em] font-bengali' : 'tracking-tight'}`}>
                 {translateFoodTitle(activeFood, customerLanguage)}
               </h2>
             </div>
@@ -3619,7 +3631,7 @@ export default function App() {
             {/* Header: Title, Category & Description */}
             <div className={`pt-1 sm:pt-1.5 shrink-0 ${(hasCustomOptions && !currentFeaturedOffer) ? 'pb-3 border-b border-white/10' : 'pb-0'}`}>
               <div className="mb-3 sm:mb-3.5">
-                <h2 className="text-white font-black text-xl sm:text-2xl tracking-tight leading-tight">
+                <h2 className={`text-white font-black text-xl sm:text-2xl leading-tight ${customerLanguage === 'bn' ? 'tracking-normal [word-spacing:0.18em] font-bengali' : 'tracking-tight'}`}>
                   {translateFoodTitle(activeFood, customerLanguage)}
                 </h2>
               </div>
@@ -3702,7 +3714,7 @@ export default function App() {
                       </div>
 
                       {/* Title */}
-                      <h3 className="text-white font-black text-xl sm:text-2xl tracking-tight leading-tight">
+                      <h3 className={`text-white font-black text-xl sm:text-2xl leading-tight ${customerLanguage === 'bn' ? 'tracking-normal [word-spacing:0.18em] font-bengali' : 'tracking-tight'}`}>
                         {translateFoodTitle(currentFeaturedOffer.title, customerLanguage)}
                       </h3>
 
@@ -4215,7 +4227,7 @@ export default function App() {
                                 alt={item.title}
                                 className="w-14 h-14 sm:w-[60px] sm:h-[60px] rounded-xl object-contain bg-[#090b10] border border-white/10 p-1 shrink-0"
                               />
-                              <h4 className="text-white font-extrabold text-base sm:text-[17px] leading-snug whitespace-normal break-words">
+                              <h4 className={`text-white font-extrabold text-base sm:text-[17px] leading-snug whitespace-normal break-words ${customerLanguage === 'bn' ? 'tracking-normal [word-spacing:0.16em] font-bengali' : 'tracking-tight'}`}>
                                 {translateFoodTitle(item.title, customerLanguage)}
                               </h4>
                             </div>
@@ -4712,7 +4724,7 @@ export default function App() {
                               </div>
 
                               {/* Main Title */}
-                              <h3 className="text-white font-black text-lg sm:text-xl tracking-tight leading-snug line-clamp-2">
+                              <h3 className={`text-white font-black text-lg sm:text-xl leading-snug line-clamp-2 ${customerLanguage === 'bn' ? 'tracking-normal [word-spacing:0.18em] font-bengali' : 'tracking-tight'}`}>
                                 {translateFoodTitle(offer.title, customerLanguage)}
                               </h3>
                             </div>
