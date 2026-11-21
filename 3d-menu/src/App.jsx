@@ -110,7 +110,14 @@ import { supabaseTableRepository } from './data/supabaseTableRepository';
 import { handleFineDineTableVisit, confirmFineDineTableSession } from './data/dgmSessionStore';
 import RestaurantHeader from './components/RestaurantHeader';
 import LanguageSelectionModal from './components/LanguageSelectionModal';
-import { t, translateCategoryName, getRestaurantPrimaryLanguage } from './utils/translations';
+import {
+  t,
+  translateCategoryName,
+  getRestaurantPrimaryLanguage,
+  formatBadgeText,
+  translateFoodTitle,
+  toBengaliDigits
+} from './utils/translations';
 
 const categories = [
   { name: 'All', icon: Utensils },
@@ -3356,27 +3363,30 @@ export default function App() {
             <div className="animate-promo-glow px-3 py-1.5 rounded-2xl bg-gradient-to-r from-red-600/90 via-orange-600/90 to-amber-500/90 border border-white/30 text-white shadow-xl flex items-center gap-1.5 backdrop-blur-md">
               <Zap className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300 animate-bounce" />
               <span className="text-[11px] font-black uppercase tracking-wider">
-                {uniformDiscountBadge}
+                {formatBadgeText(uniformDiscountBadge, customerLanguage)}
               </span>
-              <span className="text-[10px] text-white/80 font-medium hidden sm:inline">• Limited Deal</span>
+              <span className="text-[10px] text-white/80 font-medium hidden sm:inline">
+                • {customerLanguage === 'bn' ? 'সীমিত অফার' : 'Limited Deal'}
+              </span>
             </div>
           </div>
         ) : null}
 
         {/* Language Switcher Pill (Top-Right of food stage, aligned with left badge - Matching Image 3) */}
+        {/* Same width (88px) and height (34px) as the top bar Menu button */}
         <div className="absolute top-4.5 right-4 z-30 pointer-events-auto">
           <button
             type="button"
             onClick={() => setIsLanguageModalOpen(true)}
-            className="h-[34px] min-h-[34px] px-3 sm:px-3.5 rounded-full border-[1.7px] border-[#F59E0B] bg-[#090c0e]/95 hover:bg-[#18130e] active:scale-95 text-white flex items-center justify-center gap-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.5)] transition-all cursor-pointer select-none"
+            className="w-[88px] min-w-[88px] max-w-[88px] h-[34px] min-h-[34px] px-2 rounded-full border-[1.7px] border-[#F59E0B] bg-[#090c0e]/95 hover:bg-[#18130e] active:scale-95 text-white flex items-center justify-center gap-1.5 shadow-[0_4px_16px_rgba(0,0,0,0.5)] transition-all cursor-pointer select-none box-border"
             aria-label="Change Language"
             title="Change Language"
           >
-            <Globe className="w-4 h-4 text-[#F59E0B]" />
-            <span className="font-extrabold text-xs uppercase tracking-wider text-white leading-none">
+            <Globe className="w-3.5 h-3.5 text-[#F59E0B] shrink-0" />
+            <span className="font-extrabold text-xs uppercase tracking-wider text-white leading-none truncate">
               {customerLanguage === 'bn' ? 'বাংলা' : 'EN'}
             </span>
-            <ChevronDown className="w-3.5 h-3.5 text-white/80 stroke-[2.5]" />
+            <ChevronDown className="w-3 h-3 text-white/80 stroke-[2.5] shrink-0" />
           </button>
         </div>
 
@@ -3455,7 +3465,7 @@ export default function App() {
             {/* Left Column: Food Title (Wraps to 2 lines if long, category removed) */}
             <div className="min-w-0 flex-1 pr-2">
               <h2 className="text-white font-bold text-lg sm:text-[20px] tracking-tight leading-snug line-clamp-2">
-                {activeFood.title}
+                {translateFoodTitle(activeFood, customerLanguage)}
               </h2>
             </div>
 
@@ -3576,13 +3586,13 @@ export default function App() {
             <div className={`pt-1 sm:pt-1.5 shrink-0 ${(hasCustomOptions && !currentFeaturedOffer) ? 'pb-3 border-b border-white/10' : 'pb-0'}`}>
               <div className="mb-3 sm:mb-3.5">
                 <h2 className="text-white font-black text-xl sm:text-2xl tracking-tight leading-tight">
-                  {activeFood.title}
+                  {translateFoodTitle(activeFood, customerLanguage)}
                 </h2>
               </div>
               <div className="flex items-center gap-3 mb-2 flex-wrap sm:flex-nowrap">
                 {/* Tag Badge with warm amber border matching image 2 */}
                 <span className="px-3 py-0.5 rounded-full bg-[#F59E0B]/10 border border-[#F59E0B] text-[#F59E0B] text-[11px] sm:text-xs font-bold uppercase tracking-wider flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(245,158,11,0.25)]">
-                  {activeFood.tag || 'BEST SELLER'}
+                  {formatBadgeText(activeFood.tag || 'BEST SELLER', customerLanguage)}
                 </span>
 
                 {/* Divider Line 1 */}
@@ -3654,12 +3664,12 @@ export default function App() {
                     <div className="space-y-2">
                       {/* Badge */}
                       <div className="inline-flex items-center px-3 py-1 rounded-full border border-[#F59E0B] bg-black/40 text-[#F59E0B] text-[11px] sm:text-xs font-bold uppercase tracking-wider w-fit shadow-xs">
-                        {currentFeaturedOffer.badge || 'DHAMAKA OFFER'}
+                        {formatBadgeText(currentFeaturedOffer.badge || 'DHAMAKA OFFER', customerLanguage)}
                       </div>
 
                       {/* Title */}
                       <h3 className="text-white font-black text-xl sm:text-2xl tracking-tight leading-tight">
-                        {currentFeaturedOffer.title}
+                        {translateFoodTitle(currentFeaturedOffer.title, customerLanguage)}
                       </h3>
 
                       {/* What's included Section Heading & Items */}
@@ -3677,7 +3687,7 @@ export default function App() {
                               {items.map((item, idx) => (
                                 <div key={idx} className="flex items-center gap-2 text-xs sm:text-[13px] font-medium text-slate-200">
                                   <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] shrink-0 shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
-                                  <span className="line-clamp-1">{item}</span>
+                                  <span className="line-clamp-1">{translateFoodTitle(item, customerLanguage)}</span>
                                 </div>
                               ))}
                             </div>
@@ -4172,7 +4182,7 @@ export default function App() {
                                 className="w-14 h-14 sm:w-[60px] sm:h-[60px] rounded-xl object-contain bg-[#090b10] border border-white/10 p-1 shrink-0"
                               />
                               <h4 className="text-white font-extrabold text-base sm:text-[17px] leading-snug whitespace-normal break-words">
-                                {item.title}
+                                {translateFoodTitle(item.title, customerLanguage)}
                               </h4>
                             </div>
 
@@ -4664,12 +4674,12 @@ export default function App() {
                             <div className="space-y-1.5">
                               {/* Badge */}
                               <div className="inline-flex items-center px-3 py-0.5 sm:py-1 rounded-full border border-[#F59E0B] bg-black/40 text-[#F59E0B] text-[10px] sm:text-[11px] font-bold uppercase tracking-wider w-fit shadow-xs">
-                                {offer.badge || 'DHAMAKA OFFER'}
+                                {formatBadgeText(offer.badge || 'DHAMAKA OFFER', customerLanguage)}
                               </div>
 
                               {/* Main Title */}
                               <h3 className="text-white font-black text-lg sm:text-xl tracking-tight leading-snug line-clamp-2">
-                                {offer.title}
+                                {translateFoodTitle(offer.title, customerLanguage)}
                               </h3>
                             </div>
 
@@ -4751,7 +4761,7 @@ export default function App() {
                                 : translateCategoryName(cat.name, customerLanguage)}
                             </span>
                             <span className="text-[11px] text-slate-400">
-                              {count} {count > 1 ? t('items_available', customerLanguage) : t('item_available', customerLanguage)}
+                              {customerLanguage === 'bn' ? toBengaliDigits(count) : count} {count > 1 ? t('items_available', customerLanguage) : t('item_available', customerLanguage)}
                             </span>
                           </div>
                         </div>
@@ -5037,7 +5047,9 @@ export default function App() {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between">
-                        <h4 className="text-white font-bold text-xs truncate pr-1">{item.title}</h4>
+                        <h4 className="text-white font-bold text-xs truncate pr-1">
+                          {translateFoodTitle(item.title, customerLanguage)}
+                        </h4>
                         <span className="text-orange-400 font-extrabold text-xs shrink-0">{currency}{formatPrice(item.totalPrice)}</span>
                       </div>
 

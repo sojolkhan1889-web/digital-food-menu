@@ -258,15 +258,19 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-width: 82px;
+  width: 88px;
+  min-width: 88px;
+  max-width: 88px;
+  height: 34px;
   min-height: 34px;
-  padding: 7px 13px;
+  padding: 0 10px;
   border: 1.7px solid var(--rh-amber);
   border-radius: 999px;
   background: #090c0e;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.04em;
+  box-sizing: border-box;
   transition: background 150ms ease, transform 150ms ease;
 }
 

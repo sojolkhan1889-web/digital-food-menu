@@ -287,6 +287,90 @@ export const t = (key, lang = 'en', params = {}) => {
 };
 
 /**
+ * Helper to convert English digits to Bengali digits
+ */
+export const toBengaliDigits = (num) => {
+  if (num === null || num === undefined) return '';
+  const bengaliDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+  return String(num).replace(/[0-9]/g, (d) => bengaliDigits[Number(d)]);
+};
+
+/**
+ * Formats and localizes badge texts (e.g. "14% OFF", "FLAT ৳10 OFF", "BEST SELLER")
+ */
+export const formatBadgeText = (badgeText, lang = 'en') => {
+  if (!badgeText) return '';
+  if (lang !== 'bn') return badgeText;
+
+  // Percentage OFF e.g. "14% OFF", "20% OFF"
+  const pctMatch = badgeText.match(/^(\d+)%\s*OFF$/i);
+  if (pctMatch) {
+    return `${toBengaliDigits(pctMatch[1])}% ছাড়`;
+  }
+
+  // Flat discount e.g. "FLAT ৳10 OFF", "FLAT $5 OFF"
+  const flatMatch = badgeText.match(/^FLAT\s+(.+)\s+OFF$/i);
+  if (flatMatch) {
+    const amount = flatMatch[1].replace(/[0-9]/g, (d) => toBengaliDigits(d));
+    return `ফ্ল্যাট ${amount} ছাড়`;
+  }
+
+  // Standard promotional badges
+  const lower = badgeText.trim().toLowerCase();
+  if (lower === 'best seller' || lower === 'best selling') return 'বেস্ট সেলার';
+  if (lower === 'chef special') return 'শেফ স্পেশাল';
+  if (lower === 'dhamaka offer') return 'ধামাকা অফার';
+  if (lower === 'weekend special') return 'উইকেন্ড স্পেশাল';
+  if (lower === 'new') return 'নতুন';
+  if (lower === 'popular') return 'জনপ্রিয়';
+  if (lower === 'limited deal') return 'সীমিত অফার';
+
+  return badgeText;
+};
+
+/**
+ * Translates or localizes food dish titles when browsing in Bengali
+ */
+export const translateFoodTitle = (foodOrTitle, lang = 'en') => {
+  if (!foodOrTitle) return '';
+  const title = typeof foodOrTitle === 'object'
+    ? (foodOrTitle.title_bn || foodOrTitle.name_bn || foodOrTitle.title || foodOrTitle.name || '')
+    : String(foodOrTitle);
+
+  if (lang !== 'bn') return typeof foodOrTitle === 'object' ? (foodOrTitle.title || foodOrTitle.name || '') : title;
+
+  // If explicit Bengali name exists on the food object
+  if (typeof foodOrTitle === 'object' && (foodOrTitle.title_bn || foodOrTitle.name_bn)) {
+    return foodOrTitle.title_bn || foodOrTitle.name_bn;
+  }
+
+  const clean = title.trim();
+  const lower = clean.toLowerCase();
+
+  // Known catalog & customer dishes
+  if (lower === 'loaded cheesy beef fries' || lower.includes('cheesy beef fries')) return 'লোডেড চিজি বিফ ফ্রাইস';
+  if (lower === 'double flame cheeseburger') return 'ডাবল ফ্লেম চিজবার্গার';
+  if (lower === 'artisan wood-fired pizza' || lower === 'wood-fired pizza') return 'উড-ফায়ার্ড পিজ্জা';
+  if (lower === 'korean gochujang crisp chicken' || lower.includes('gochujang crisp chicken')) return 'কোরিয়ান ক্রিস্প চিকেন';
+  if (lower === 'double smash burger combo') return 'ডাবল স্ম্যাশ বার্গার কম্বো';
+  if (lower === 'double smash burger') return 'ডাবল স্ম্যাশ বার্গার';
+  if (lower === 'smash burger') return 'স্ম্যাশ বার্গার';
+  if (lower === 'oreo thick shake') return 'ওরিও থিক শেক';
+  if (lower === 'iced caramel macchiato') return 'আইসড ক্যারামেল ম্যাকিয়াটো';
+  if (lower === 'signature kacchi biryani' || lower === 'kacchi biryani') return 'কাচ্চি বিরিয়ানি';
+  if (lower === 'artisan espresso') return 'আর্টিসান এসপ্রেসো';
+  if (lower === 'belgian chocolate sundae') return 'বেলজিয়ান চকলেট সানডে';
+  if (lower === 'crispy fries' || lower === 'french fries') return 'ক্রিস্পি ফ্রাইস';
+  if (lower === 'beef burger') return 'বিফ বার্গার';
+  if (lower === 'chicken burger') return 'চিকেন বার্গার';
+  if (lower.startsWith('coke') || lower.includes('coca cola') || lower.includes('coke •')) return 'কোক • ৩৫০ মিলি';
+  if (lower.includes('pepsi')) return 'পেপসি';
+  if (lower.includes('cold drink') || lower.includes('soft drink')) return 'কোল্ড ড্রিংক';
+
+  return clean;
+};
+
+/**
  * Translates known standard category names dynamically
  */
 export const translateCategoryName = (categoryName, lang = 'en') => {
@@ -296,13 +380,20 @@ export const translateCategoryName = (categoryName, lang = 'en') => {
   const lower = categoryName.trim().toLowerCase();
   if (lower === 'all items' || lower === 'all') return 'সব আইটেম';
   if (lower === 'fast food items' || lower === 'fast food') return 'ফাস্ট ফুড';
-  if (lower === 'smash burgers') return 'স্ম্যাশ বার্গার';
+  if (lower === 'smash burgers' || lower === 'smash burger' || lower === 'burgers' || lower === 'burger') return 'স্ম্যাশ বার্গার';
   if (lower === 'main course') return 'মেইন কোর্স';
-  if (lower === 'appetizers') return 'অ্যাপেটাইজার';
+  if (lower === 'appetizers' || lower === 'appetizer' || lower === 'starter' || lower === 'starters') return 'অ্যাপেটাইজার';
   if (lower === 'beverages') return 'পানীয় ও ড্রিংকস';
-  if (lower === 'drinks') return 'ড্রিংকস';
-  if (lower === 'dessert' || lower === 'desserts') return 'ডেজার্ট';
-  if (lower === 'chineese' || lower === 'chinese') return 'চাইনিজ';
+  if (lower === 'drinks' || lower === 'drink' || lower === 'soft drinks') return 'ড্রিংকস';
+  if (lower === 'dessert' || lower === 'desserts' || lower === 'ice cream') return 'ডেজার্ট';
+  if (lower.startsWith('chinee') || lower.startsWith('chine') || lower === 'chinese' || lower === 'chinees' || lower === 'chineese') return 'চাইনিজ';
+  if (lower.includes('fries')) return 'ফ্রাইস';
+  if (lower.includes('shake')) return 'শেক';
+  if (lower.includes('pizza')) return 'পিজ্জা';
+  if (lower.includes('biryani') || lower.includes('kacchi')) return 'বিরিয়ানি';
+  if (lower.includes('chicken')) return 'চিকেন';
+  if (lower.includes('beef')) return 'বিফ';
+  if (lower.includes('pasta')) return 'পাস্তা';
 
   return categoryName;
 };
