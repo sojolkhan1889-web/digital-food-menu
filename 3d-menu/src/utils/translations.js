@@ -160,6 +160,8 @@ export const translations = {
     back_to_menu: 'Back to Menu',
     portion_label: 'PORTION',
     addons_label: 'ADDONS',
+    extra_addons_label: 'EXTRA ADD-ONS',
+    item_total: 'Item total',
 
     // Cart Modal (if enabled)
     your_cart: 'YOUR CART',
@@ -249,6 +251,8 @@ export const translations = {
     back_to_menu: 'মেনুতে ফিরে যান',
     portion_label: 'পরিমাণ',
     addons_label: 'অ্যাড-অন',
+    extra_addons_label: 'অতিরিক্ত অ্যাড-অন',
+    item_total: 'আইটেম মোট',
 
     // Cart Modal (if enabled)
     your_cart: 'আপনার কার্ট',
@@ -437,4 +441,154 @@ export const translateCategoryName = (categoryName, lang = 'en') => {
   if (lower.includes('pasta')) return 'পাস্তা';
 
   return categoryName;
+};
+
+/**
+ * Translates portion and serving size names when browsing in Bengali / Native Language
+ */
+export const translatePortionName = (portionOrName, lang = 'en') => {
+  if (!portionOrName) return '';
+  const isObj = typeof portionOrName === 'object' && portionOrName !== null;
+  const defaultName = isObj ? (portionOrName.name || '') : String(portionOrName);
+
+  if (lang !== 'bn') return defaultName;
+
+  // 1. If explicit native or Bengali name exists on the portion object, prioritize it
+  if (isObj) {
+    if (portionOrName.name_bn || portionOrName.name_native || portionOrName.nameNative) {
+      return portionOrName.name_bn || portionOrName.name_native || portionOrName.nameNative;
+    }
+  }
+
+  const clean = defaultName.trim();
+  const lower = clean.toLowerCase();
+
+  // Pattern: "10 Pcs Party Box" -> "১০ পিস পার্টি বক্স"
+  const pcsBoxMatch = clean.match(/^(\d+)\s*(pcs?|pieces?)\s*(party\s*box|box)$/i);
+  if (pcsBoxMatch) {
+    return `${toBengaliDigits(pcsBoxMatch[1])} পিস পার্টি বক্স`;
+  }
+
+  // Pattern: "10 Pcs", "20 Pcs", "6 Pcs", "1 Pc", "12 Pieces"
+  const pcsMatch = clean.match(/^(\d+)\s*(pcs?|pieces?)$/i);
+  if (pcsMatch) {
+    return `${toBengaliDigits(pcsMatch[1])} পিস`;
+  }
+
+  // Pattern: "250 gm", "500 g", "100 grams"
+  const gmMatch = clean.match(/^(\d+)\s*(gm|g|grams?)$/i);
+  if (gmMatch) {
+    return `${toBengaliDigits(gmMatch[1])} গ্রাম`;
+  }
+
+  // Pattern: "1 kg", "2 kilo"
+  const kgMatch = clean.match(/^(\d+)\s*(kg|kilo|kilograms?)$/i);
+  if (kgMatch) {
+    return `${toBengaliDigits(kgMatch[1])} কেজি`;
+  }
+
+  // Pattern: "500 ml", "250 ml"
+  const mlMatch = clean.match(/^(\d+)\s*(ml|milliliters?)$/i);
+  if (mlMatch) {
+    return `${toBengaliDigits(mlMatch[1])} মিলি`;
+  }
+
+  // Pattern: "1 l", "2 liter"
+  const lMatch = clean.match(/^(\d+)\s*(l|litres?|liters?)$/i);
+  if (lMatch) {
+    return `${toBengaliDigits(lMatch[1])} লিটার`;
+  }
+
+  // Common sizes
+  if (lower === 'half') return 'হাফ';
+  if (lower === 'full') return 'ফুল';
+  if (lower === 'quarter') return 'কোয়ার্টার';
+  if (lower === 'regular') return 'রেগুলার';
+  if (lower === 'small') return 'স্মল';
+  if (lower === 'medium') return 'মিডিয়াম';
+  if (lower === 'large') return 'লার্জ';
+  if (lower === 'extra large' || lower === 'xl') return 'এক্সট্রা লার্জ';
+  if (lower === 'family' || lower === 'family pack' || lower === 'family size') return 'ফ্যামিলি';
+  if (lower === 'standard' || lower === 'standard portion') return 'স্ট্যান্ডার্ড';
+  if (lower === 'single') return 'সিঙ্গেল';
+  if (lower === 'double') return 'ডাবল';
+  if (lower === 'triple') return 'ট্রিপল';
+
+  return clean;
+};
+
+/**
+ * Translates extra addon and side choices when browsing in Bengali / Native Language
+ */
+export const translateAddonName = (addonOrName, lang = 'en') => {
+  if (!addonOrName) return '';
+  const isObj = typeof addonOrName === 'object' && addonOrName !== null;
+  const defaultName = isObj ? (addonOrName.name || '') : String(addonOrName);
+
+  if (lang !== 'bn') return defaultName;
+
+  // 1. If explicit native or Bengali name exists on the addon object, prioritize it
+  if (isObj) {
+    if (addonOrName.name_bn || addonOrName.name_native || addonOrName.nameNative) {
+      return addonOrName.name_bn || addonOrName.name_native || addonOrName.nameNative;
+    }
+  }
+
+  const clean = defaultName.trim();
+  const lower = clean.toLowerCase();
+
+  // Pattern for drinks: "Coke 500 ML", "Sprite 500 ML", "Pepsi 250 ML", "Fanta 500 ML", etc.
+  const drinkMatch = clean.match(/^(coke|coca cola|pepsi|sprite|fanta|mirinda|mountain dew|7up|seven up)\s*(\d+)?\s*(ml|l|litre|liter)?$/i);
+  if (drinkMatch) {
+    const brand = drinkMatch[1].toLowerCase();
+    const amount = drinkMatch[2];
+    const unit = drinkMatch[3]?.toLowerCase();
+
+    let brandBn = 'কোক';
+    if (brand.includes('coke') || brand.includes('coca')) brandBn = 'কোক';
+    else if (brand.includes('pepsi')) brandBn = 'পেপসি';
+    else if (brand.includes('sprite')) brandBn = 'স্প্রাইট';
+    else if (brand.includes('fanta')) brandBn = 'ফ্যান্টা';
+    else if (brand.includes('mirinda')) brandBn = 'মিরিন্ডা';
+    else if (brand.includes('mountain')) brandBn = 'মাউন্টেন ডিউ';
+    else if (brand.includes('7up') || brand.includes('seven')) brandBn = 'সেভেন আপ';
+
+    if (amount) {
+      const unitBn = (unit === 'l' || unit === 'litre' || unit === 'liter') ? 'লিটার' : 'মিলি';
+      return `${brandBn} ${toBengaliDigits(amount)} ${unitBn}`;
+    }
+    return brandBn;
+  }
+
+  // Exact known addons
+  if (lower === 'extra dip sauce' || lower === 'dip sauce') return 'এক্সট্রা ডিপ সস';
+  if (lower === 'extra cheese') return 'এক্সট্রা চিজ';
+  if (lower === 'extra sauce') return 'এক্সট্রা সস';
+  if (lower === 'extra egg') return 'এক্সট্রা ডিম';
+  if (lower === 'extra meat') return 'এক্সট্রা মিট';
+  if (lower === 'extra patty' || lower === 'extra beef patty') return 'এক্সট্রা প্যাটি';
+  if (lower === 'extra chicken') return 'এক্সট্রা চিকেন';
+  if (lower === 'extra bacon') return 'এক্সট্রা বেকন';
+  if (lower === 'extra fries') return 'এক্সট্রা ফ্রাইস';
+  if (lower === 'extra mayo' || lower === 'extra mayonnaise') return 'এক্সট্রা মেয়োনিজ';
+  if (lower === 'mineral water' || lower === 'water') return 'মিনারেল ওয়াটার';
+
+  // Generic "Extra {Item}" matching
+  const extraMatch = clean.match(/^extra\s+(.+)$/i);
+  if (extraMatch) {
+    const item = extraMatch[1].toLowerCase().trim();
+    if (item === 'dip sauce') return 'এক্সট্রা ডিপ সস';
+    if (item === 'cheese') return 'এক্সট্রা চিজ';
+    if (item === 'sauce') return 'এক্সট্রা সস';
+    if (item === 'egg') return 'এক্সট্রা ডিম';
+    if (item === 'meat') return 'এক্সট্রা মিট';
+    if (item === 'patty') return 'এক্সট্রা প্যাটি';
+    if (item === 'chicken') return 'এক্সট্রা চিকেন';
+    if (item === 'bacon') return 'এক্সট্রা বেকন';
+    if (item === 'fries') return 'এক্সট্রা ফ্রাইস';
+    if (item === 'mayo' || item === 'mayonnaise') return 'এক্সট্রা মেয়োনিজ';
+    return `এক্সট্রা ${extraMatch[1]}`;
+  }
+
+  return clean;
 };

@@ -133,6 +133,7 @@ export default function AddFoodWizard({
           }
           return {
             name: p.name || '',
+            nameNative: p.name_native || p.name_bn || p.nameNative || '',
             regularPrice: String(regularP || sellingP || ''),
             price: String(sellingP || ''),
             discountMode: mode,
@@ -176,8 +177,8 @@ export default function AddFoodWizard({
           setDiscountValue('');
         }
         setPortions([
-          { name: 'Half', regularPrice: '180', price: '180', discountMode: 'none', discountValue: '' },
-          { name: 'Full', regularPrice: '320', price: '320', discountMode: 'none', discountValue: '' }
+          { name: 'Half', nameNative: 'হাফ', regularPrice: '180', price: '180', discountMode: 'none', discountValue: '' },
+          { name: 'Full', nameNative: 'ফুল', regularPrice: '320', price: '320', discountMode: 'none', discountValue: '' }
         ]);
       }
 
@@ -185,13 +186,14 @@ export default function AddFoodWizard({
       setHasExtraChoices(Boolean(hasAddons));
       if (hasAddons) {
         setExtraOptions(editingFood.customizable.addons.map(a => ({
-          name: a.name,
+          name: a.name || '',
+          nameNative: a.name_native || a.name_bn || a.nameNative || '',
           price: String(a.price || 0)
         })));
       } else {
         setExtraOptions([
-          { name: 'Extra Egg', price: '30' },
-          { name: 'Extra Meat', price: '120' }
+          { name: 'Extra Egg', nameNative: 'এক্সট্রা ডিম', price: '30' },
+          { name: 'Extra Meat', nameNative: 'এক্সট্রা মিট', price: '120' }
         ]);
       }
       setImageMeta(null);
@@ -213,16 +215,16 @@ export default function AddFoodWizard({
       setDiscountMode('none');
       setDiscountValue('');
       setPortions([
-        { name: 'Half', regularPrice: '180', price: '180', discountMode: 'none', discountValue: '' },
-        { name: 'Full', regularPrice: '320', price: '320', discountMode: 'none', discountValue: '' }
+        { name: 'Half', nameNative: 'হাফ', regularPrice: '180', price: '180', discountMode: 'none', discountValue: '' },
+        { name: 'Full', nameNative: 'ফুল', regularPrice: '320', price: '320', discountMode: 'none', discountValue: '' }
       ]);
       setHasExtraChoices(false);
       setChoiceGroupName('Extra Add-ons');
       setSelectionType('multiple');
       setMaxSelections(3);
       setExtraOptions([
-        { name: 'Extra Egg', price: '30' },
-        { name: 'Extra Meat', price: '120' }
+        { name: 'Extra Egg', nameNative: 'এক্সট্রা ডিম', price: '30' },
+        { name: 'Extra Meat', nameNative: 'এক্সট্রা মিট', price: '120' }
       ]);
     }
     setPreviewSelectedPortion(0);
@@ -386,6 +388,7 @@ export default function AddFoodWizard({
       ...prev,
       {
         name: '',
+        nameNative: '',
         regularPrice: '',
         price: '',
         discountMode: 'none',
@@ -473,7 +476,7 @@ export default function AddFoodWizard({
   const [draggedOptionIdx, setDraggedOptionIdx] = useState(null);
 
   const addExtraOption = () => {
-    setExtraOptions(prev => [...prev, { name: '', price: '' }]);
+    setExtraOptions(prev => [...prev, { name: '', nameNative: '', price: '' }]);
   };
   const updateExtraOption = (idx, field, val) => {
     setExtraOptions(prev => {
@@ -574,6 +577,8 @@ export default function AddFoodWizard({
           const regularP = Number(p.regularPrice || p.price || 0);
           return {
             name: p.name.trim(),
+            name_native: p.nameNative?.trim() || undefined,
+            name_bn: p.nameNative?.trim() || undefined,
             price: sellingP,
             oldPrice: regularP > sellingP ? regularP : undefined,
             discountMode: p.discountMode || (regularP > sellingP ? 'percent' : 'none'),
@@ -588,7 +593,9 @@ export default function AddFoodWizard({
           .filter(opt => opt.name.trim() !== '')
           .map((opt, i) => ({
             id: `addon_${Date.now()}_${i}`,
-            name: opt.name,
+            name: opt.name.trim(),
+            name_native: opt.nameNative?.trim() || undefined,
+            name_bn: opt.nameNative?.trim() || undefined,
             price: Number(opt.price || 0)
           }));
       }
@@ -1314,17 +1321,32 @@ export default function AddFoodWizard({
                           )}
                         </div>
 
-                        {/* Row 1: Portion Name & Regular Price (MRP) */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Row 1: Portion Name (EN), Native Name (BN), & Regular Price (MRP) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div>
                             <label className={`text-[11px] font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                              Portion Name <span className="text-red-500">*</span>
+                              Portion Name (English) <span className="text-red-500">*</span>
                             </label>
                             <input
                               type="text"
-                              placeholder="e.g. Half, Full, 10-inch, Family Pack..."
+                              placeholder="e.g. Half, Full, 10 Pcs..."
                               value={portion.name}
                               onChange={(e) => updatePortion(idx, 'name', e.target.value)}
+                              className={`w-full px-3 py-1.5 rounded-[5px] border text-xs font-medium focus:outline-none focus:border-orange-500 ${
+                                isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                              }`}
+                            />
+                          </div>
+
+                          <div>
+                            <label className={`text-[11px] font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                              Portion Name ({nativeLang.nativeName}) <span className="text-[10px] text-slate-400 font-normal">(ঐচ্ছিক)</span>
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="যেমন: হাফ, ফুল, ১০ পিস..."
+                              value={portion.nameNative || ''}
+                              onChange={(e) => updatePortion(idx, 'nameNative', e.target.value)}
                               className={`w-full px-3 py-1.5 rounded-[5px] border text-xs font-medium focus:outline-none focus:border-orange-500 ${
                                 isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                               }`}
@@ -1665,14 +1687,28 @@ export default function AddFoodWizard({
                           </div>
                         </div>
 
-                        {/* Extra Name Input */}
+                        {/* Extra Name Input (English) */}
                         <div className="flex-1 min-w-0">
-                          <label className="text-[10px] text-slate-500 block mb-0.5">Extra Name</label>
+                          <label className="text-[10px] text-slate-500 block mb-0.5">Extra Name (English)</label>
                           <input
                             type="text"
-                            placeholder="e.g. Extra Egg"
+                            placeholder="e.g. Extra Egg, Coke 500 ML"
                             value={opt.name}
                             onChange={(e) => updateExtraOption(idx, 'name', e.target.value)}
+                            className={`w-full px-2.5 py-1.5 rounded-[5px] border text-xs font-medium focus:outline-none focus:border-orange-500 ${
+                              isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                            }`}
+                          />
+                        </div>
+
+                        {/* Extra Name Input (Native Language) */}
+                        <div className="flex-1 min-w-0">
+                          <label className="text-[10px] text-slate-500 block mb-0.5">Extra Name ({nativeLang.nativeName})</label>
+                          <input
+                            type="text"
+                            placeholder="যেমন: এক্সট্রা ডিম, কোক ৫০০ মিলি..."
+                            value={opt.nameNative || ''}
+                            onChange={(e) => updateExtraOption(idx, 'nameNative', e.target.value)}
                             className={`w-full px-2.5 py-1.5 rounded-[5px] border text-xs font-medium focus:outline-none focus:border-orange-500 ${
                               isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                             }`}

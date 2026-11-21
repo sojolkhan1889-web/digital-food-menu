@@ -117,6 +117,8 @@ import {
   formatBadgeText,
   translateFoodTitle,
   translateFoodDescription,
+  translatePortionName,
+  translateAddonName,
   toBengaliDigits
 } from './utils/translations';
 
@@ -2383,6 +2385,8 @@ export default function App() {
             return {
               idx: sp.idx,
               name: pObj?.name || 'Standard Portion',
+              name_native: pObj?.name_native || pObj?.nameNative,
+              name_bn: pObj?.name_bn || pObj?.name_native || pObj?.nameNative,
               quantity: sp.quantity || 1,
               unitPrice: pSelling,
               totalPrice: pSelling * (sp.quantity || 1)
@@ -2414,7 +2418,12 @@ export default function App() {
       category: activeFood.category,
       portion: portionSummaryText,
       portions: portionsToAdd,
-      addons: selectedAddons.map(a => ({ ...a, quantity: a.quantity || 1 })),
+      addons: selectedAddons.map(a => ({
+        ...a,
+        name_native: a.name_native || a.nameNative,
+        name_bn: a.name_bn || a.name_native || a.nameNative,
+        quantity: a.quantity || 1
+      })),
       unitPrice: currentItemTotalPrice,
       quantity: 1,
       totalPrice: currentItemTotalPrice,
@@ -2444,7 +2453,12 @@ export default function App() {
             category: activeFood.category,
             portion: portionSummaryText,
             portions: portionsToAdd,
-            addons: selectedAddons.map(a => ({ ...a, quantity: a.quantity || 1 })),
+            addons: selectedAddons.map(a => ({
+              ...a,
+              name_native: a.name_native || a.nameNative,
+              name_bn: a.name_bn || a.name_native || a.nameNative,
+              quantity: a.quantity || 1
+            })),
             unitPrice: currentItemTotalPrice,
             quantity: item.quantity || 1,
             totalPrice: currentItemTotalPrice,
@@ -3655,9 +3669,15 @@ export default function App() {
                 {/* Rating with formatted Review Count */}
                 <span className="text-xs sm:text-[13px] text-[#F59E0B] font-bold flex items-center gap-1 shrink-0">
                   <Star className="w-3.5 h-3.5 fill-[#F59E0B] text-[#F59E0B]" />
-                  <span>{activeFood.rating?.toFixed(1) || '4.9'}</span>
+                  <span>
+                    {customerLanguage === 'bn'
+                      ? toBengaliDigits(activeFood.rating?.toFixed(1) || '4.9')
+                      : (activeFood.rating?.toFixed(1) || '4.9')}
+                  </span>
                   <span className="text-slate-400 font-normal text-xs sm:text-[13px] ml-0.5">
-                    ({formatReviewCount(activeFood.ratingCount || activeFood.reviewsCount || activeFood.reviews || (activeFood.id ? (activeFood.id * 540 + 1200) : 1240))})
+                    ({customerLanguage === 'bn'
+                      ? toBengaliDigits(formatReviewCount(activeFood.ratingCount || activeFood.reviewsCount || activeFood.reviews || (activeFood.id ? (activeFood.id * 540 + 1200) : 1240)))
+                      : formatReviewCount(activeFood.ratingCount || activeFood.reviewsCount || activeFood.reviews || (activeFood.id ? (activeFood.id * 540 + 1200) : 1240))})
                   </span>
                 </span>
               </div>
@@ -3800,8 +3820,8 @@ export default function App() {
                             >
                               {isSelected && <Check className="w-3.5 h-3.5 text-black stroke-[3]" />}
                             </div>
-                            <span className={`text-[15px] sm:text-base font-bold truncate ${isSelected ? 'text-white' : 'text-slate-300'}`}>
-                              {portion.name}
+                            <span className={`text-[15px] sm:text-base font-bold truncate ${customerLanguage === 'bn' ? 'font-bengali tracking-normal' : ''} ${isSelected ? 'text-white' : 'text-slate-300'}`}>
+                              {translatePortionName(portion, customerLanguage)}
                             </span>
                           </div>
 
@@ -3820,7 +3840,7 @@ export default function App() {
                                   <Minus className="w-3.5 h-3.5 text-white" />
                                 </button>
                                 <span className="text-sm font-black text-white min-w-4 text-center tabular-nums">
-                                  {portionQty}
+                                  {customerLanguage === 'bn' ? toBengaliDigits(portionQty) : portionQty}
                                 </span>
                                 <button
                                   onClick={() => updatePortionQuantity(idx, 1)}
@@ -3834,7 +3854,7 @@ export default function App() {
 
                             {isSelected && !isQtyVisible && portionQty > 1 && (
                               <span className="text-xs font-black text-[#F59E0B] bg-[#F59E0B]/15 border border-[#F59E0B]/30 px-2 py-0.5 rounded-md">
-                                ×{portionQty}
+                                ×{customerLanguage === 'bn' ? toBengaliDigits(portionQty) : portionQty}
                               </span>
                             )}
 
@@ -3891,8 +3911,8 @@ export default function App() {
                             >
                               {isSelected && <Check className="w-3.5 h-3.5 text-black stroke-[3]" />}
                             </div>
-                            <span className={`text-[15px] sm:text-base font-bold truncate ${isSelected ? 'text-white' : 'text-slate-300'}`}>
-                              {addon.name}
+                            <span className={`text-[15px] sm:text-base font-bold truncate ${customerLanguage === 'bn' ? 'font-bengali tracking-normal' : ''} ${isSelected ? 'text-white' : 'text-slate-300'}`}>
+                              {translateAddonName(addon, customerLanguage)}
                             </span>
                           </div>
 
@@ -3911,7 +3931,7 @@ export default function App() {
                                   <Minus className="w-3.5 h-3.5 text-white" />
                                 </button>
                                 <span className="text-sm font-black text-white min-w-4 text-center tabular-nums">
-                                  {addonQty}
+                                  {customerLanguage === 'bn' ? toBengaliDigits(addonQty) : addonQty}
                                 </span>
                                 <button
                                   onClick={() => updateAddonQuantity(addon.id, 1)}
@@ -3925,7 +3945,7 @@ export default function App() {
 
                             {isSelected && !isQtyVisible && addonQty > 1 && (
                               <span className="text-xs font-black text-[#F59E0B] bg-[#F59E0B]/15 border border-[#F59E0B]/30 px-2 py-0.5 rounded-md">
-                                ×{addonQty}
+                                ×{customerLanguage === 'bn' ? toBengaliDigits(addonQty) : addonQty}
                               </span>
                             )}
 
@@ -4175,7 +4195,7 @@ export default function App() {
                       const sublistSections = [
                         {
                           key: 'portion',
-                          label: 'PORTION',
+                          label: customerLanguage === 'bn' ? 'পরিমাণ' : 'PORTION',
                           isFirst: true,
                           isFinal: !hasAddons,
                           rows: normalizedPortions.map((p, idx) => {
@@ -4186,7 +4206,7 @@ export default function App() {
                                 : Number(p.unitPrice || 0) * qty;
                             return {
                               rowKey: `p-${idx}`,
-                              name: p.name,
+                              name: translatePortionName(p, customerLanguage),
                               qty,
                               priceText: `${currency}${formatPrice(price)}`
                             };
@@ -4196,7 +4216,7 @@ export default function App() {
                           ? [
                               {
                                 key: 'addons',
-                                label: 'EXTRA ADD-ONS',
+                                label: customerLanguage === 'bn' ? 'অতিরিক্ত অ্যাড-অন' : 'EXTRA ADD-ONS',
                                 isFirst: false,
                                 isFinal: true,
                                 rows: normalizedAddons.map((addon, idx) => {
@@ -4204,7 +4224,7 @@ export default function App() {
                                   const price = (Number(addon.price) || 0) * qty;
                                   return {
                                     rowKey: addon.id || `a-${idx}`,
-                                    name: addon.name,
+                                    name: translateAddonName(addon, customerLanguage),
                                     qty,
                                     priceText: `+${currency}${formatPrice(price)}`
                                   };
@@ -4282,11 +4302,11 @@ export default function App() {
                                         <span className="relative z-10 w-2.5 h-2.5 rounded-full bg-[#F59E0B] shadow-[0_0_8px_rgba(245,158,11,0.45)] shrink-0" />
                                       </div>
                                       <div className="flex-1 min-w-0 flex items-baseline justify-between gap-3 py-0.5">
-                                        <span className="text-[13.5px] sm:text-[14.5px] font-semibold text-white/95 leading-snug whitespace-normal break-words">
+                                        <span className={`text-[13.5px] sm:text-[14.5px] font-semibold text-white/95 leading-snug whitespace-normal break-words ${customerLanguage === 'bn' ? 'font-bengali tracking-normal' : ''}`}>
                                           {row.name}
                                           {row.qty > 1 ? (
                                             <span className="text-[#F59E0B] font-bold text-xs ml-1.5">
-                                              ×{row.qty}
+                                              ×{customerLanguage === 'bn' ? toBengaliDigits(row.qty) : row.qty}
                                             </span>
                                           ) : null}
                                         </span>
@@ -4313,7 +4333,7 @@ export default function App() {
                                 <Minus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
                               </button>
                               <span className="text-sm sm:text-[15px] font-extrabold text-white min-w-4 text-center tabular-nums">
-                                {item.quantity || 1}
+                                {customerLanguage === 'bn' ? toBengaliDigits(item.quantity || 1) : (item.quantity || 1)}
                               </span>
                               <button
                                 type="button"
@@ -4328,8 +4348,8 @@ export default function App() {
                             <div className="w-[1px] h-7 bg-white/15 shrink-0" aria-hidden="true" />
 
                             <div className="text-right shrink-0">
-                              <span className="block text-[11px] font-medium text-slate-400 leading-tight">
-                                Item total
+                              <span className={`block text-[11px] font-medium text-slate-400 leading-tight ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}>
+                                {customerLanguage === 'bn' ? 'আইটেম মোট' : 'Item total'}
                               </span>
                               <span className="block text-base sm:text-lg font-black text-[#F59E0B] tabular-nums leading-tight mt-0.5">
                                 {currency}
@@ -4364,7 +4384,7 @@ export default function App() {
                     {isVatActive && (
                       <>
                         <div className="flex justify-between items-center text-slate-300 py-0.5">
-                          <span className="font-medium">{t('vat', customerLanguage)} ({vatType === 'percentage' ? `${vatRate}%` : `Flat ${currency}${formatPrice(vatRate)}`})</span>
+                          <span className="font-medium">{t('vat', customerLanguage)} ({vatType === 'percentage' ? `${customerLanguage === 'bn' ? toBengaliDigits(vatRate) : vatRate}%` : `Flat ${currency}${formatPrice(vatRate)}`})</span>
                           <span className="tabular-nums font-bold text-white">{currency}{formatPrice(selectedListVat)}</span>
                         </div>
                         {/* Divider Line between VAT and Table Service Charge */}
@@ -4376,7 +4396,7 @@ export default function App() {
                     {isServiceChargeActive && (
                       <>
                         <div className="flex justify-between items-center text-slate-300 py-0.5">
-                          <span className="font-medium">{t('service_charge', customerLanguage)} ({serviceChargeType === 'percentage' ? `${serviceChargeRate}%` : `${currency}${formatPrice(serviceChargeRate)}`})</span>
+                          <span className="font-medium">{t('service_charge', customerLanguage)} ({serviceChargeType === 'percentage' ? `${customerLanguage === 'bn' ? toBengaliDigits(serviceChargeRate) : serviceChargeRate}%` : `${currency}${formatPrice(serviceChargeRate)}`})</span>
                           <span className="tabular-nums font-bold text-white">{currency}{formatPrice(selectedListServiceFee)}</span>
                         </div>
                         {/* Divider Line before Grand Total */}
