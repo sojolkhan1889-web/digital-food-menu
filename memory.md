@@ -54,8 +54,8 @@ When working on any future task, you **MUST** strictly adhere to the following r
   - Subtle steam animation shimmer (`animate-steam`) for hot dishes.
   - Interactive touch rotation and autoplay floating animation (`animate-food-live`).
 - **Typography:**
-  - Primary UI: Enterprise Sans-Serif (`font-sans`, Inter / System UI).
-  - Bengali Typography: `font-bengali` (`Hind Siliguri` / `Anek Bangla`) with custom word-spacing (`[word-spacing:0.16em]`).
+  - Primary UI: Enterprise Sans-Serif (`font-sans`, Inter / Plus Jakarta Sans).
+  - Bengali Typography: `font-bengali` (`Noto Sans Bengali`, followed by `Hind Siliguri`) with custom word-spacing (`[word-spacing:0.16em]`). `Noto Sans Bengali` is strictly prioritized first so that the Bengali numeral '১' (Ek) renders with an open, distinct circular loop rather than a collapsed dot/comma at small font sizes (10px–14px).
 
 ---
 
@@ -180,6 +180,7 @@ flowchart TD
 
 | Date | Category | Key Implementation & Solved Issues |
 | :--- | :--- | :--- |
+| **2026-11-23** | **Bengali Digit '১' Legibility & Order Modal Typography** | Prioritized `Noto Sans Bengali` before `Hind Siliguri` across `@theme`, `[lang="bn"], .lang-bn, .font-bengali, :lang(bn)`, and `.bengali-title` in `index.css`, loaded Google Fonts weights up to 900 in `index.html` ensuring the Bengali numeral '১' (Ek) has an open, prominent circular loop and is clearly readable across all modals and views. In the 'অর্ডার তালিকা' (Order List) modal, increased 'পরিমাণ' and 'অতিরিক্ত অ্যাড-অন' sublist section labels from 10px to **11px** (`text-[11px]`), and 'আইটেম মোট' from 11px to **12px** (`text-[12px]`). |
 | **2026-11-22** | **Native Mode Scroll Hint & Order Button Font** | Localized 'Scroll for more' button in 'Menu and Specials' modal to show 'আরও দেখতে স্ক্রোল করুন' in Bengali/native mode via `t('scroll_for_more', customerLanguage)`. Increased home screen 'অর্ডার তালিকা দেখুন' button font size to 14px (`text-[14px]`) specifically in Bengali/native language mode. |
 | **2026-11-22** | **Universal Menu Cards & Modal Typography** | Redesigned Restaurant Panel Food Item Cards matching target screenshot (rounded-3xl, h-64/72 image box, BEST SELLER badge, rating pill, big orange price, slash category, Layers/PlusCircle pills, Live on menu pill). Refined frontend Menu & Specials modal: aligned Flame icon with Featured Specials (14px), increased slider badge (12px), matched Menu Category title to #F59E0B (14px), and increased item count subtext (12px). |
 | **2026-11-22** | **AddFoodWizard Step 2-4 UI & Currency Precision** | Step 2 Single price matching Image 4 target specs (formula banner `৳420 - ৳40 = ৳380`, 3-column green card, subtitle "Set your price and optional discount."). Reset button strictly `#f54900`. Step 3 `Extra price (৳) *` header & input currency glyph fix. Step 4 PhoneMenu header strictly `PhoneMenu` in both English & Bengali; Item summary currency icons rendered in `font-noto-bengali font-bold` for crisp baseline visibility. |

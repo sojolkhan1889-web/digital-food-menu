@@ -4265,7 +4265,7 @@ export default function App() {
                   <h2 className="text-white font-black text-lg sm:text-xl tracking-tight leading-tight uppercase">
                     {t('your_order_list', customerLanguage)}
                   </h2>
-                  <p className="text-[11px] text-slate-400 font-medium">
+                  <p className={`text-[11px] text-slate-400 font-medium ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}>
                     {t('dishes_in_list', customerLanguage, {
                       count: customerLanguage === 'bn' ? toBengaliDigits(selectedList.length) : selectedList.length,
                       plural: selectedList.length !== 1 ? 'es' : ''
@@ -4413,9 +4413,9 @@ export default function App() {
                                     />
                                   </div>
                                   <span
-                                    className={`text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 leading-none ${
+                                    className={`text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400 leading-none ${
                                       section.isFirst ? 'pb-1.5' : 'pt-2.5 pb-1.5'
-                                    }`}
+                                    } ${customerLanguage === 'bn' ? 'font-bengali tracking-normal' : ''}`}
                                   >
                                     {section.label}
                                   </span>
@@ -4469,7 +4469,7 @@ export default function App() {
                               >
                                 <Minus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.2]" />
                               </button>
-                              <span className="text-sm sm:text-[15px] font-extrabold text-white min-w-4 text-center tabular-nums">
+                              <span className={`text-sm sm:text-[15px] font-extrabold text-white min-w-4 text-center tabular-nums ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}>
                                 {customerLanguage === 'bn' ? toBengaliDigits(item.quantity || 1) : (item.quantity || 1)}
                               </span>
                               <button
@@ -4485,7 +4485,7 @@ export default function App() {
                             <div className="w-[1px] h-7 bg-white/15 shrink-0" aria-hidden="true" />
 
                             <div className="text-right shrink-0">
-                              <span className={`block text-[11px] font-medium text-slate-400 leading-tight ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}>
+                              <span className={`block text-[12px] font-medium text-slate-400 leading-tight ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}>
                                 {customerLanguage === 'bn' ? 'আইটেম মোট' : 'Item total'}
                               </span>
                               <span className="block text-base sm:text-lg font-black text-[#F59E0B] tabular-nums leading-tight mt-0.5">
@@ -4969,7 +4969,7 @@ export default function App() {
                                 ? t('all_items', customerLanguage)
                                 : translateCategoryName(cat.name, customerLanguage, categoryTranslations)}
                             </span>
-                            <span className="text-[12px] text-slate-400">
+                            <span className={`text-[12px] text-slate-400 ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}>
                               {customerLanguage === 'bn' ? toBengaliDigits(count) : count} {count > 1 ? t('items_available', customerLanguage) : t('item_available', customerLanguage)}
                             </span>
                           </div>

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Plus Jakarta Sans', 'Hind Siliguri', 'Noto Sans Bengali', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'Noto Sans Bengali', 'Hind Siliguri', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 /* Inter & Noto Sans Bengali font classes for Menu Builder */
@@ -28,12 +28,12 @@ body {
 .lang-bn,
 .font-bengali,
 :lang(bn) {
-  font-family: 'Hind Siliguri', 'Noto Sans Bengali', var(--font-sans);
+  font-family: 'Noto Sans Bengali', 'Hind Siliguri', sans-serif;
   letter-spacing: normal !important;
 }
 
 .bengali-title {
-  font-family: 'Hind Siliguri', 'Noto Sans Bengali', var(--font-sans);
+  font-family: 'Noto Sans Bengali', 'Hind Siliguri', sans-serif;
   letter-spacing: normal !important;
   word-spacing: 0.18em !important;
 }
