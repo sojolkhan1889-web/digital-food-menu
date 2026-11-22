@@ -1102,12 +1102,12 @@ export default function AddFoodWizard({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    {hasDifferentSizes ? 'Sizes & pricing' : '2. Size & price'}
+                    2. Size & price
                   </h3>
                   <p className={`text-xs font-normal ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                     {hasDifferentSizes
                       ? 'Set a price and optional discount for each size.'
-                      : 'Does this food come in single price or multiple sizes?'}
+                      : 'Set your price and optional discount.'}
                   </p>
                 </div>
 
@@ -1171,10 +1171,12 @@ export default function AddFoodWizard({
                         Regular price (MRP) <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3.5 top-2.5 text-slate-600 font-bold">{currency}</span>
+                        <span className="absolute left-3.5 top-2.5 text-slate-500 font-noto-bengali font-bold text-sm">
+                          {currency}
+                        </span>
                         <input
                           type="number"
-                          placeholder="280"
+                          placeholder="420"
                           value={singleOldPrice || (discountMode === 'none' ? singlePrice : '')}
                           onChange={(e) => handleRegularPriceChange(e.target.value)}
                           className={`w-full pl-9 pr-3.5 py-2.5 rounded-lg border text-sm font-bold focus:outline-none focus:border-orange-500 transition-colors ${
@@ -1213,59 +1215,99 @@ export default function AddFoodWizard({
                     </div>
                   </div>
 
-                  {/* Row 2: Discount Amount (When active) */}
+                  {/* Row 2: Discount Amount (When active) & Real-time Calculation Formula */}
                   {discountMode !== 'none' && (
-                    <div>
-                      <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
-                        {discountMode === 'percent' ? 'Discount percentage *' : 'Discount amount *'}
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-2.5 text-slate-600 font-bold">
-                          {discountMode === 'percent' ? '%' : currency}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                      <div>
+                        <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                          {discountMode === 'percent' ? 'Discount percentage *' : 'Discount amount *'}
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-2.5 text-slate-500 font-noto-bengali font-bold text-sm">
+                            {discountMode === 'percent' ? '%' : currency}
+                          </span>
+                          <input
+                            type="number"
+                            placeholder={discountMode === 'percent' ? '15' : '40'}
+                            value={discountValue}
+                            onChange={(e) => handleDiscountValueChange(e.target.value)}
+                            className={`w-full pl-9 pr-3.5 py-2.5 rounded-lg border text-sm font-bold focus:outline-none focus:border-orange-500 transition-colors ${
+                              isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                            }`}
+                          />
+                        </div>
+                        <span className={`text-[11px] font-normal block mt-1.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                          {discountMode === 'percent'
+                            ? 'Percentage deducted from the regular price.'
+                            : 'Fixed amount deducted from the regular price.'}
                         </span>
-                        <input
-                          type="number"
-                          placeholder={discountMode === 'percent' ? '15' : '30'}
-                          value={discountValue}
-                          onChange={(e) => handleDiscountValueChange(e.target.value)}
-                          className={`w-full sm:w-1/2 pl-9 pr-3.5 py-2.5 rounded-lg border text-sm font-bold focus:outline-none focus:border-orange-500 transition-colors ${
-                            isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
-                          }`}
-                        />
+                      </div>
+
+                      {/* Right side calculation formula matching Image 4 */}
+                      <div className="pt-2 sm:pt-0">
+                        {discountMode === 'fixed' && singleOldPrice && discountValue ? (
+                          <div className="text-lg sm:text-xl font-bold tracking-tight flex items-center gap-1.5 text-slate-900 dark:text-white">
+                            <span className="font-noto-bengali font-bold">{currency}</span>{singleOldPrice}
+                            <span className="text-slate-400 font-normal">&minus;</span>
+                            <span className="font-noto-bengali font-bold">{currency}</span>{discountValue}
+                            <span className="text-slate-400 font-normal">=</span>
+                            <span className="font-noto-bengali font-bold">{currency}</span>{singlePrice}
+                          </div>
+                        ) : discountMode === 'percent' && singleOldPrice && discountValue ? (
+                          <div className="text-lg sm:text-xl font-bold tracking-tight flex items-center gap-1.5 text-slate-900 dark:text-white">
+                            <span className="font-noto-bengali font-bold">{currency}</span>{singleOldPrice}
+                            <span className="text-slate-400 font-normal">&minus;</span>
+                            <span>{discountValue}%</span>
+                            <span className="text-slate-400 font-normal">=</span>
+                            <span className="font-noto-bengali font-bold">{currency}</span>{singlePrice}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   )}
 
-                  {/* Selling Price Calculation Box */}
-                  <div className={`p-4 rounded-xl border flex items-center justify-between ${
+                  {/* Selling Price Calculation Box - 3 Distinct Columns with Dividers matching Image 4 */}
+                  <div className={`p-4 sm:p-5 rounded-2xl border flex items-center justify-between ${
                     isDark
                       ? 'bg-emerald-950/20 border-emerald-800/40'
-                      : 'bg-emerald-50/80 border-emerald-200/80'
+                      : 'bg-[#F0FDF4] border-emerald-200'
                   }`}>
-                    <div>
-                      <span className={`text-xs font-semibold block mb-0.5 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                    {/* Column 1: Selling price */}
+                    <div className="flex-1">
+                      <span className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
                         Selling price
                       </span>
-                      <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-                        {currency} {singlePrice || '0'}
+                      <span className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 flex items-center">
+                        <span className="font-noto-bengali font-black mr-1">{currency}</span>
+                        {singlePrice || '0'}
                       </span>
                     </div>
 
                     {Number(singleOldPrice) > Number(singlePrice) && Number(singlePrice) > 0 && (
                       <>
-                        <div className="h-9 w-px bg-slate-300 dark:bg-slate-700 mx-2" />
-                        <div>
-                          <span className={`text-xs font-semibold block mb-0.5 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                        <div className="h-10 w-px bg-slate-200 dark:bg-slate-700 mx-3 sm:mx-6 shrink-0" />
+
+                        {/* Column 2: Customer saves */}
+                        <div className="flex-1">
+                          <span className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
                             Customer saves
                           </span>
-                          <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                            {currency} {(Number(singleOldPrice) - Number(singlePrice)).toFixed(0)}
+                          <span className="text-xl sm:text-2xl font-bold text-emerald-600 dark:text-emerald-400 flex items-center">
+                            <span className="font-noto-bengali font-bold mr-1">{currency}</span>
+                            {(Number(singleOldPrice) - Number(singlePrice)).toFixed(0)}
                           </span>
                         </div>
 
-                        <div className="text-right">
-                          <span className="line-through text-slate-400 dark:text-slate-500 text-lg font-bold">
-                            {currency} {singleOldPrice}
+                        <div className="h-10 w-px bg-slate-200 dark:bg-slate-700 mx-3 sm:mx-6 shrink-0" />
+
+                        {/* Column 3: Regular price (Strikethrough) */}
+                        <div className="flex-1 text-right sm:text-left">
+                          <span className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                            Regular price
+                          </span>
+                          <span className="line-through text-slate-400 dark:text-slate-500 text-xl sm:text-2xl font-bold flex items-center justify-end sm:justify-start">
+                            <span className="font-noto-bengali font-semibold mr-1">{currency}</span>
+                            {singleOldPrice}
                           </span>
                         </div>
                       </>
@@ -1323,9 +1365,8 @@ export default function AddFoodWizard({
                     <button
                       type="button"
                       onClick={() => applyDiscountToAllPortions('none')}
-                      className={`text-xs font-semibold cursor-pointer transition-colors ${
-                        isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                      className="text-xs font-semibold cursor-pointer transition-colors hover:opacity-80"
+                      style={{ color: '#f54900' }}
                     >
                       Reset
                     </button>
@@ -1418,7 +1459,7 @@ export default function AddFoodWizard({
                               Regular price <span className="text-red-500">*</span>
                             </label>
                             <div className="relative">
-                              <span className="absolute left-3 top-2 text-slate-600 font-bold text-xs">{currency}</span>
+                              <span className="absolute left-3 top-2 text-slate-500 font-noto-bengali font-bold text-xs">{currency}</span>
                               <input
                                 type="number"
                                 placeholder="180"
@@ -1460,7 +1501,7 @@ export default function AddFoodWizard({
                                 Discount
                               </label>
                               <div className="relative">
-                                <span className="absolute right-3 top-2 text-slate-600 font-bold text-xs">
+                                <span className="absolute right-3 top-2 text-slate-500 font-noto-bengali font-bold text-xs">
                                   {portion.discountMode === 'percent' ? '%' : currency}
                                 </span>
                                 <input
@@ -1488,13 +1529,14 @@ export default function AddFoodWizard({
                             }`}>
                               <div>
                                 <span className="text-[10px] text-slate-600 dark:text-slate-400 font-medium block leading-tight">Selling price</span>
-                                <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
-                                  {currency} {portion.price || '0'}
+                                <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 flex items-center">
+                                  <span className="font-noto-bengali font-bold mr-0.5">{currency}</span>
+                                  {portion.price || '0'}
                                 </span>
                               </div>
                               {Number(portion.regularPrice) > Number(portion.price) && (
-                                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                                  Save {currency}{Number(portion.regularPrice) - Number(portion.price)}
+                                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 flex items-center">
+                                  Save&nbsp;<span className="font-noto-bengali font-bold">{currency}</span>{Number(portion.regularPrice) - Number(portion.price)}
                                 </span>
                               )}
                             </div>
@@ -1682,7 +1724,9 @@ export default function AddFoodWizard({
                       <div className="col-span-1"></div>
                       <div className="col-span-4">Name (English) <span className="text-red-500">*</span></div>
                       <div className="col-span-4">Name (Native language) <span className="font-normal text-slate-500">Optional</span></div>
-                      <div className="col-span-2">Extra price ({currency}) <span className="text-red-500">*</span></div>
+                      <div className="col-span-2">
+                        Extra price (<span className="font-noto-bengali font-bold text-sm text-orange-600 inline-block align-baseline">{currency}</span>) <span className="text-red-500">*</span>
+                      </div>
                       <div className="col-span-1"></div>
                     </div>
 
@@ -1730,15 +1774,20 @@ export default function AddFoodWizard({
                           </div>
 
                           <div className="col-span-2 w-full">
-                            <input
-                              type="number"
-                              placeholder="30"
-                              value={opt.price}
-                              onChange={(e) => updateExtraOption(idx, 'price', e.target.value)}
-                              className={`w-full px-3 py-2 rounded-lg border text-xs font-bold focus:outline-none focus:border-orange-500 ${
-                                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
-                              }`}
-                            />
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-2 text-slate-500 font-noto-bengali font-bold text-xs">
+                                {currency}
+                              </span>
+                              <input
+                                type="number"
+                                placeholder="30"
+                                value={opt.price}
+                                onChange={(e) => updateExtraOption(idx, 'price', e.target.value)}
+                                className={`w-full pl-6 pr-2.5 py-2 rounded-lg border text-xs font-bold focus:outline-none focus:border-orange-500 ${
+                                  isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                                }`}
+                              />
+                            </div>
                           </div>
 
                           <div className="col-span-1 flex justify-end w-full sm:w-auto">
@@ -1865,12 +1914,7 @@ export default function AddFoodWizard({
                             <Utensils className="w-3.5 h-3.5" />
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <span className={`text-xs font-bold tracking-tight ${isBn ? 'font-noto-bengali' : ''}`}>
-                              {isBn ? 'মেনু ও স্পেশাল' : 'PhoneMenu'}
-                            </span>
-                            {isBn && (
-                              <CheckCircle2 className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20" />
-                            )}
+                            <span className="text-xs font-bold tracking-tight">PhoneMenu</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-2.5 text-slate-400">
@@ -1948,12 +1992,14 @@ export default function AddFoodWizard({
                                     <span className={isBn ? 'font-noto-bengali font-semibold' : ''}>{pName}</span>
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    <span className={`text-white font-bold ${isBn ? 'font-noto-bengali' : ''}`}>
-                                      {currency}{formattedPrice}
+                                    <span className={`text-white font-bold flex items-center ${isBn ? 'font-noto-bengali' : ''}`}>
+                                      <span className="font-noto-bengali font-bold mr-0.5">{currency}</span>
+                                      {formattedPrice}
                                     </span>
                                     {Number(p.regularPrice) > Number(p.price) && (
-                                      <span className={`line-through text-slate-500 text-[11px] ${isBn ? 'font-noto-bengali' : ''}`}>
-                                        {currency}{formattedOldPrice}
+                                      <span className={`line-through text-slate-500 text-[11px] flex items-center ${isBn ? 'font-noto-bengali' : ''}`}>
+                                        <span className="font-noto-bengali font-normal mr-0.5">{currency}</span>
+                                        {formattedOldPrice}
                                       </span>
                                     )}
                                   </div>
@@ -1996,8 +2042,9 @@ export default function AddFoodWizard({
                                     </div>
                                     <span className={isBn ? 'font-noto-bengali font-medium' : ''}>{optName}</span>
                                   </div>
-                                  <span className={`text-slate-200 font-bold ${isBn ? 'font-noto-bengali' : ''}`}>
-                                    +{currency}{formattedPrice}
+                                  <span className={`text-slate-200 font-bold flex items-center ${isBn ? 'font-noto-bengali' : ''}`}>
+                                    +<span className="font-noto-bengali font-bold mr-0.5">{currency}</span>
+                                    {formattedPrice}
                                   </span>
                                 </div>
                               );
@@ -2011,8 +2058,9 @@ export default function AddFoodWizard({
                         <span className={`text-xs text-slate-300 ${isBn ? 'font-noto-bengali font-semibold' : ''}`}>
                           {isBn ? 'আইটেমের মোট মূল্য' : 'Total'}
                         </span>
-                        <span className={`text-xl text-amber-400 font-black ${isBn ? 'font-noto-bengali' : ''}`}>
-                          {currency}{isBn ? toBengaliDigits(previewTotalPrice) : previewTotalPrice}
+                        <span className={`text-xl text-amber-400 font-black flex items-center ${isBn ? 'font-noto-bengali' : ''}`}>
+                          <span className="font-noto-bengali font-black mr-1">{currency}</span>
+                          {isBn ? toBengaliDigits(previewTotalPrice) : previewTotalPrice}
                         </span>
                       </div>
                     </div>
@@ -2106,12 +2154,18 @@ export default function AddFoodWizard({
                               Single Price
                             </span>
                             <div className="col-span-8 flex items-center gap-2.5">
-                              <span className={`font-bold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                                {currency}{singlePrice}
+                              <span className={`font-bold text-sm flex items-center ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                <span className="font-noto-bengali font-bold text-sm sm:text-base inline-block align-baseline mr-0.5 text-slate-900 dark:text-white">
+                                  {currency}
+                                </span>
+                                {singlePrice}
                               </span>
                               {singleOldPrice && (
-                                <span className="line-through text-slate-400 font-semibold text-xs">
-                                  {currency}{singleOldPrice}
+                                <span className="line-through text-slate-400 font-semibold text-xs flex items-center">
+                                  <span className="font-noto-bengali font-semibold text-xs inline-block align-baseline mr-0.5 text-slate-400">
+                                    {currency}
+                                  </span>
+                                  {singleOldPrice}
                                 </span>
                               )}
                             </div>
@@ -2130,12 +2184,18 @@ export default function AddFoodWizard({
                                 )}
                               </div>
                               <div className="flex items-center gap-2">
-                                <span className={`font-bold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                                  {currency}{p.price}
+                                <span className={`font-bold text-sm flex items-center ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                  <span className="font-noto-bengali font-bold text-sm sm:text-base inline-block align-baseline mr-0.5 text-slate-900 dark:text-white">
+                                    {currency}
+                                  </span>
+                                  {p.price}
                                 </span>
                                 {Number(p.regularPrice) > Number(p.price) && (
-                                  <span className="line-through text-slate-400 text-xs">
-                                    {currency}{p.regularPrice}
+                                  <span className="line-through text-slate-400 text-xs flex items-center">
+                                    <span className="font-noto-bengali font-semibold text-xs inline-block align-baseline mr-0.5 text-slate-400">
+                                      {currency}
+                                    </span>
+                                    {p.regularPrice}
                                   </span>
                                 )}
                               </div>
@@ -2205,8 +2265,11 @@ export default function AddFoodWizard({
                                   <span className={`font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                                     {opt.name}
                                   </span>
-                                  <span className={`font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                                    +{currency}{opt.price}
+                                  <span className={`font-bold text-xs sm:text-sm flex items-center ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                    +<span className="font-noto-bengali font-bold text-xs sm:text-sm inline-block align-baseline mr-0.5 text-slate-900 dark:text-white">
+                                      {currency}
+                                    </span>
+                                    {opt.price}
                                   </span>
                                 </div>
                               ))}
