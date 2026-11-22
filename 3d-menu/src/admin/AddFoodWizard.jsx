@@ -1246,19 +1246,19 @@ export default function AddFoodWizard({
                       {/* Right side calculation formula matching Image 4 */}
                       <div className="pt-2 sm:pt-0">
                         {discountMode === 'fixed' && singleOldPrice && discountValue ? (
-                          <div className="text-lg sm:text-xl font-bold tracking-tight flex items-center gap-1.5 text-slate-900 dark:text-white">
+                          <div className={`text-lg sm:text-xl font-bold tracking-tight flex items-center gap-1.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
                             <span className="font-noto-bengali font-bold">{currency}</span>{singleOldPrice}
-                            <span className="text-slate-400 font-normal">&minus;</span>
+                            <span className={`${isDark ? 'text-slate-400' : 'text-slate-500'} font-normal`}>&minus;</span>
                             <span className="font-noto-bengali font-bold">{currency}</span>{discountValue}
-                            <span className="text-slate-400 font-normal">=</span>
+                            <span className={`${isDark ? 'text-slate-400' : 'text-slate-500'} font-normal`}>=</span>
                             <span className="font-noto-bengali font-bold">{currency}</span>{singlePrice}
                           </div>
                         ) : discountMode === 'percent' && singleOldPrice && discountValue ? (
-                          <div className="text-lg sm:text-xl font-bold tracking-tight flex items-center gap-1.5 text-slate-900 dark:text-white">
+                          <div className={`text-lg sm:text-xl font-bold tracking-tight flex items-center gap-1.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
                             <span className="font-noto-bengali font-bold">{currency}</span>{singleOldPrice}
-                            <span className="text-slate-400 font-normal">&minus;</span>
+                            <span className={`${isDark ? 'text-slate-400' : 'text-slate-500'} font-normal`}>&minus;</span>
                             <span>{discountValue}%</span>
-                            <span className="text-slate-400 font-normal">=</span>
+                            <span className={`${isDark ? 'text-slate-400' : 'text-slate-500'} font-normal`}>=</span>
                             <span className="font-noto-bengali font-bold">{currency}</span>{singlePrice}
                           </div>
                         ) : null}
@@ -2155,7 +2155,7 @@ export default function AddFoodWizard({
                             </span>
                             <div className="col-span-8 flex items-center gap-2.5">
                               <span className={`font-bold text-sm flex items-center ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                                <span className="font-noto-bengali font-bold text-sm sm:text-base inline-block align-baseline mr-0.5 text-slate-900 dark:text-white">
+                                <span className={`font-noto-bengali font-bold text-sm sm:text-base inline-block align-baseline mr-0.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
                                   {currency}
                                 </span>
                                 {singlePrice}
@@ -2185,7 +2185,7 @@ export default function AddFoodWizard({
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className={`font-bold text-sm flex items-center ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                                  <span className="font-noto-bengali font-bold text-sm sm:text-base inline-block align-baseline mr-0.5 text-slate-900 dark:text-white">
+                                  <span className={`font-noto-bengali font-bold text-sm sm:text-base inline-block align-baseline mr-0.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
                                     {currency}
                                   </span>
                                   {p.price}
@@ -2266,7 +2266,7 @@ export default function AddFoodWizard({
                                     {opt.name}
                                   </span>
                                   <span className={`font-bold text-xs sm:text-sm flex items-center ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                                    +<span className="font-noto-bengali font-bold text-xs sm:text-sm inline-block align-baseline mr-0.5 text-slate-900 dark:text-white">
+                                    +<span className={`font-noto-bengali font-bold text-xs sm:text-sm inline-block align-baseline mr-0.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
                                       {currency}
                                     </span>
                                     {opt.price}

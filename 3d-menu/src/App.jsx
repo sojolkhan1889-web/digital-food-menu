@@ -4803,7 +4803,7 @@ export default function App() {
                 <div className="flex items-center justify-between mb-2.5">
                   <div className="inline-flex items-center gap-1.5 leading-none">
                     <Flame className="w-4 h-4 text-[#F59E0B] fill-[#F59E0B] shrink-0 self-center" />
-                    <span className={`text-[14px] font-black uppercase tracking-widest text-[#F59E0B] leading-none ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}>
+                    <span className={`${customerLanguage === 'bn' ? 'text-[14px] font-bengali' : 'text-[13px]'} font-black uppercase tracking-widest text-[#F59E0B] leading-none`}>
                       {t('featured_specials', customerLanguage)}
                     </span>
                   </div>
@@ -4937,7 +4937,7 @@ export default function App() {
 
               {/* Categories Section with Large, Readable Buttons */}
               <div>
-                <h4 className={`text-[14px] font-black uppercase tracking-widest text-[#F59E0B] mb-2.5 ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}>
+                <h4 className={`${customerLanguage === 'bn' ? 'text-[14px] font-bengali' : 'text-[13px]'} font-black uppercase tracking-widest text-[#F59E0B] mb-2.5`}>
                   {t('menu_categories', customerLanguage)}
                 </h4>
                 <div className="space-y-2.5">
