@@ -74,14 +74,14 @@ export default function LanguageSelectionModal({
           <div>
             {/* Header: Globe Icon + Title & Localized Subtitle */}
             <div className="flex items-start gap-3.5 mb-5">
-              <div className="w-10 h-10 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-[#F59E0B] shrink-0 mt-0.5 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
-                <Globe className="w-5 h-5 text-[#F59E0B] stroke-[2.2]" />
+              <div className="w-10 h-10 rounded-full bg-[#fd6e00]/15 border border-[#fd6e00]/30 flex items-center justify-center text-[#fd6e00] shrink-0 mt-0.5 shadow-[0_0_15px_rgba(253,110,0,0.25)]">
+                <Globe className="w-5 h-5 text-[#fd6e00] stroke-[2.2]" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-white font-black text-lg sm:text-[19px] tracking-tight leading-snug">
+                <h3 className="text-white font-inter font-bold sm:font-extrabold text-lg sm:text-[19px] tracking-tight leading-snug">
                   Choose your language
                 </h3>
-                <p className="text-xs sm:text-[13px] text-slate-300 font-normal leading-tight mt-0.5">
+                <p className="text-xs sm:text-[13px] text-slate-300 font-hind-siliguri font-medium sm:font-semibold leading-tight mt-0.5">
                   {nativeLang.subtitle || "আপনার পছন্দের ভাষা বেছে নিন"}
                 </p>
               </div>
@@ -94,9 +94,9 @@ export default function LanguageSelectionModal({
               <button
                 type="button"
                 onClick={() => setSelectedCode(nativeLang.code)}
-                className={`p-3.5 sm:p-4 rounded-2xl flex items-center justify-between border-2 transition-colors cursor-pointer select-none backdrop-blur-md ${
+                className={`p-3.5 sm:p-4 rounded-2xl flex items-center justify-between border-2 transition-all cursor-pointer select-none backdrop-blur-md ${
                   selectedCode === nativeLang.code
-                    ? 'border-[#F59E0B] bg-[#F59E0B]/15 text-white shadow-[0_0_18px_rgba(245,158,11,0.22)]'
+                    ? 'border-[#fd6e00] bg-[#fd6e00]/15 text-white shadow-[0_0_18px_rgba(253,110,0,0.30)]'
                     : 'border-white/10 hover:border-white/20 bg-white/[0.04] hover:bg-white/[0.08] text-slate-200'
                 }`}
               >
@@ -106,12 +106,12 @@ export default function LanguageSelectionModal({
                 <div
                   className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                     selectedCode === nativeLang.code
-                      ? 'border-[#F59E0B]'
+                      ? 'border-[#fd6e00]'
                       : 'border-zinc-500'
                   }`}
                 >
                   {selectedCode === nativeLang.code && (
-                    <div className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#fd6e00]" />
                   )}
                 </div>
               </button>
@@ -120,24 +120,24 @@ export default function LanguageSelectionModal({
               <button
                 type="button"
                 onClick={() => setSelectedCode('en')}
-                className={`p-3.5 sm:p-4 rounded-2xl flex items-center justify-between border-2 transition-colors cursor-pointer select-none backdrop-blur-md ${
+                className={`p-3.5 sm:p-4 rounded-2xl flex items-center justify-between border-2 transition-all cursor-pointer select-none backdrop-blur-md ${
                   selectedCode === 'en'
-                    ? 'border-[#F59E0B] bg-[#F59E0B]/15 text-white shadow-[0_0_18px_rgba(245,158,11,0.22)]'
+                    ? 'border-[#fd6e00] bg-[#fd6e00]/15 text-white shadow-[0_0_18px_rgba(253,110,0,0.30)]'
                     : 'border-white/10 hover:border-white/20 bg-white/[0.04] hover:bg-white/[0.08] text-slate-200'
                 }`}
               >
-                <span className="font-bold text-base sm:text-lg">
+                <span className="font-bold text-base sm:text-lg font-inter">
                   English
                 </span>
                 <div
                   className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                     selectedCode === 'en'
-                      ? 'border-[#F59E0B]'
+                      ? 'border-[#fd6e00]'
                       : 'border-zinc-500'
                   }`}
                 >
                   {selectedCode === 'en' && (
-                    <div className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#fd6e00]" />
                   )}
                 </div>
               </button>
@@ -151,8 +151,8 @@ export default function LanguageSelectionModal({
                 className="w-full p-3.5 rounded-2xl bg-[#1a1722]/80 hover:bg-[#23202e] border border-zinc-700/60 flex items-center justify-between text-slate-200 mb-3.5 transition-all cursor-pointer"
               >
                 <div className="flex items-center gap-2.5">
-                  <Globe className="w-4 h-4 text-[#F59E0B]" />
-                  <span className="font-medium text-xs sm:text-sm">Other languages</span>
+                  <Globe className="w-4 h-4 text-[#fd6e00]" />
+                  <span className="font-medium text-xs sm:text-sm font-inter">Other languages</span>
                 </div>
                 <ChevronRight className="w-4 h-4 text-zinc-400" />
               </button>
@@ -162,10 +162,10 @@ export default function LanguageSelectionModal({
             <button
               type="button"
               onClick={handleContinue}
-              className="w-full mt-2 py-3.5 sm:py-4 rounded-2xl bg-[#F59E0B] hover:bg-[#d97706] active:scale-[0.98] text-black font-black text-sm sm:text-base flex items-center justify-center gap-2 shadow-[0_8px_25px_rgba(245,158,11,0.35)] transition-all cursor-pointer"
+              className="w-full mt-2 py-3.5 sm:py-4 rounded-2xl bg-[#fd6e00] hover:bg-[#e66400] active:scale-[0.98] text-white font-bold text-sm sm:text-base flex items-center justify-center gap-2 shadow-[0_8px_25px_rgba(253,110,0,0.35)] transition-all cursor-pointer"
             >
-              <span>Continue</span>
-              <ArrowRight className="w-4 h-4 stroke-[3]" />
+              <span className="text-white font-inter font-bold">Continue</span>
+              <ArrowRight className="w-4 h-4 stroke-[2.5] text-white" />
             </button>
           </div>
         ) : (
@@ -178,11 +178,11 @@ export default function LanguageSelectionModal({
               <button
                 type="button"
                 onClick={() => setIsOtherView(false)}
-                className="p-1 rounded-full hover:bg-white/10 active:scale-95 text-amber-500 cursor-pointer"
+                className="p-1 rounded-full hover:bg-white/10 active:scale-95 text-[#fd6e00] cursor-pointer"
               >
-                <ArrowLeft className="w-5 h-5 text-amber-400" />
+                <ArrowLeft className="w-5 h-5 text-[#fd6e00]" />
               </button>
-              <h3 className="text-white font-bold text-base sm:text-lg">
+              <h3 className="text-white font-inter font-bold text-base sm:text-lg">
                 Other languages
               </h3>
             </div>
@@ -195,7 +195,7 @@ export default function LanguageSelectionModal({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search languages"
-                className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-zinc-900/90 border border-zinc-700/80 text-white placeholder-zinc-500 text-xs sm:text-sm focus:outline-none focus:border-amber-500"
+                className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-zinc-900/90 border border-zinc-700/80 text-white placeholder-zinc-500 text-xs sm:text-sm focus:outline-none focus:border-[#fd6e00]"
               />
             </div>
 
@@ -210,7 +210,7 @@ export default function LanguageSelectionModal({
                     onClick={() => setSelectedCode(lang.code)}
                     className={`p-2.5 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-[#1b1712] border-2 border-[#F59E0B] text-white'
+                        ? 'bg-[#1b1712] border-2 border-[#fd6e00] text-white shadow-[0_0_12px_rgba(253,110,0,0.25)]'
                         : 'bg-zinc-900/70 border border-zinc-800 text-zinc-300 hover:border-zinc-700'
                     }`}
                   >
@@ -220,10 +220,10 @@ export default function LanguageSelectionModal({
                     </div>
                     <div
                       className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${
-                        isSelected ? 'border-2 border-[#F59E0B]' : 'border border-zinc-600'
+                        isSelected ? 'border-2 border-[#fd6e00]' : 'border border-zinc-600'
                       }`}
                     >
-                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]" />}
+                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[#fd6e00]" />}
                     </div>
                   </button>
                 );
@@ -234,10 +234,10 @@ export default function LanguageSelectionModal({
             <button
               type="button"
               onClick={handleContinue}
-              className="w-full py-3 sm:py-3.5 rounded-2xl bg-[#F59E0B] hover:bg-[#d97706] active:scale-[0.98] text-black font-black text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+              className="w-full py-3 sm:py-3.5 rounded-2xl bg-[#fd6e00] hover:bg-[#e66400] active:scale-[0.98] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-[0_8px_25px_rgba(253,110,0,0.35)] cursor-pointer"
             >
-              <span>Continue</span>
-              <ArrowRight className="w-4 h-4 stroke-[3]" />
+              <span className="text-white font-inter font-bold">Continue</span>
+              <ArrowRight className="w-4 h-4 stroke-[2.5] text-white" />
             </button>
           </div>
         )}

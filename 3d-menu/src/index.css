@@ -9,6 +9,14 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
+.font-inter {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.font-hind-siliguri {
+  font-family: 'Hind Siliguri', sans-serif;
+}
+
 .font-noto-bengali {
   font-family: 'Noto Sans Bengali', 'Hind Siliguri', sans-serif;
 }
