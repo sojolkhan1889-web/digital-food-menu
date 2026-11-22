@@ -237,9 +237,9 @@ export default function FeaturedSliderWizard({
     setIsUploadingBg(true);
     try {
       const res = await compressImage(file, {
-        maxWidth: 1280,
-        maxHeight: 720,
-        quality: 0.85,
+        maxWidth: 900,
+        maxHeight: 500,
+        quality: 0.75,
         autoTrimTransparency: false
       });
       if (res && res.dataUrl) {

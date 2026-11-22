@@ -461,16 +461,25 @@ export const recordMenuScan = async (restaurantId = 'resto_001', tableNumber = '
 
 export const fetchLiveMenuScansFromSupabase = async (restaurantId = null) => {
   try {
-    let query = supabase.from('menu_scans').select('*').order('created_at', { ascending: false });
+    // 1. Exact total scans count using lightweight head request (~0 KB egress)
+    let totalQuery = supabase.from('menu_scans').select('*', { count: 'exact', head: true });
     if (restaurantId) {
-      query = query.eq('restaurant_id', restaurantId);
+      totalQuery = totalQuery.eq('restaurant_id', restaurantId);
     }
-    const { data, error } = await safeQuery(query);
-    if (error || !Array.isArray(data)) {
-      return getMenuScans(restaurantId || 'resto_001');
+    const totalRes = await safeQuery(totalQuery);
+    const totalScans = (totalRes && typeof totalRes.count === 'number') ? totalRes.count : 0;
+
+    // 2. Today's scans count strictly filtered by local midnight (~0 KB egress)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let todayQuery = supabase.from('menu_scans')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', today.toISOString());
+    if (restaurantId) {
+      todayQuery = todayQuery.eq('restaurant_id', restaurantId);
     }
-    const totalScans = data.length;
-    const todayScans = data.filter(s => isSameCalendarDay(s.scanned_at || s.created_at)).length;
+    const todayRes = await safeQuery(todayQuery);
+    const todayScans = (todayRes && typeof todayRes.count === 'number') ? todayRes.count : 0;
 
     // Cache latest counts strictly matching true database state
     try {
@@ -765,7 +774,7 @@ export const fetchLiveFollowersFromSupabase = async (restaurantId = 'resto_001')
   try {
     const { data, error } = await supabase
       .from('restaurant_followers')
-      .select('*')
+      .select('customer_id, followed_at, created_at')
       .eq('restaurant_id', restaurantId);
 
     if (!error && Array.isArray(data)) {
@@ -810,14 +819,24 @@ export const broadcastRestaurantNotification = async (restaurantId = 'resto_001'
   const foodId = notificationData.foodId || '';
   const targetUrl = notificationData.url || (sliderId ? `/?openSlide=${encodeURIComponent(sliderId)}${foodId ? `&foodId=${encodeURIComponent(foodId)}` : ''}` : '/');
 
+  // Guard against massive base64 in database row to preserve database bandwidth
+  let safeImage = notificationData.image || null;
+  if (typeof safeImage === 'string' && (safeImage.startsWith('data:') || safeImage.length > 500)) {
+    safeImage = '/burger_combo.jpg';
+  }
+  let safeIcon = notificationData.icon || '/monkey_bhai_logo.png';
+  if (typeof safeIcon === 'string' && (safeIcon.startsWith('data:') || safeIcon.length > 500)) {
+    safeIcon = '/monkey_bhai_logo.png';
+  }
+
   const payload = {
     id: notifId,
     restaurant_id: restaurantId,
     slider_id: sliderId || null,
     title: notificationData.title || '🔥 New Special Offer!',
     body: notificationData.body || 'Check out our new special dish on the digital menu.',
-    icon: notificationData.icon || '/monkey_bhai_logo.png',
-    image: notificationData.image || null,
+    icon: safeIcon,
+    image: safeImage,
     url: targetUrl,
     status: 'sent',
     recipients_count: Number(notificationData.recipientsCount || 0),
@@ -850,13 +869,13 @@ export const broadcastRestaurantNotification = async (restaurantId = 'resto_001'
 
   // 3. Dispatch real OS background Web Push via Supabase Edge Function (Wakes up phones when Chrome is closed / screen is locked)
   try {
-    let safeImage = payload.image;
-    if (typeof safeImage === 'string' && (safeImage.startsWith('data:') || safeImage.length > 500)) {
-      safeImage = undefined;
+    let pushImage = payload.image;
+    if (typeof pushImage === 'string' && (pushImage.startsWith('data:') || pushImage.length > 500)) {
+      pushImage = undefined;
     }
-    let safeIcon = payload.icon;
-    if (typeof safeIcon === 'string' && (safeIcon.startsWith('data:') || safeIcon.length > 500)) {
-      safeIcon = '/monkey_bhai_logo.png';
+    let pushIcon = payload.icon;
+    if (typeof pushIcon === 'string' && (pushIcon.startsWith('data:') || pushIcon.length > 500)) {
+      pushIcon = '/monkey_bhai_logo.png';
     }
 
     fetch('https://rsbwehchoovcmaclssuh.supabase.co/functions/v1/send-web-push', {
@@ -897,7 +916,7 @@ export const fetchLatestRestaurantNotifications = async (restaurantId = 'resto_0
   try {
     const { data, error } = await supabase
       .from('restaurant_notifications')
-      .select('*')
+      .select('id, restaurant_id, slider_id, title, body, icon, url, created_at')
       .eq('restaurant_id', restaurantId)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -983,7 +1002,10 @@ export const showBrowserNotification = async (title, options = {}) => {
 export const syncFoodToSupabase = async (food, restaurantId) => {
   try {
     const isPub = food.is_published !== false && food.status !== 'unpublished' && food.status !== 'draft';
-    const imageToSync = food.image || null;
+    let imageToSync = food.image || null;
+    if (typeof imageToSync === 'string' && imageToSync.startsWith('/src/assets/')) {
+      imageToSync = imageToSync.replace('/src/assets/', '/');
+    }
     const payload = {
       id: String(food.id),
       restaurant_id: restaurantId || food.restaurant_id || food.restaurantId || 'resto_001',
@@ -1157,20 +1179,46 @@ const safeQuery = async (promise) => {
   }
 };
 
+// --- In-Memory Cache for Supabase Egress Protection ---
+const remoteDataCache = new Map();
+const CACHE_TTL_MS = 25000; // 25 seconds throttle for repeat views
+
 // --- Remote Fetch Scoped to Restaurant Tenant ---
-export const fetchRemoteData = async (restaurantId = 'resto_001') => {
+export const fetchRemoteData = async (restaurantId = 'resto_001', options = { includeAdminData: false }) => {
+  const targetId = restaurantId || 'resto_001';
+  const cacheKey = `${targetId}_${Boolean(options?.includeAdminData)}`;
+  const now = Date.now();
+  const cached = remoteDataCache.get(cacheKey);
+  if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
+    return cached.data;
+  }
+
   try {
-    const targetId = restaurantId || 'resto_001';
-    const [foodsRes, catsRes, subsRes, slidersRes, settingsRes, ticketsRes, chatRes, ordersRes] = await Promise.all([
+    const baseQueries = [
       safeQuery(supabase.from('food_items').select('*').eq('restaurant_id', targetId)),
       safeQuery(supabase.from('categories').select('*').eq('restaurant_id', targetId).order('display_order', { ascending: true })),
       safeQuery(supabase.from('subcategories').select('*').eq('restaurant_id', targetId).order('display_order', { ascending: true })),
       safeQuery(supabase.from('featured_sliders').select('*').eq('restaurant_id', targetId).order('display_order', { ascending: true })),
-      safeQuery(supabase.from('restaurant_settings').select('*').or(`id.eq.set_${targetId},restaurant_id.eq.${targetId}`).single()),
-      safeQuery(supabase.from('support_tickets').select('*').eq('restaurant_id', targetId).order('created_at', { ascending: false })),
-      safeQuery(supabase.from('support_chat_messages').select('*').eq('restaurant_id', targetId).order('created_at', { ascending: true })),
-      safeQuery(supabase.from('orders').select('*').eq('restaurant_id', targetId).order('created_at', { ascending: false }))
-    ]);
+      safeQuery(supabase.from('restaurant_settings').select('*').or(`id.eq.set_${targetId},restaurant_id.eq.${targetId}`).single())
+    ];
+
+    const [foodsRes, catsRes, subsRes, slidersRes, settingsRes] = await Promise.all(baseQueries);
+
+    let ticketsRes = { data: null };
+    let chatRes = { data: null };
+    let ordersRes = { data: null };
+
+    // Only query admin tables if requested by Restaurant Portal or Super Admin
+    if (options?.includeAdminData) {
+      const [tRes, cRes, oRes] = await Promise.all([
+        safeQuery(supabase.from('support_tickets').select('*').eq('restaurant_id', targetId).order('created_at', { ascending: false }).limit(20)),
+        safeQuery(supabase.from('support_chat_messages').select('*').eq('restaurant_id', targetId).order('created_at', { ascending: true }).limit(50)),
+        safeQuery(supabase.from('orders').select('*').eq('restaurant_id', targetId).order('created_at', { ascending: false }).limit(50))
+      ]);
+      ticketsRes = tRes;
+      chatRes = cRes;
+      ordersRes = oRes;
+    }
 
     let remoteFoods = null;
     let remoteCategories = null;
@@ -1360,7 +1408,7 @@ export const fetchRemoteData = async (restaurantId = 'resto_001') => {
       }));
     }
 
-    return {
+    const result = {
       remoteFoods,
       remoteCategories,
       remoteSubcategories,
@@ -1370,6 +1418,10 @@ export const fetchRemoteData = async (restaurantId = 'resto_001') => {
       remoteChat,
       remoteOrders
     };
+
+    remoteDataCache.set(cacheKey, { timestamp: now, data: result });
+
+    return result;
   } catch (err) {
     console.warn('Remote fetch error (using local cache):', err);
     return {
@@ -1458,9 +1510,9 @@ export const addStoredOrder = (newOrder) => {
   }
 };
 
-export const fetchLiveOrdersFromSupabase = async (restaurantId = 'resto_001') => {
+export const fetchLiveOrdersFromSupabase = async (restaurantId = 'resto_001', limit = 50) => {
   try {
-    let query = supabase.from('orders').select('*').order('created_at', { ascending: false });
+    let query = supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(limit);
     if (restaurantId) {
       query = query.eq('restaurant_id', restaurantId);
     }

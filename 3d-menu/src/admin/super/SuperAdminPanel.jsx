@@ -2266,6 +2266,24 @@ function FoodCatalogView({ catalog, onBack, onOpenAddFood }) {
   const foods = catalog.foods || [];
   const categories = catalog.categories || [];
 
+  const resolveCatalogImage = (img) => {
+    if (!img || typeof img !== 'string') return '/burger_hd.png';
+    let clean = img.trim();
+    if (clean.startsWith('/src/assets/')) {
+      clean = clean.replace('/src/assets/', '/');
+    }
+    if (clean.includes('Food.gif')) return '/Food.gif';
+    if (clean.includes('pizza_hd')) return '/pizza_hd.png';
+    if (clean.includes('burger_hd')) return '/burger_hd.png';
+    if (clean.includes('korean_chicken_hd')) return '/korean_chicken_hd.png';
+    if (clean.includes('iced_macchiato_hd')) return '/iced_macchiato_hd.png';
+    if (clean.includes('coffee.png')) return '/coffee.png';
+    if (clean.includes('kacchi_biryani')) return '/kacchi_biryani.png';
+    if (clean.includes('ice_cream')) return '/ice_cream.png';
+    if (clean.includes('burger_combo')) return '/burger_combo.jpg';
+    return clean;
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{
@@ -2329,8 +2347,12 @@ function FoodCatalogView({ catalog, onBack, onOpenAddFood }) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       {item.image ? (
                         <img
-                          src={item.image}
+                          src={resolveCatalogImage(item.image)}
                           alt={item.name}
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = '/burger_hd.png';
+                          }}
                           style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover' }}
                         />
                       ) : (

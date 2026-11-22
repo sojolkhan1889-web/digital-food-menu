@@ -762,12 +762,12 @@ export default function RestaurantPanel({
     window.addEventListener('focus', handleVisibilityOrFocus);
     document.addEventListener('visibilitychange', handleVisibilityOrFocus);
 
-    // 3. Gentle backup fallback (60s instead of 6s, only when tab is visible)
+    // 3. Gentle backup fallback (5m instead of 60s, only when tab is visible)
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         loadScans();
       }
-    }, 60000);
+    }, 300000);
 
     return () => {
       isMounted = false;
@@ -814,12 +814,12 @@ export default function RestaurantPanel({
     window.addEventListener('focus', handleVisibilityOrFocus);
     document.addEventListener('visibilitychange', handleVisibilityOrFocus);
 
-    // 3. Gentle backup fallback (60s instead of 6s, only when tab is visible)
+    // 3. Gentle backup fallback (5m instead of 60s, only when tab is visible)
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         loadFollowers();
       }
-    }, 60000);
+    }, 300000);
 
     return () => {
       isMounted = false;
@@ -866,12 +866,12 @@ export default function RestaurantPanel({
     window.addEventListener('focus', handleVisibilityOrFocus);
     document.addEventListener('visibilitychange', handleVisibilityOrFocus);
 
-    // 3. Gentle backup fallback (60s instead of 6s, only when tab is visible)
+    // 3. Gentle backup fallback (5m instead of 60s, only when tab is visible)
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         syncSettlements();
       }
-    }, 60000);
+    }, 300000);
 
     return () => {
       isMounted = false;

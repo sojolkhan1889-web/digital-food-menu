@@ -317,9 +317,9 @@ export default function AddFoodWizard({
 
     try {
       const res = await compressImage(file, {
-        maxWidth: 800,
-        maxHeight: 800,
-        quality: 0.85,
+        maxWidth: 500,
+        maxHeight: 500,
+        quality: 0.78,
         autoTrimTransparency: true
       });
 

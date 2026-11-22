@@ -630,7 +630,8 @@ export default function App() {
   const loadRestaurantData = async (targetId, targetMeta = null) => {
     const restoId = targetId || 'resto_001';
     try {
-      const data = await fetchRemoteData(restoId);
+      const isAdminMode = currentView === 'admin' || currentView === 'superadmin';
+      const data = await fetchRemoteData(restoId, { includeAdminData: isAdminMode });
       if (data) {
         if (data.remoteFoods && data.remoteFoods.length > 0) {
           setFoodsList(data.remoteFoods);
@@ -882,6 +883,8 @@ export default function App() {
   useEffect(() => {
     let isMounted = true;
     const syncOrders = async () => {
+      // Bandwidth Guard: Only sync full orders if current view is Admin or SuperAdmin
+      if (currentView !== 'admin' && currentView !== 'superadmin') return;
       const live = await fetchLiveOrdersFromSupabase(currentRestoId);
       if (isMounted && live) {
         setOrdersList(live);
@@ -935,7 +938,7 @@ export default function App() {
       if (document.visibilityState === 'visible') {
         syncOrders();
       }
-    }, 60000);
+    }, 300000); // 5 minutes gentle fallback instead of 60 seconds
 
     return () => {
       isMounted = false;
@@ -944,7 +947,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       clearInterval(interval);
     };
-  }, [currentRestoId]);
+  }, [currentRestoId, currentView]);
 
   // Realtime Restaurant Status (Active vs Suspended) Synchronization across all devices & tabs
   useEffect(() => {
@@ -1698,7 +1701,7 @@ export default function App() {
     window.addEventListener('focus', checkLatestNotifs);
     document.addEventListener('visibilitychange', checkLatestNotifs);
 
-    const pollInterval = setInterval(checkLatestNotifs, 60000);
+    const pollInterval = setInterval(checkLatestNotifs, 300000); // 5 minutes gentle fallback
 
     return () => {
       if (broadcastChannel) supabase.removeChannel(broadcastChannel);

@@ -321,12 +321,25 @@ export const fetchLiveTicketsFromSupabase = async () => {
 export const fetchLiveCatalogFromSupabase = async () => {
   try {
     const [foodsRes, catsRes] = await Promise.all([
-      supabase.from('food_items').select('*'),
+      supabase.from('food_items').select('id, title, category_name, price, old_price, image, description, is_published, status, restaurant_id, customizable'),
       supabase.from('categories').select('*').order('display_order', { ascending: true })
     ]);
 
+    const mappedFoods = (foodsRes.data || []).map(f => {
+      let cleanImage = f.image || '';
+      if (typeof cleanImage === 'string' && cleanImage.startsWith('/src/assets/')) {
+        cleanImage = cleanImage.replace('/src/assets/', '/');
+      }
+      return {
+        ...f,
+        name: f.title || f.name,
+        category: f.category_name || f.category || 'General',
+        image: cleanImage || '/burger_hd.png'
+      };
+    });
+
     return {
-      foods: foodsRes.data || [],
+      foods: mappedFoods,
       categories: catsRes.data || []
     };
   } catch (err) {
