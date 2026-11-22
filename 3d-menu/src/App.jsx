@@ -300,7 +300,7 @@ export default function App() {
   const [isSuperAdminAuthenticated, setIsSuperAdminAuthenticated] = useState(getSuperAdminAuthSession);
 
   // Dynamic Foods, Categories, Orders, and Payments from Menu Store
-  const [foodsList, setFoodsList] = useState(getStoredFoods);
+  const [foodsList, setFoodsList] = useState(() => getStoredFoods(currentRestoId));
   const [categoriesList, setCategoriesList] = useState(() => getStoredCategories(currentRestoId));
   const [categoryTranslations, setCategoryTranslations] = useState(() => getStoredCategoryTranslations(currentRestoId));
   const [subcategoriesList, setSubcategoriesList] = useState(getStoredSubcategories);

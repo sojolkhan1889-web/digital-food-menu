@@ -2267,8 +2267,10 @@ function FoodCatalogView({ catalog, onBack, onOpenAddFood }) {
   const categories = catalog.categories || [];
 
   const resolveCatalogImage = (img) => {
-    if (!img || typeof img !== 'string') return '/burger_hd.png';
+    if (!img || typeof img !== 'string') return '/Food.gif';
     let clean = img.trim();
+    if (clean.startsWith('data:') || clean.startsWith('http://') || clean.startsWith('https://')) return clean;
+    if (clean.startsWith('/uploads/')) return clean;
     if (clean.startsWith('/src/assets/')) {
       clean = clean.replace('/src/assets/', '/');
     }
@@ -2280,7 +2282,6 @@ function FoodCatalogView({ catalog, onBack, onOpenAddFood }) {
     if (clean.includes('coffee.png')) return '/coffee.png';
     if (clean.includes('kacchi_biryani')) return '/kacchi_biryani.png';
     if (clean.includes('ice_cream')) return '/ice_cream.png';
-    if (clean.includes('burger_combo')) return '/burger_combo.jpg';
     return clean;
   };
 

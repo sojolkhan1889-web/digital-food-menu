@@ -187,23 +187,15 @@ export const loadFoodsFromIndexedDB = async () => {
 };
 
 export const resolveFoodImage = (image, fallback) => {
-  if (!image) return fallback?.image || '/burger_hd.png';
+  if (!image) return fallback?.image || '/Food.gif';
   const clean = String(image).trim();
   // Valid Base64 Data URL, Blob, or external HTTP/HTTPS URL
   if (clean.startsWith('data:image/') || clean.startsWith('blob:') || clean.startsWith('http://') || clean.startsWith('https://')) {
     return clean;
   }
-  // Fast resolution for combo image and standard public assets
-  if (clean.includes('double_smash') || clean.includes('burger_combo')) {
-    return '/burger_combo.jpg';
-  }
-  if (clean.startsWith('/burger_combo.jpg') || clean.startsWith('/assets/') || clean.startsWith('/models/')) {
+  // All static paths including /uploads/, /assets/, /models/
+  if (clean.startsWith('/uploads/') || clean.startsWith('/assets/') || clean.startsWith('/models/')) {
     return clean;
-  }
-  if (fallback?.image) {
-    if (clean.startsWith('/src/assets/')) {
-      return fallback.image;
-    }
   }
   if (clean.startsWith('/src/assets/')) {
     return clean.replace('/src/assets/', '/');
