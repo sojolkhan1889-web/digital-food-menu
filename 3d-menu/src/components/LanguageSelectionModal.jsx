@@ -81,7 +81,7 @@ export default function LanguageSelectionModal({
                 <h3 className="text-white font-inter font-bold sm:font-extrabold text-lg sm:text-[19px] tracking-tight leading-snug">
                   Choose your language
                 </h3>
-                <p className="text-xs sm:text-[13px] text-slate-300 font-hind-siliguri font-medium sm:font-semibold leading-tight mt-0.5">
+                <p className="text-[13px] text-slate-300 font-hind-siliguri font-medium sm:font-semibold leading-tight mt-0.5">
                   {nativeLang.subtitle || "আপনার পছন্দের ভাষা বেছে নিন"}
                 </p>
               </div>
