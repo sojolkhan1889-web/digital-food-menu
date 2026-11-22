@@ -3708,7 +3708,11 @@ export default function App() {
                 </svg>
               </div>
 
-              <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wider truncate text-white">
+              <span className={`truncate text-white ${
+                (customerLanguage === 'bn' || customerLanguage !== 'en')
+                  ? 'text-[14px] sm:text-[14px] font-bold tracking-normal font-bengali'
+                  : 'text-xs sm:text-sm font-extrabold uppercase tracking-wider'
+              }`}>
                 {t('view_order_list', customerLanguage)} ({customerLanguage === 'bn' ? toBengaliDigits(selectedListCount) : selectedListCount})
               </span>
             </div>
@@ -4994,7 +4998,9 @@ export default function App() {
                 className="absolute bottom-5 left-1/2 -translate-x-1/2 z-30 pointer-events-auto cursor-pointer animate-[bounce_1.5s_infinite]"
               >
                 <div className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-[0_4px_25px_rgba(234,88,12,0.7)] border border-orange-400/60 backdrop-blur-md flex items-center gap-1.5 transition-all active:scale-95">
-                  <span className="text-[11px] font-black uppercase tracking-wider">Scroll for more</span>
+                  <span className={`text-[11px] font-black uppercase tracking-wider ${customerLanguage === 'bn' ? 'font-bengali tracking-normal' : ''}`}>
+                    {t('scroll_for_more', customerLanguage)}
+                  </span>
                   <ChevronDown className="w-3.5 h-3.5 text-white animate-pulse" />
                 </div>
               </div>
