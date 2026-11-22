@@ -55,6 +55,7 @@ import {
   getSuperAdminRestaurants,
   saveSuperAdminRestaurants
 } from './admin/super/superAdminStore';
+import { resolveMediaUrl } from './lib/mediaStorageService';
 import {
   getStoredFoods,
   saveStoredFoods,
@@ -3607,9 +3608,11 @@ export default function App() {
               )}
 
               <img
-                src={activeFood.image}
+                src={resolveMediaUrl(activeFood.image)}
                 alt={activeFood.title}
                 draggable="false"
+                decoding="async"
+                onError={(e) => { e.target.src = '/Food.gif'; }}
                 className="pointer-events-none select-none transition-all duration-300 w-80 h-80 sm:w-96 sm:h-96 md:w-[420px] md:h-[420px] max-w-[90vw] max-h-[46vh] object-contain drop-shadow-[0_32px_50px_rgba(0,0,0,0.92)] animate-food-live"
               />
             </div>
@@ -4370,8 +4373,11 @@ export default function App() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex items-center gap-3.5 min-w-0 flex-1">
                               <img
-                                src={item.image}
+                                src={resolveMediaUrl(item.image)}
                                 alt={item.title}
+                                loading="lazy"
+                                decoding="async"
+                                onError={(e) => { e.target.src = '/Food.gif'; }}
                                 className="w-14 h-14 sm:w-[60px] sm:h-[60px] rounded-xl object-contain bg-[#090b10] border border-white/10 p-1 shrink-0"
                               />
                               <h4 className={`text-white font-extrabold text-base sm:text-[17px] leading-snug whitespace-normal break-words ${customerLanguage === 'bn' ? 'tracking-normal [word-spacing:0.16em] font-bengali' : 'tracking-tight'}`}>
@@ -5013,8 +5019,11 @@ export default function App() {
             <div className="flex items-center justify-between pb-3.5 border-b border-white/10">
               <div className="flex items-center gap-3">
                 <img
-                  src={activeFood.image}
+                  src={resolveMediaUrl(activeFood.image)}
                   alt={activeFood.title}
+                  loading="lazy"
+                  decoding="async"
+                  onError={(e) => { e.target.src = '/Food.gif'; }}
                   className="w-12 h-12 rounded-xl object-contain bg-white/5 border border-white/10 p-1"
                 />
                 <div>
@@ -5237,8 +5246,11 @@ export default function App() {
                     className="p-3 rounded-xl bg-white/5 border border-white/10 flex items-start gap-2.5 relative"
                   >
                     <img
-                      src={item.image}
+                      src={resolveMediaUrl(item.image)}
                       alt={item.title}
+                      loading="lazy"
+                      decoding="async"
+                      onError={(e) => { e.target.src = '/Food.gif'; }}
                       className="w-12 h-12 rounded-lg object-contain bg-white/5 border border-white/10 p-1 shrink-0"
                     />
 

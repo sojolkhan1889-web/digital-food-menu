@@ -2,6 +2,7 @@
 import { initialFoods, initialCategories } from './initialFoods';
 import { supabase } from '../lib/supabaseClient';
 import { initialCategoryTranslations } from '../utils/translations';
+import { uploadMediaFile } from '../lib/mediaStorageService';
 
 const FOODS_KEY = 'dgm_restaurant_foods';
 const FOODS_VERSION_KEY = 'dgm_foods_cache_version';
@@ -1006,6 +1007,19 @@ export const syncFoodToSupabase = async (food, restaurantId) => {
     if (typeof imageToSync === 'string' && imageToSync.startsWith('/src/assets/')) {
       imageToSync = imageToSync.replace('/src/assets/', '/');
     }
+
+    // Auto-upload dataUrl images to zero-egress storage so database payload stays minimal
+    if (typeof imageToSync === 'string' && imageToSync.startsWith('data:image/')) {
+      try {
+        const uploadRes = await uploadMediaFile(imageToSync, { filename: `food_${food.id || Date.now()}` });
+        if (uploadRes?.url) {
+          imageToSync = uploadRes.url;
+        }
+      } catch (e) {
+        console.warn('[SupabaseSync] Auto media upload caught:', e);
+      }
+    }
+
     const payload = {
       id: String(food.id),
       restaurant_id: restaurantId || food.restaurant_id || food.restaurantId || 'resto_001',
@@ -1945,11 +1959,31 @@ export const saveStoredFeaturedSliders = (sliders, restaurantId) => {
 export const syncSliderToSupabase = async (slider, restaurantId = 'resto_001') => {
   try {
     let sliderImg = slider.image || null;
+    let bgImg = slider.bgImage || null;
+
+    // Auto-upload dataUrl images to zero-egress storage so database payload stays minimal
+    if (typeof sliderImg === 'string' && sliderImg.startsWith('data:image/')) {
+      try {
+        const up = await uploadMediaFile(sliderImg, { filename: `slider_cutout_${slider.id || Date.now()}` });
+        if (up?.url) sliderImg = up.url;
+      } catch (e) {
+        console.warn('[SupabaseSync] Auto slider image upload caught:', e);
+      }
+    }
+
+    if (typeof bgImg === 'string' && bgImg.startsWith('data:image/')) {
+      try {
+        const up = await uploadMediaFile(bgImg, { filename: `slider_bg_${slider.id || Date.now()}` });
+        if (up?.url) bgImg = up.url;
+      } catch (e) {
+        console.warn('[SupabaseSync] Auto slider bg upload caught:', e);
+      }
+    }
 
     // Bundle cutout, bg, and all native/English included fields into image JSON payload so Supabase preserves everything
     sliderImg = JSON.stringify({
       cutout: sliderImg,
-      bg: slider.bgImage || null,
+      bg: bgImg,
       includedType: slider.includedType || 'list',
       includedHeading: slider.includedHeading || 'Combo includes',
       includedHeading_native: slider.includedHeading_native || slider.includedHeading_bn || null,

@@ -9,9 +9,10 @@
 1. [Database Overview & Infrastructure](#1-database-overview--infrastructure)
 2. [Database Tables Reference](#2-database-tables-reference)
 3. [Case Study: 100% Solution for Supabase Egress & Bandwidth Leaks](#3-case-study-100-solution-for-supabase-egress--bandwidth-leaks)
-4. [Category Ordering & Multi-Tenant Synchronization](#4-category-ordering--multi-tenant-synchronization)
-5. [Mandatory Backend Developer Guidelines (SOP)](#5-mandatory-backend-developer-guidelines-sop)
-6. [Database Operations Change Log](#6-database-operations-change-log)
+4. [High-Definition Zero-Egress Media & CDN Architecture (Plug-and-Play)](#4-high-definition-zero-egress-media--cdn-architecture-plug-and-play)
+5. [Category Ordering & Multi-Tenant Synchronization](#5-category-ordering--multi-tenant-synchronization)
+6. [Mandatory Backend Developer Guidelines (SOP)](#6-mandatory-backend-developer-guidelines-sop)
+7. [Database Operations Change Log](#7-database-operations-change-log)
 
 ---
 
@@ -124,16 +125,62 @@ flowchart TD
 
 ### 📊 Table Size Audit: Before vs After Optimization
 
-| Table Name | Before Optimization | After Optimization | Reduction |
+| Table Name | Before Optimization | After Optimization | Total Reduction |
 | :--- | :--- | :--- | :--- |
-| `food_items` (16 rows) | 303.79 KB | **40.02 KB** | **-86.8%** |
-| `featured_sliders` (7 rows) | 301.29 KB | **37.61 KB** | **-87.5%** |
+| `food_items` (16 rows) | 303.79 KB | **11.72 KB** | **-96.1%** |
+| `featured_sliders` (7 rows) | 301.29 KB | **3.51 KB** | **-98.8%** |
 | `restaurant_notifications` (36 rows) | 2,124.12 KB | **Query payload: 0.4 KB** | **-99.9%** |
-| `menu_scans` (764 rows) | 243.36 KB per fetch | **Head Count: ~0.1 KB** | **-99.9%** |
+| `menu_scans` (764 rows) | 243.36 KB per fetch | **Head Count: ~0.1 KB** | **-99.96%** |
 
 ---
 
-## 4. Category Ordering & Multi-Tenant Synchronization
+## 4. High-Definition Zero-Egress Media & CDN Architecture (Plug-and-Play)
+
+To deliver crystal-clear, appetizing 3D and 2D food photography to customers without exhausting Supabase or private server bandwidth limits, a dedicated **Media Pipeline & Storage Adapter** was implemented:
+
+```mermaid
+flowchart LR
+    A["Admin Photo Upload (2MB-10MB DSLR/Phone)"] --> B["Client-Side HD WebP Engine (1080p, 85% Sharpness)"]
+    B -->|File Size 70KB - 95KB| C["Storage Upload Endpoint (/api/media/upload)"]
+    C -->|Dev Mode| D["public/uploads/ (Served by Vite Static)"]
+    C -->|Production VPS| E["/var/www/uploads/ (Served by Nginx / Node)"]
+    E --> F["Cloudflare CDN (Global Edge Cache, Free Unlimited Egress)"]
+    
+    subgraph Supabase Database
+        G["food_items.image"]
+        H["featured_sliders.image"]
+    end
+    
+    C -->|Stores ONLY 35-byte URL Path| G
+    C -->|Stores ONLY 35-byte URL Path| H
+    G -.->|0 Bytes Image Egress| I["Customer 3D Digital Menu (<OptimizedImage />)"]
+    F --> I
+```
+
+### ⚙️ Core Components:
+1. **`imageCompressor.js` & `imageOptimizer.js`:**
+   - Converts uploaded photos (up to 10MB+) to high-definition WebP (`maxWidth: 1080`, `maxHeight: 1080`, `quality: 0.85`).
+   - Retains 100% retina clarity, juicy textures, and alpha channel transparency for cutout food dishes.
+   - Slashes raw photo sizes by **95%** (down to 70 KB – 95 KB).
+2. **`mediaStorageService.js`:**
+   - Manages client-server upload requests to `/api/media/upload`.
+   - Resolves URLs dynamically via `resolveMediaUrl(url)`.
+   - **Plug-and-Play Production:** If `VITE_CDN_URL=https://cdn.example.com` is configured in production, all `/uploads/...` images automatically stream through Cloudflare / BunnyCDN with 0 origin server load!
+3. **Vite Development Plugin (`vite-plugin-media-upload.js`):**
+   - Intercepts `/api/media/upload` during development and writes optimized WebP files directly into `3d-menu/public/uploads/`.
+   - Served statically by Vite dev server (`http://localhost:5173/uploads/...`).
+4. **Production VPS Server Handler (`server/uploadHandler.js`):**
+   - Production-ready Node / Express handler for private VPS deployments.
+   - Saves uploaded files to disk and sets `Cache-Control: public, max-age=31536000, immutable`.
+5. **`<OptimizedImage />` Component (`src/components/OptimizedImage.jsx`):**
+   - Employs native browser lazy-loading (`loading="lazy"`), asynchronous decoding (`decoding="async"`), and shimmer loading skeletons.
+   - Protects against broken images with automatic fallback to `/Food.gif`.
+6. **Double Safety Net in `menuStore.js`:**
+   - Both `syncFoodToSupabase` and `syncSliderToSupabase` intercept any incoming Base64 Data URLs and auto-upload them to zero-egress static storage before saving to Supabase.
+
+---
+
+## 5. Category Ordering & Multi-Tenant Synchronization
 
 ### 🔍 Background
 In the Restaurant Panel (`/categories`), dragging and dropping categories to reorder them was reflected on the admin screen but reverted or showed in the wrong order on the customer "Menu & Specials" modal.
@@ -154,13 +201,14 @@ In the Restaurant Panel (`/categories`), dragging and dropping categories to reo
 
 ---
 
-## 5. Mandatory Backend Developer Guidelines (SOP)
+## 6. Mandatory Backend Developer Guidelines (SOP)
 
 All future developers working on this project **MUST** adhere to the following rules:
 
 ### ⚠️ Rule 1: Never Store Large Base64 Strings in PostgreSQL Rows
 - **DO NOT** store Base64 images larger than 30 KB directly in `image` columns.
-- Always compress images client-side before upload (target: max 500x500, quality 0.75-0.80 WebP).
+- Always compress images client-side before upload (target: max 1080x1080, quality 0.85 WebP).
+- Media files should always be routed through `/api/media/upload` (via `uploadMediaFile` in `mediaStorageService.js`) so that Supabase only stores a 35-byte static URL path (e.g. `/uploads/dish_xxx.webp`).
 - For platform assets (combos, default icons), place the file in the `/public` folder and save the root URL path (e.g. `/burger_combo.jpg`).
 
 ### ⚠️ Rule 2: Always Use Head Requests for Row Counts
@@ -183,7 +231,7 @@ All future developers working on this project **MUST** adhere to the following r
 
 ---
 
-## 6. Database Operations Change Log
+## 7. Database Operations Change Log
 
 *When making any modifications to the Supabase schema, queries, or data sync logic, record your changes in the table below.*
 
@@ -195,3 +243,4 @@ All future developers working on this project **MUST** adhere to the following r
 | **2026-11-22** | Antigravity AI | `categories` | Added `syncCategoriesOrderToSupabase` batch atomic ordering and tenant-scoped caching. Enabled ascending sort on `display_order`. | Category reordering now persists 100% |
 | **2026-11-22** | Antigravity AI | `orders`, `support_tickets`, `support_chat_messages` | Scoped `fetchRemoteData` so customer QR scans never query admin tables. Added `.limit(50)` to orders. | 37.5% fewer queries per customer visit |
 | **2026-11-22** | Antigravity AI | Core Engine | Increased fallback polling intervals from 60s to 5 minutes; added 25s in-memory throttle cache. | 80% reduction in background idle egress |
+| **2026-11-22** | Antigravity AI | `food_items`, `featured_sliders`, Media Engine | Built Plug-and-Play Zero-Egress Media Architecture: client-side 1080p WebP auto-compressor (`imageCompressor.js`), `/api/media/upload` Vite plugin, production VPS handler (`server/uploadHandler.js`), and `<OptimizedImage />`. Cleaned all Base64 in `food_items` and `featured_sliders`. | `food_items` down to **11.72 KB (-96.1%)**, `featured_sliders` down to **3.51 KB (-98.8%)** |

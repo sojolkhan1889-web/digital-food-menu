@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { compressImage } from '../lib/imageCompressor';
+import { resolveMediaUrl } from '../lib/mediaStorageService';
 import {
   LayoutDashboard,
   Utensils,
@@ -2072,8 +2073,11 @@ export default function RestaurantPanel({
                         {/* Centered Food Photo */}
                         {food.image ? (
                           <img
-                            src={food.image}
+                            src={resolveMediaUrl(food.image)}
                             alt={food.title}
+                            loading="lazy"
+                            decoding="async"
+                            onError={(e) => { e.target.src = '/Food.gif'; }}
                             className="max-h-36 max-w-[85%] object-contain drop-shadow-xl group-hover:scale-105 transition-transform duration-300"
                           />
                         ) : (
@@ -2803,8 +2807,10 @@ export default function RestaurantPanel({
                         {slide.bgImage ? (
                           <>
                             <img
-                              src={slide.bgImage}
+                              src={resolveMediaUrl(slide.bgImage)}
                               alt={slide.title}
+                              loading="lazy"
+                              decoding="async"
                               className="absolute inset-0 w-full h-full object-cover object-center"
                             />
                             <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/80 to-transparent pointer-events-none z-10" />
@@ -2826,8 +2832,11 @@ export default function RestaurantPanel({
                           return (
                             <div className="absolute right-1 sm:right-3 top-1/2 -translate-y-1/2 w-40 h-40 sm:w-44 sm:h-44 flex items-center justify-center z-15 pointer-events-none">
                               <img
-                                src={displaySlideImage}
+                                src={resolveMediaUrl(displaySlideImage)}
                                 alt={slide.title}
+                                loading="lazy"
+                                decoding="async"
+                                onError={(e) => { e.target.src = '/Food.gif'; }}
                                 className={slide.isPng !== false ? "w-full h-full object-contain drop-shadow-[0_14px_28px_rgba(0,0,0,0.85)] scale-110" : "w-32 h-32 sm:w-36 sm:h-36 object-cover rounded-full border border-white/20 shadow-2xl"}
                               />
                             </div>

@@ -19,6 +19,7 @@ import {
   Languages
 } from 'lucide-react';
 import { compressImage } from '../lib/imageCompressor';
+import { uploadMediaFile } from '../lib/mediaStorageService';
 import { getRestaurantPrimaryLanguage, toBengaliDigits } from '../utils/translations';
 
 export default function FeaturedSliderWizard({
@@ -236,20 +237,29 @@ export default function FeaturedSliderWizard({
     }
     setIsUploadingBg(true);
     try {
+      // High-definition banner WebP compression
       const res = await compressImage(file, {
-        maxWidth: 900,
-        maxHeight: 500,
-        quality: 0.75,
-        autoTrimTransparency: false
+        maxWidth: 1280,
+        maxHeight: 720,
+        quality: 0.85,
+        autoTrimTransparency: false,
+        preferWebP: true
       });
       if (res && res.dataUrl) {
-        setBgImage(res.dataUrl);
+        // Upload to zero-egress static server storage
+        const uploadRes = await uploadMediaFile(res.dataUrl, {
+          filename: `banner_bg_${Date.now()}`
+        });
+        setBgImage(uploadRes?.url || res.dataUrl);
       }
     } catch (err) {
       console.error('Error compressing banner background:', err);
       const reader = new FileReader();
-      reader.onload = (ev) => {
-        if (ev.target?.result) setBgImage(ev.target.result);
+      reader.onload = async (ev) => {
+        if (ev.target?.result) {
+          const uploadRes = await uploadMediaFile(ev.target.result, { filename: 'banner_bg_fallback' });
+          setBgImage(uploadRes?.url || ev.target.result);
+        }
       };
       reader.readAsDataURL(file);
     } finally {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { compressImage } from '../lib/imageCompressor';
+import { uploadMediaFile } from '../lib/mediaStorageService';
 import {
   X,
   Upload,
@@ -316,16 +317,19 @@ export default function AddFoodWizard({
     setIsOptimizingImage(true);
 
     try {
+      // 1. High-definition client-side WebP optimization (retina sharpness, ~80-100KB)
       const res = await compressImage(file, {
-        maxWidth: 500,
-        maxHeight: 500,
-        quality: 0.78,
-        autoTrimTransparency: true
+        maxWidth: 1080,
+        maxHeight: 1080,
+        quality: 0.85,
+        autoTrimTransparency: true,
+        preferWebP: true
       });
 
       if (res && res.dataUrl) {
+        // Immediate local preview so user sees instant feedback
         setImagePreview(res.dataUrl);
-        setFoodImage(res.dataUrl);
+
         setImageMeta({
           width: res.origW || res.width,
           height: res.origH || res.height,
@@ -335,17 +339,34 @@ export default function AddFoodWizard({
           isOptimal: (res.origW || res.width) >= 500,
           autoTrimmed: res.didTrim
         });
+
+        // 2. Upload to zero-egress static server storage (/uploads)
+        const safeName = (foodName || file.name || 'dish')
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '_')
+          .substring(0, 30);
+
+        const uploadRes = await uploadMediaFile(res.dataUrl, {
+          filename: `dish_${safeName}`
+        });
+
+        if (uploadRes && uploadRes.url) {
+          setFoodImage(uploadRes.url);
+        } else {
+          setFoodImage(res.dataUrl);
+        }
       } else {
         throw new Error('Compression returned empty payload');
       }
     } catch (err) {
       console.warn('Image processing failed, falling back to direct FileReader:', err);
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onloadend = async () => {
         const dataUrl = reader.result;
         if (dataUrl) {
           setImagePreview(dataUrl);
-          setFoodImage(dataUrl);
+          const uploadRes = await uploadMediaFile(dataUrl, { filename: 'dish_fallback' });
+          setFoodImage(uploadRes?.url || dataUrl);
           setImageMeta({
             width: 800,
             height: 800,
