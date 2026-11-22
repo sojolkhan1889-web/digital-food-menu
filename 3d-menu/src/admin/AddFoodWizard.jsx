@@ -1961,30 +1961,67 @@ export default function AddFoodWizard({
             </button>
           ) : <div />}
 
-          {currentStep < 4 ? (
-            <button
-              type="button"
-              disabled={currentStep === 1 ? !canProceedStep1 : !canProceedStep2}
-              onClick={() => setCurrentStep(prev => prev + 1)}
-              className={`px-6 py-2 rounded-[5px] font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
-                (currentStep === 1 ? canProceedStep1 : canProceedStep2)
-                  ? 'bg-orange-600 hover:bg-orange-500 text-white'
-                  : isDark ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' : 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300'
-              }`}
-            >
-              <span>Continue</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleFinalSave}
-              className="px-6 py-2.5 rounded-[5px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-colors shadow"
-            >
-              <Check className="w-4 h-4 stroke-[3]" />
-              <span>{editingFood ? 'UPDATE FOOD ITEM' : 'PUBLISH TO DIGITAL MENU'}</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {editingFood && currentStep < 4 && (
+              <button
+                type="button"
+                disabled={isOptimizingImage || !canProceedStep1}
+                onClick={handleFinalSave}
+                className={`px-4 sm:px-5 py-2 rounded-[5px] font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow ${
+                  isOptimizingImage || !canProceedStep1
+                    ? 'bg-emerald-600/50 text-white/70 cursor-not-allowed'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                }`}
+              >
+                {isOptimizingImage ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Uploading...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    <span>UPDATE FOOD ITEM</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {currentStep < 4 ? (
+              <button
+                type="button"
+                disabled={isOptimizingImage || (currentStep === 1 ? !canProceedStep1 : !canProceedStep2)}
+                onClick={() => setCurrentStep(prev => prev + 1)}
+                className={`px-5 sm:px-6 py-2 rounded-[5px] font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  !isOptimizingImage && (currentStep === 1 ? canProceedStep1 : canProceedStep2)
+                    ? 'bg-orange-600 hover:bg-orange-500 text-white'
+                    : isDark ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' : 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300'
+                }`}
+              >
+                {isOptimizingImage && currentStep === 1 ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Continue</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={isOptimizingImage}
+                onClick={handleFinalSave}
+                className="px-6 py-2.5 rounded-[5px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-colors shadow"
+              >
+                <Check className="w-4 h-4 stroke-[3]" />
+                <span>{editingFood ? 'UPDATE FOOD ITEM' : 'PUBLISH TO DIGITAL MENU'}</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

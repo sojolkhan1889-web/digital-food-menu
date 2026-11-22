@@ -636,7 +636,7 @@ export default function App() {
       if (data) {
         if (data.remoteFoods && data.remoteFoods.length > 0) {
           setFoodsList(data.remoteFoods);
-          saveStoredFoods(data.remoteFoods);
+          saveStoredFoods(data.remoteFoods, restoId);
         } else if (restoId !== 'resto_001') {
           setFoodsList([]);
         }
@@ -1153,7 +1153,7 @@ export default function App() {
       updated = [savedFood, ...foodsList];
     }
     setFoodsList(updated);
-    saveStoredFoods(updated);
+    saveStoredFoods(updated, currentRestoId);
 
     // Sync to Supabase scoped to current restaurant
     syncFoodToSupabase(savedFood, currentRestoId);

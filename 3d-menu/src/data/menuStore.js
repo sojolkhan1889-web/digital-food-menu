@@ -232,10 +232,11 @@ const mapFoodItem = (item) => {
   };
 };
 
-export const getStoredFoods = () => {
+export const getStoredFoods = (restaurantId = null) => {
   try {
     const version = localStorage.getItem(FOODS_VERSION_KEY);
-    const data = localStorage.getItem(FOODS_KEY);
+    const storageKey = restaurantId ? `${FOODS_KEY}_${restaurantId}` : FOODS_KEY;
+    const data = localStorage.getItem(storageKey);
     if (data) {
       let parsed = JSON.parse(data);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -245,13 +246,16 @@ export const getStoredFoods = () => {
           return t !== 'kacchi' && String(item.id).toLowerCase() !== 'kacchi';
         });
 
-        // 2. Check if KACCHI BIRYANI exists in cleaned
+        // 2. Check if KACCHI BIRYANI exists in cleaned (only for resto_001 default)
         const hasBiryani = cleaned.some(item => 
           String(item.title || '').trim().toUpperCase() === 'KACCHI BIRYANI'
         );
 
-        // 3. If version matches and has KACCHI BIRYANI and count is >= 8, return clean items
-        if (version === CURRENT_FOODS_VERSION && hasBiryani && cleaned.length >= 8) {
+        if (cleaned.length > 0 && (!restaurantId || restaurantId === 'resto_001')) {
+          if (version === CURRENT_FOODS_VERSION && hasBiryani && cleaned.length >= 8) {
+            return cleaned.map(mapFoodItem);
+          }
+        } else if (cleaned.length > 0) {
           return cleaned.map(mapFoodItem);
         }
 
@@ -260,7 +264,7 @@ export const getStoredFoods = () => {
         const missing = initialFoods.filter(i => !cleanedIds.has(String(i.id)));
         const merged = [...cleaned, ...missing];
 
-        saveStoredFoods(merged);
+        saveStoredFoods(merged, restaurantId);
         localStorage.setItem(FOODS_VERSION_KEY, CURRENT_FOODS_VERSION);
         return merged.map(mapFoodItem);
       }
@@ -270,14 +274,14 @@ export const getStoredFoods = () => {
   }
 
   // Fallback to initialFoods (all 8 official dishes)
-  saveStoredFoods(initialFoods);
+  saveStoredFoods(initialFoods, restaurantId);
   try {
     localStorage.setItem(FOODS_VERSION_KEY, CURRENT_FOODS_VERSION);
   } catch (e) {}
   return initialFoods.map(mapFoodItem);
 };
 
-export const saveStoredFoods = (foods) => {
+export const saveStoredFoods = (foods, restaurantId = null) => {
   if (!Array.isArray(foods)) return;
 
   // Filter out any stale 'Kacchi'
@@ -291,7 +295,11 @@ export const saveStoredFoods = (foods) => {
 
   // Safely save to localStorage
   try {
-    localStorage.setItem(FOODS_KEY, JSON.stringify(filtered));
+    const storageKey = restaurantId ? `${FOODS_KEY}_${restaurantId}` : FOODS_KEY;
+    localStorage.setItem(storageKey, JSON.stringify(filtered));
+    if (restaurantId && restaurantId === 'resto_001') {
+      localStorage.setItem(FOODS_KEY, JSON.stringify(filtered));
+    }
     localStorage.setItem(FOODS_VERSION_KEY, CURRENT_FOODS_VERSION);
   } catch (e) {
     console.warn('Quota safe save fallback triggered:', e);
@@ -1049,14 +1057,16 @@ export const syncFoodToSupabase = async (food, restaurantId) => {
 
     const { error } = await supabase.from('food_items').upsert([payload]);
     if (error) console.warn('Supabase food sync warning:', error);
+    else invalidateRemoteDataCache(payload.restaurant_id);
   } catch (err) {
     console.warn('Supabase food sync caught:', err);
   }
 };
 
-export const deleteFoodFromSupabase = async (foodId) => {
+export const deleteFoodFromSupabase = async (foodId, restaurantId = null) => {
   try {
     await supabase.from('food_items').delete().eq('id', String(foodId));
+    invalidateRemoteDataCache(restaurantId);
   } catch (err) {
     console.warn('Supabase food delete caught:', err);
   }
@@ -1143,6 +1153,7 @@ export const syncCategoryToSupabase = async (catName, restaurantId = 'resto_001'
       display_order: Number(displayOrder) || 10
     }]);
     if (error) console.warn('Supabase category sync warning:', error);
+    else invalidateRemoteDataCache(restaurantId);
   } catch (err) {
     console.warn('Supabase category sync caught:', err);
   }
@@ -1165,6 +1176,7 @@ export const syncCategoriesOrderToSupabase = async (orderedCategories, restauran
       });
     const { error } = await supabase.from('categories').upsert(records);
     if (error) console.warn('Supabase categories batch order sync warning:', error);
+    else invalidateRemoteDataCache(restaurantId);
   } catch (err) {
     console.warn('Supabase categories batch order sync caught:', err);
   }
@@ -1196,6 +1208,18 @@ const safeQuery = async (promise) => {
 // --- In-Memory Cache for Supabase Egress Protection ---
 const remoteDataCache = new Map();
 const CACHE_TTL_MS = 25000; // 25 seconds throttle for repeat views
+
+export const invalidateRemoteDataCache = (restaurantId = null) => {
+  if (restaurantId) {
+    for (const key of remoteDataCache.keys()) {
+      if (key.startsWith(`${restaurantId}_`)) {
+        remoteDataCache.delete(key);
+      }
+    }
+  } else {
+    remoteDataCache.clear();
+  }
+};
 
 // --- Remote Fetch Scoped to Restaurant Tenant ---
 export const fetchRemoteData = async (restaurantId = 'resto_001', options = { includeAdminData: false }) => {
@@ -2018,6 +2042,7 @@ export const syncSliderToSupabase = async (slider, restaurantId = 'resto_001') =
       console.error('Supabase slider sync error:', error);
     } else {
       console.log('Supabase slider sync success:', slider.id);
+      invalidateRemoteDataCache(slider.restaurant_id || slider.restaurantId || restaurantId);
     }
   } catch (err) {
     console.warn('Supabase slider sync caught:', err);
@@ -2172,9 +2197,10 @@ export const deleteRestaurantTableFromSupabase = async (id, restaurantId = 'rest
 };
 
 
-export const deleteSliderFromSupabase = async (sliderId) => {
+export const deleteSliderFromSupabase = async (sliderId, restaurantId = null) => {
   try {
     await supabase.from('featured_sliders').delete().eq('id', String(sliderId));
+    invalidateRemoteDataCache(restaurantId);
   } catch (err) {
     console.warn('Supabase slider delete caught:', err);
   }
