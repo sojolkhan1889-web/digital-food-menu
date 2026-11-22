@@ -111,10 +111,14 @@ flowchart TD
 1. **Universal Menu Engine (`tab=foods`):**
    - Food catalog grid with real-time live preview cards.
    - Publish/unpublish toggles, edit modal, delete actions.
-   - **`AddFoodWizard.jsx`:**
-     - 4-step wizard: Details -> Size & Price -> Addons -> Preview & Save.
-     - **Quick Update on Step 1:** Admin can change photo/title and click green `UPDATE FOOD ITEM` directly on Step 1 without stepping through 4 screens.
-     - Automatic client-side 1080p WebP optimization and upload to zero-egress storage.
+   - **`AddFoodWizard.jsx` (Redesigned 4-Step Modern Wizard):**
+     - **Header & Stepper:** Numbered circle step nodes (1-4) with green completed checks, orange active indicator, and step labels.
+     - **Step 1 (Food Details):** 2-column layout. Left column has "Food information" (bilingual names, category, subcategory, bilingual descriptions, and promotional badge dropdown). Right column has "Food photo" with live preview, "Change photo", "Remove", 1200x1200px guidelines accordion.
+     - **Step 2 (Size & Price):** Currency selector, Single price vs Multiple sizes segmented toggle. Single price includes MRP, discount type (None/Percent/Flat), and soft-green savings box. Multiple sizes includes bulk discount toolbar, default size selector with radio indicator, individual discounts, and "+ Add size".
+     - **Step 3 (Extra Choices):** Modern ON/OFF toggle. When OFF: clean empty state ("No extras for this item"). When ON: selection settings (Group name, One option / Multiple options, Maximum selections) and reorderable extra items table with drag grip, bilingual names, and price.
+     - **Step 4 (Review & Preview):** 2-column layout. Left column has "Customer preview" with English/Native language switcher, dark PhoneMenu mobile device container, interactive portions and addons, and total bar. Right column has "Item summary" cards (Food details, Sizes & pricing, Extra choices) with orange "Edit" pencil jump links.
+     - **Quick Update on Step 1, 2, 3:** Admin can click green `Update Food Item` directly on any step to instantly persist changes without stepping through all 4 screens.
+     - **Zero-Egress Integration:** Automatic client-side 1080p WebP optimization and upload to zero-egress static server storage (`/uploads/`).
 2. **Category Management (`tab=categories`):**
    - Add new category with English name and optional Native Language (Bengali) name.
    - **Drag-and-Drop Reordering:** Allows reordering active menu categories by dragging or using up/down controls.
@@ -171,6 +175,7 @@ flowchart TD
 
 | Date | Category | Key Implementation & Solved Issues |
 | :--- | :--- | :--- |
+| **2026-11-22** | **AddFoodWizard Redesign** | Fully redesigned all 4 steps of `AddFoodWizard.jsx` matching target UI specs: Numbered circle stepper, 2-column food info/photo with guidelines accordion, single/multiple sizes with bulk toolbar & default size radio, extra choices toggle ON/OFF with settings & table, and Step 4 PhoneMenu mobile preview with bilingual switch and summary cards with instant edit links. |
 | **2026-11-22** | **Media Engine** | Solved food image revert bug by removing hardcoded `double_smash` override in `resolveFoodImage`. Verified `/uploads/` persistence upon browser refresh. |
 | **2026-11-22** | **AddFoodWizard UI** | Added instant `UPDATE FOOD ITEM` button on Step 1, 2, and 3 so managers can update photos/names in 1 click without completing 4 wizard screens. |
 | **2026-11-22** | **Zero-Egress Media** | Built high-definition 1080p WebP auto-compressor (`imageCompressor.js`), `/api/media/upload` Vite plugin, `/public/uploads/` storage, and `<OptimizedImage />` component. |
