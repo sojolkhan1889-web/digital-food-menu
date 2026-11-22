@@ -4797,10 +4797,12 @@ export default function App() {
               {/* Featured Promo Carousel (Re-designed matching Image 1: +30px height, full-bleed offer photo, no arrows, custom dots) */}
               <div>
                 <div className="flex items-center justify-between mb-2.5">
-                  <span className="text-xs font-black uppercase tracking-widest text-[#F59E0B] flex items-center gap-1.5">
-                    <Flame className="w-3.5 h-3.5 text-[#F59E0B] fill-[#F59E0B]" />
-                    {t('featured_specials', customerLanguage)}
-                  </span>
+                  <div className="inline-flex items-center gap-1.5 leading-none">
+                    <Flame className="w-4 h-4 text-[#F59E0B] fill-[#F59E0B] shrink-0 self-center" />
+                    <span className={`text-[14px] font-black uppercase tracking-widest text-[#F59E0B] leading-none ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}>
+                      {t('featured_specials', customerLanguage)}
+                    </span>
+                  </div>
                   <span className="text-xs font-bold text-slate-400 tracking-widest tabular-nums">
                     {String(menuOfferIndex + 1).padStart(2, '0')} / {String(carouselItems.length || 1).padStart(2, '0')}
                   </span>
@@ -4872,7 +4874,7 @@ export default function App() {
                           <div className="relative z-20 h-full p-4 sm:p-5 flex flex-col justify-between max-w-[58%] sm:max-w-[55%]">
                             <div className="space-y-1.5">
                               {/* Badge */}
-                              <div className="inline-flex items-center px-3 py-0.5 sm:py-1 rounded-full border border-[#F59E0B] bg-black/40 text-[#F59E0B] text-[10px] sm:text-[11px] font-bold uppercase tracking-wider w-fit shadow-xs">
+                              <div className="inline-flex items-center px-3 py-1 rounded-full border border-[#F59E0B] bg-black/50 text-[#F59E0B] text-[12px] font-bold uppercase tracking-wider w-fit shadow-xs">
                                 {customerLanguage === 'bn' && (offer.badge_bn || offer.badge_native)
                                   ? (offer.badge_bn || offer.badge_native)
                                   : formatBadgeText(offer.badge || 'DHAMAKA OFFER', customerLanguage)}
@@ -4931,7 +4933,7 @@ export default function App() {
 
               {/* Categories Section with Large, Readable Buttons */}
               <div>
-                <h4 className="text-[12px] font-black uppercase tracking-widest text-slate-400 mb-2.5">
+                <h4 className={`text-[14px] font-black uppercase tracking-widest text-[#F59E0B] mb-2.5 ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}>
                   {t('menu_categories', customerLanguage)}
                 </h4>
                 <div className="space-y-2.5">
@@ -4963,7 +4965,7 @@ export default function App() {
                                 ? t('all_items', customerLanguage)
                                 : translateCategoryName(cat.name, customerLanguage, categoryTranslations)}
                             </span>
-                            <span className="text-[11px] text-slate-400">
+                            <span className="text-[12px] text-slate-400">
                               {customerLanguage === 'bn' ? toBengaliDigits(count) : count} {count > 1 ? t('items_available', customerLanguage) : t('item_available', customerLanguage)}
                             </span>
                           </div>

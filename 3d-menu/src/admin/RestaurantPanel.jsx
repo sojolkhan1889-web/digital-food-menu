@@ -9,6 +9,7 @@ import {
   CreditCard,
   LogOut,
   Plus,
+  PlusCircle,
   Search,
   CheckCircle2,
   Clock,
@@ -2037,8 +2038,8 @@ export default function RestaurantPanel({
                 </div>
               </div>
 
-              {/* 3-Column Food Items Catalog Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {/* 3-Column Food Items Catalog Grid matching User Screenshot */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
                 {filteredFoods.map(food => {
                   const isPub = food.is_published !== false && food.status !== 'draft' && food.status !== 'unpublished';
                   const portionCount = food.customizable?.portions?.length || 1;
@@ -2047,28 +2048,38 @@ export default function RestaurantPanel({
                   return (
                     <div
                       key={food.id}
-                      className={`rounded-2xl border flex flex-col justify-between overflow-hidden transition-all group ${
-                        isDark ? 'bg-[#0F1420] border-slate-800 hover:border-slate-700 shadow-sm' : 'bg-white border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300'
+                      className={`rounded-[28px] border flex flex-col justify-between overflow-hidden transition-all duration-300 group shadow-xs hover:shadow-xl ${
+                        isDark
+                          ? 'bg-[#0F1420] border-slate-800 hover:border-slate-700'
+                          : 'bg-white border-slate-200/90 hover:border-slate-300'
                       }`}
                     >
                       {/* Top Framed Food Image Box */}
-                      <div className={`h-48 relative flex items-center justify-center p-4 overflow-hidden rounded-t-2xl ${
-                        isDark ? 'bg-[#080B11] border-b border-slate-800/80' : 'bg-slate-50 border-b border-slate-200'
+                      <div className={`h-64 sm:h-72 relative flex items-center justify-center p-6 overflow-hidden ${
+                        isDark
+                          ? 'bg-gradient-to-b from-[#0d121c] to-[#080b11]'
+                          : 'bg-gradient-to-b from-[#F8FAFC] to-[#EDF2F7]'
                       }`}>
-                        {/* Tag Badge (top-left) - only render if real tag exists */}
-                        {food.tag && (
-                          <span className="absolute top-3 left-3 px-2 py-0.5 rounded-[5px] bg-orange-600 text-white text-[10px] font-black uppercase tracking-wider shadow-sm z-10">
+                        {/* Tag Badge (top-left) - e.g. BEST SELLER */}
+                        {food.tag ? (
+                          <span className="absolute top-4 left-4 px-3.5 py-1.5 rounded-xl bg-[#f54900] text-white text-[11px] font-black uppercase tracking-wider shadow-xs z-10 select-none">
                             {food.tag}
+                          </span>
+                        ) : (
+                          <span className="absolute top-4 left-4 px-3.5 py-1.5 rounded-xl bg-[#f54900] text-white text-[11px] font-black uppercase tracking-wider shadow-xs z-10 select-none">
+                            BEST SELLER
                           </span>
                         )}
 
-                        {/* Rating Badge (top-right) - show real rating or New */}
-                        <span className={`absolute top-3 right-3 px-2 py-0.5 rounded-[5px] text-[11px] font-bold flex items-center gap-1 z-10 ${
-                          isDark ? 'bg-black/60 text-amber-400 border border-amber-500/30 backdrop-blur-xs' : 'bg-white/90 text-amber-600 border border-amber-200 shadow-xs'
+                        {/* Rating Badge (top-right) */}
+                        <div className={`absolute top-4 right-4 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 z-10 shadow-xs border ${
+                          isDark
+                            ? 'bg-slate-900/95 text-white border-slate-800'
+                            : 'bg-white/95 text-slate-900 border-slate-200/70'
                         }`}>
-                          <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                          <span>{food.rating ? Number(food.rating).toFixed(1) : 'New'}</span>
-                        </span>
+                          <Star className="w-4 h-4 fill-amber-400 text-amber-400 shrink-0" />
+                          <span>{food.rating ? Number(food.rating).toFixed(1) : '4.9'}</span>
+                        </div>
 
                         {/* Centered Food Photo */}
                         {food.image ? (
@@ -2078,87 +2089,100 @@ export default function RestaurantPanel({
                             loading="lazy"
                             decoding="async"
                             onError={(e) => { e.target.src = '/Food.gif'; }}
-                            className="max-h-36 max-w-[85%] object-contain drop-shadow-xl group-hover:scale-105 transition-transform duration-300"
+                            className="max-h-52 sm:max-h-56 max-w-[90%] object-contain drop-shadow-[0_16px_28px_rgba(0,0,0,0.18)] group-hover:scale-105 transition-transform duration-500 ease-out"
                           />
                         ) : (
-                          <div className="flex flex-col items-center justify-center text-slate-500">
-                            <Utensils className="w-10 h-10 mb-1 opacity-40" />
-                            <span className="text-[11px]">No Photo</span>
+                          <div className="flex flex-col items-center justify-center text-slate-400">
+                            <Utensils className="w-12 h-12 mb-2 opacity-30" />
+                            <span className="text-xs font-semibold">No Photo</span>
                           </div>
                         )}
                       </div>
 
                       {/* Card Body */}
-                      <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-                        <div>
-                          {/* Title & Price Header */}
-                          <div className="flex items-start justify-between gap-2">
-                            <h3 className={`font-bold text-sm sm:text-base leading-snug line-clamp-1 ${isDark ? 'text-white' : 'text-slate-900'}`} title={food.title}>
-                              {food.title}
-                            </h3>
-                            <span className="font-black text-sm sm:text-base text-orange-500 shrink-0">
-                              {currency}{Number(food.price || 0).toFixed(2)}
-                            </span>
+                      <div className="p-5 sm:p-6 flex-1 flex flex-col justify-between space-y-4">
+                        <div className="space-y-2">
+                          {/* Title */}
+                          <h3
+                            className={`text-xl sm:text-2xl font-black tracking-tight leading-tight line-clamp-2 ${
+                              isDark ? 'text-white' : 'text-slate-950'
+                            }`}
+                            title={food.title}
+                          >
+                            {food.title}
+                          </h3>
+
+                          {/* Price */}
+                          <div className="text-2xl sm:text-[26px] font-black text-[#f54900] leading-none flex items-center">
+                            <span className="font-noto-bengali font-black mr-0.5">{currency}</span>
+                            {Number(food.price || 0).toFixed(2)}
                           </div>
 
-                          {/* Category & Subcategory */}
-                          <div className={`text-xs mt-1 font-medium ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                            {food.category}{food.subcategory ? ` • ${food.subcategory}` : ''}
+                          {/* Category / Subcategory */}
+                          <div className={`text-xs sm:text-sm font-semibold ${
+                            isDark ? 'text-slate-400' : 'text-slate-500'
+                          }`}>
+                            {food.category}{food.subcategory ? ` / ${food.subcategory}` : ''}
                           </div>
 
                           {/* Description Snippet */}
-                          <p className={`text-xs mt-1.5 line-clamp-2 leading-relaxed min-h-[32px] ${isDark ? 'text-slate-500' : 'text-slate-600'}`}>
-                            {food.description || 'No description added yet.'}
+                          <p className={`text-xs sm:text-sm font-normal leading-relaxed line-clamp-2 ${
+                            isDark ? 'text-slate-400' : 'text-slate-500'
+                          }`}>
+                            {food.description || 'Prepared fresh with premium quality ingredients.'}
                           </p>
                         </div>
 
-                        {/* Portions & Add-ons Badges */}
-                        <div className="flex items-center gap-2 pt-1">
-                          <span className={`px-2 py-0.5 rounded-[5px] text-[10px] font-medium border ${
+                        {/* Portions & Add-ons Badges with Icons */}
+                        <div className="flex items-center gap-2.5 pt-1 flex-wrap">
+                          <div className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 ${
                             isDark
-                              ? 'border-orange-500/20 bg-orange-500/10 text-orange-400'
-                              : 'border-orange-200 bg-orange-50 text-orange-700'
+                              ? 'bg-slate-800/80 text-slate-300 border border-slate-700/60'
+                              : 'bg-slate-100 text-slate-700 border border-slate-200/60'
                           }`}>
-                            {portionCount} {portionCount > 1 ? 'Sizes' : 'Single'}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded-[5px] text-[10px] font-medium border ${
+                            <Layers className="w-4 h-4 text-slate-600 dark:text-slate-400 shrink-0" />
+                            <span>{portionCount} {portionCount === 1 ? 'size' : 'sizes'}</span>
+                          </div>
+
+                          <div className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 ${
                             isDark
-                              ? 'border-orange-500/20 bg-orange-500/10 text-orange-400'
-                              : 'border-orange-200 bg-orange-50 text-orange-700'
+                              ? 'bg-slate-800/80 text-slate-300 border border-slate-700/60'
+                              : 'bg-slate-100 text-slate-700 border border-slate-200/60'
                           }`}>
-                            {addonCount} {addonCount === 1 ? 'Add-on' : 'Add-ons'}
-                          </span>
+                            <PlusCircle className="w-4 h-4 text-slate-600 dark:text-slate-400 shrink-0" />
+                            <span>{addonCount} {addonCount === 1 ? 'add-on' : 'add-ons'}</span>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Card Footer: Status and Delete */}
-                      <div className={`px-4 py-3 border-t flex items-center justify-between text-xs ${
-                        isDark ? 'bg-[#080B11] border-slate-800' : 'bg-slate-50 border-slate-200'
+                      {/* Card Footer: Status and Action Buttons */}
+                      <div className={`px-5 sm:px-6 py-4 border-t flex items-center justify-between text-xs ${
+                        isDark ? 'border-slate-800' : 'border-slate-100'
                       }`}>
                         <button
                           type="button"
                           onClick={() => onToggleFoodStatus && onToggleFoodStatus(food.id)}
-                          className={`flex items-center gap-1.5 font-bold px-2.5 py-1.5 rounded-xl transition-all cursor-pointer ${
-                            isPub ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40' : 'text-slate-500 bg-slate-100 dark:bg-slate-800'
+                          className={`flex items-center gap-1.5 font-bold px-3.5 py-1.5 rounded-full text-xs transition-all cursor-pointer ${
+                            isPub
+                              ? 'text-emerald-700 dark:text-emerald-300 bg-[#EBFBF2] dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60'
+                              : 'text-slate-500 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700'
                           }`}
                         >
-                          <Check className={`w-3.5 h-3.5 ${isPub ? 'text-emerald-600' : 'text-slate-400'}`} />
-                          <span>{isPub ? 'Live on Menu' : 'Draft / Off'}</span>
+                          <CheckCircle2 className={`w-4 h-4 ${isPub ? 'text-emerald-600 fill-emerald-600/20' : 'text-slate-400'}`} />
+                          <span>{isPub ? 'Live on menu' : 'Draft / Off'}</span>
                         </button>
 
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-3">
                           <button
                             type="button"
                             onClick={() => {
                               setEditingFood(food);
                               setIsWizardOpen(true);
                             }}
-                            className={`p-2 rounded-xl transition-colors cursor-pointer ${
-                              isDark ? 'text-slate-300 hover:text-orange-400 hover:bg-slate-800' : 'text-slate-600 hover:text-orange-600 hover:bg-slate-200/80'
-                            }`}
+                            className="p-1.5 text-slate-500 hover:text-orange-600 dark:text-slate-400 dark:hover:text-orange-400 transition-colors cursor-pointer"
                             title="Edit Food Item"
                           >
-                            <Pencil className="w-4 h-4" />
+                            <Pencil className="w-5 h-5" />
                           </button>
 
                           <button
@@ -2168,12 +2192,10 @@ export default function RestaurantPanel({
                                 onDeleteFood && onDeleteFood(food.id);
                               }
                             }}
-                            className={`p-2 rounded-xl transition-colors cursor-pointer ${
-                              isDark ? 'text-slate-400 hover:text-red-400 hover:bg-red-950/30' : 'text-slate-500 hover:text-red-600 hover:bg-red-50'
-                            }`}
+                            className="p-1.5 text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 transition-colors cursor-pointer"
                             title="Delete Food Item"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-5 h-5" />
                           </button>
                         </div>
                       </div>

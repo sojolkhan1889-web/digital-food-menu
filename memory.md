@@ -109,7 +109,11 @@ flowchart TD
 
 ### 4.2 Restaurant Manager Portal Features
 1. **Universal Menu Engine (`tab=foods`):**
-   - Food catalog grid with real-time live preview cards.
+   - **Modern Food Item Cards (Target UI Specs):**
+     - Container: `rounded-[28px]` with clean border, soft shadow, and hover elevation.
+     - Top Image Box: `h-64 sm:h-72` subtle cool gradient background, `BEST SELLER` orange pill badge top-left, `★ 4.9` white card rating badge top-right, and large centered food cutout.
+     - Body: Prominent 2-line title, big bold orange price (`৳380.00`), `Category / Subcategory` with slash separator, clean 2-line description, and pill badges for Portions (`[ ☲ x sizes ]`) and Add-ons (`[ ⊕ x add-ons ]`).
+     - Footer: Status pill `Live on menu` with green `CheckCircle2` toggle, and minimalist outline Pencil (Edit) and Trash2 (Delete) action icons.
    - Publish/unpublish toggles, edit modal, delete actions.
    - **`AddFoodWizard.jsx` (Redesigned 4-Step Modern Wizard):**
      - **Typography Standards:** Sans-serif base with `Inter` family (`font-menu-builder`), Headings: Inter Bold 700, Labels & Buttons: Inter SemiBold 600 (`text-slate-700 dark:text-slate-200`), Descriptions: Inter Regular 400 (`text-slate-500 dark:text-slate-400`), Bengali text: `Noto Sans Bengali` (`font-noto-bengali`).
@@ -176,6 +180,7 @@ flowchart TD
 
 | Date | Category | Key Implementation & Solved Issues |
 | :--- | :--- | :--- |
+| **2026-11-22** | **Universal Menu Cards & Modal Typography** | Redesigned Restaurant Panel Food Item Cards matching target screenshot (rounded-3xl, h-64/72 image box, BEST SELLER badge, rating pill, big orange price, slash category, Layers/PlusCircle pills, Live on menu pill). Refined frontend Menu & Specials modal: aligned Flame icon with Featured Specials (14px), increased slider badge (12px), matched Menu Category title to #F59E0B (14px), and increased item count subtext (12px). |
 | **2026-11-22** | **AddFoodWizard Step 2-4 UI & Currency Precision** | Step 2 Single price matching Image 4 target specs (formula banner `৳420 - ৳40 = ৳380`, 3-column green card, subtitle "Set your price and optional discount."). Reset button strictly `#f54900`. Step 3 `Extra price (৳) *` header & input currency glyph fix. Step 4 PhoneMenu header strictly `PhoneMenu` in both English & Bengali; Item summary currency icons rendered in `font-noto-bengali font-bold` for crisp baseline visibility. |
 | **2026-11-22** | **AddFoodWizard Typography & Preview** | Implemented exact typography specifications (Inter Bold 700 headings, SemiBold 600 labels & buttons, Regular 400 descriptions, Noto Sans Bengali). Fixed all low-contrast unreadable texts in Step 4 Item Summary. Increased Step 4 Customer Preview size and implemented 100% authentic live frontend localization in Bengali mode (bilingual title, description, category, Bengali digits `toBengaliDigits` for prices `৳১৮০`, `PORTION` -> `পরিমাণ সাইজ`, `EXTRAS` -> `অতিরিক্ত আইটেম`, `+৳৩০`, Total bar). |
 | **2026-11-22** | **AddFoodWizard Redesign** | Fully redesigned all 4 steps of `AddFoodWizard.jsx` matching target UI specs: Numbered circle stepper, 2-column food info/photo with guidelines accordion, single/multiple sizes with bulk toolbar & default size radio, extra choices toggle ON/OFF with settings & table, and Step 4 PhoneMenu mobile preview with bilingual switch and summary cards with instant edit links. |
