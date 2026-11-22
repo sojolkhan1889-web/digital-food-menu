@@ -23,9 +23,20 @@ import {
   Search,
   Menu,
   Info,
-  Star
+  Star,
+  CheckCircle2
 } from 'lucide-react';
-import { getRestaurantPrimaryLanguage } from '../utils/translations';
+import {
+  getRestaurantPrimaryLanguage,
+  toBengaliDigits,
+  formatBadgeText,
+  translateFoodTitle,
+  translateFoodDescription,
+  translateCategoryName,
+  translateSubcategoryName,
+  translatePortionName,
+  translateAddonName
+} from '../utils/translations';
 
 export default function AddFoodWizard({
   isOpen,
@@ -671,16 +682,16 @@ export default function AddFoodWizard({
   const isDark = theme === 'dark';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 overflow-y-auto select-auto touch-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 overflow-y-auto select-auto touch-auto font-menu-builder">
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-4xl max-h-[92vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden transition-all ${
+        className={`w-full max-w-5xl max-h-[94vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden transition-all ${
           isDark
             ? 'bg-[#111827] border-slate-700 text-slate-100'
             : 'bg-white border-slate-200 text-slate-900'
         }`}
       >
-        {/* Top Header */}
+        {/* Top Header - Heading: Inter Bold 700 */}
         <div className={`px-6 sm:px-8 py-4 border-b flex items-center justify-between shrink-0 ${
           isDark ? 'bg-[#0B0F19] border-slate-800' : 'bg-white border-slate-100'
         }`}>
@@ -693,7 +704,7 @@ export default function AddFoodWizard({
                 {editingFood ? 'Edit Food Item' : 'Add New Food'}
               </h2>
               {editingFood && (
-                <span className={`text-xs px-2.5 py-0.5 rounded-md font-semibold border truncate max-w-[240px] ${
+                <span className={`text-xs px-2.5 py-0.5 rounded-md font-semibold border truncate max-w-[260px] ${
                   isDark
                     ? 'bg-orange-500/10 text-orange-400 border-orange-500/30'
                     : 'bg-orange-50 text-orange-700 border-orange-200'
@@ -711,7 +722,7 @@ export default function AddFoodWizard({
             className={`p-2 border rounded-lg transition-colors cursor-pointer ${
               isDark
                 ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300'
-                : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-500'
+                : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-600'
             }`}
           >
             <X className="w-4 h-4" />
@@ -752,7 +763,7 @@ export default function AddFoodWizard({
                           {step.num}
                         </div>
                       ) : (
-                        <div className={`w-7 h-7 rounded-full border text-xs font-medium flex items-center justify-center ${
+                        <div className={`w-7 h-7 rounded-full border text-xs font-semibold flex items-center justify-center ${
                           isDark
                             ? 'border-slate-700 bg-slate-800 text-slate-400'
                             : 'border-slate-300 bg-white text-slate-500'
@@ -815,9 +826,9 @@ export default function AddFoodWizard({
                   </h3>
                 </div>
 
-                {/* Food Name (English) */}
+                {/* Food Name (English) - High Contrast SemiBold 600 Label */}
                 <div>
-                  <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                  <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                     Food name (English) <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -826,7 +837,7 @@ export default function AddFoodWizard({
                     value={foodName}
                     onChange={(e) => setFoodName(e.target.value)}
                     className={`w-full px-3.5 py-2.5 rounded-lg border text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
-                      isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400'
+                      isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-500' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
                     }`}
                   />
                 </div>
@@ -834,10 +845,10 @@ export default function AddFoodWizard({
                 {/* Food Name (Native Language) */}
                 <div>
                   <div className="flex items-center gap-2 mb-1.5">
-                    <label className={`text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    <label className={`text-xs font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                       Food name (Native language)
                     </label>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                    <span className="text-[10px] font-medium text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
                       Optional
                     </span>
                   </div>
@@ -846,11 +857,11 @@ export default function AddFoodWizard({
                     placeholder="Enter the food name in your native language"
                     value={foodNameNative}
                     onChange={(e) => setFoodNameNative(e.target.value)}
-                    className={`w-full px-3.5 py-2.5 rounded-lg border text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
-                      isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400'
+                    className={`w-full px-3.5 py-2.5 rounded-lg border text-sm font-medium font-noto-bengali focus:outline-none focus:border-orange-500 transition-colors ${
+                      isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-500' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
                     }`}
                   />
-                  <span className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 block">
+                  <span className={`text-xs font-normal mt-1 block ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                     Use your restaurant's local language.
                   </span>
                 </div>
@@ -858,15 +869,15 @@ export default function AddFoodWizard({
                 {/* Category & Subcategory */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                       Category <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <select
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
-                        className={`w-full appearance-none pl-3.5 pr-10 py-2.5 rounded-lg border text-sm font-medium focus:outline-none focus:border-orange-500 cursor-pointer ${
-                          isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                        className={`w-full appearance-none pl-3.5 pr-10 py-2.5 rounded-lg border text-sm font-semibold focus:outline-none focus:border-orange-500 cursor-pointer ${
+                          isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                         }`}
                       >
                         {uniqueCategories.map(c => (
@@ -879,10 +890,10 @@ export default function AddFoodWizard({
 
                   <div>
                     <div className="flex items-center gap-1.5 mb-1.5">
-                      <label className={`text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                      <label className={`text-xs font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                         Subcategory
                       </label>
-                      <span className="text-slate-400 text-xs font-normal">(Optional)</span>
+                      <span className={`text-xs font-normal ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>(Optional)</span>
                     </div>
                     <input
                       type="text"
@@ -890,7 +901,7 @@ export default function AddFoodWizard({
                       value={subcategory}
                       onChange={(e) => setSubcategory(e.target.value)}
                       className={`w-full px-3.5 py-2.5 rounded-lg border text-sm font-medium focus:outline-none focus:border-orange-500 transition-colors ${
-                        isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400'
+                        isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-500' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
                       }`}
                     />
                   </div>
@@ -898,7 +909,7 @@ export default function AddFoodWizard({
 
                 {/* Food Description (English) */}
                 <div>
-                  <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                  <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                     Food description (English)
                   </label>
                   <textarea
@@ -906,8 +917,8 @@ export default function AddFoodWizard({
                     placeholder="Two smashed beef patties with caramelized onions, cheddar cheese and signature smash sauce."
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    className={`w-full px-3.5 py-2.5 rounded-lg border text-sm focus:outline-none focus:border-orange-500 resize-none ${
-                      isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400'
+                    className={`w-full px-3.5 py-2.5 rounded-lg border text-sm font-normal focus:outline-none focus:border-orange-500 resize-none ${
+                      isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-500' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
                     }`}
                   />
                 </div>
@@ -915,10 +926,10 @@ export default function AddFoodWizard({
                 {/* Food Description (Native language) */}
                 <div>
                   <div className="flex items-center gap-2 mb-1.5">
-                    <label className={`text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    <label className={`text-xs font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                       Food description (Native language)
                     </label>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                    <span className="text-[10px] font-medium text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
                       Optional
                     </span>
                   </div>
@@ -927,8 +938,8 @@ export default function AddFoodWizard({
                     placeholder="Describe this food in your native language"
                     value={descriptionNative}
                     onChange={(e) => setDescriptionNative(e.target.value)}
-                    className={`w-full px-3.5 py-2.5 rounded-lg border text-sm focus:outline-none focus:border-orange-500 resize-none ${
-                      isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-600' : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400'
+                    className={`w-full px-3.5 py-2.5 rounded-lg border text-sm font-normal font-noto-bengali focus:outline-none focus:border-orange-500 resize-none ${
+                      isDark ? 'bg-[#0B0F19] border-slate-700 text-white placeholder-slate-500' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
                     }`}
                   />
                 </div>
@@ -936,17 +947,17 @@ export default function AddFoodWizard({
                 {/* Food Badge (Optional) */}
                 <div>
                   <div className="flex items-center gap-1.5 mb-1.5">
-                    <label className={`text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    <label className={`text-xs font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                       Food badge
                     </label>
-                    <span className="text-slate-400 text-xs font-normal">(Optional)</span>
+                    <span className={`text-xs font-normal ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>(Optional)</span>
                   </div>
                   <div className="relative">
                     <select
                       value={badgeTag}
                       onChange={(e) => setBadgeTag(e.target.value)}
-                      className={`w-full appearance-none pl-3.5 pr-10 py-2.5 rounded-lg border text-sm font-medium focus:outline-none focus:border-orange-500 cursor-pointer ${
-                        isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                      className={`w-full appearance-none pl-3.5 pr-10 py-2.5 rounded-lg border text-sm font-semibold focus:outline-none focus:border-orange-500 cursor-pointer ${
+                        isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                       }`}
                     >
                       <option value="No badge">No badge</option>
@@ -1004,7 +1015,7 @@ export default function AddFoodWizard({
                       <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-800'}`}>
                         Upload High-Quality PNG or Photo
                       </span>
-                      <span className="text-[11px] text-slate-400">
+                      <span className={`text-[11px] font-normal ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                         Drag and drop or click Change photo below.
                       </span>
                     </div>
@@ -1012,7 +1023,7 @@ export default function AddFoodWizard({
 
                   {/* Buttons Row */}
                   <div className="flex items-center justify-center gap-3 pt-1">
-                    <label className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold cursor-pointer transition-colors shadow-sm ${
+                    <label className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold cursor-pointer transition-colors shadow-sm ${
                       isOptimizingImage ? 'opacity-50 pointer-events-none' : ''
                     }`}>
                       <Upload className="w-3.5 h-3.5 text-orange-600" />
@@ -1028,7 +1039,7 @@ export default function AddFoodWizard({
                           setFoodImage('');
                           setImageMeta(null);
                         }}
-                        className="text-xs font-semibold text-slate-500 hover:text-red-600 transition-colors cursor-pointer px-2 py-1"
+                        className="text-xs font-semibold text-slate-600 hover:text-red-600 transition-colors cursor-pointer px-2 py-1"
                       >
                         Remove
                       </button>
@@ -1036,9 +1047,13 @@ export default function AddFoodWizard({
                   </div>
 
                   {/* Image Specs Subtext */}
-                  <div className="text-[11px] text-slate-400 dark:text-slate-500 space-y-0.5">
-                    <p>PNG or WebP &bull; 1200 &times; 1200 px</p>
-                    <p>Transparent images work best.</p>
+                  <div className="text-xs space-y-0.5">
+                    <p className={`font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                      PNG or WebP &bull; 1200 &times; 1200 px
+                    </p>
+                    <p className={`font-normal ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                      Transparent images work best.
+                    </p>
                   </div>
 
                   {/* Expandable Photo Guidelines Accordion */}
@@ -1046,8 +1061,8 @@ export default function AddFoodWizard({
                     <button
                       type="button"
                       onClick={() => setShowGuidelines(!showGuidelines)}
-                      className={`w-full py-2 px-3 rounded-lg flex items-center justify-between text-xs font-semibold transition-colors ${
-                        isDark ? 'bg-slate-800/60 hover:bg-slate-800 text-slate-300' : 'bg-slate-50 hover:bg-slate-100 text-slate-700'
+                      className={`w-full py-2 px-3 rounded-lg flex items-center justify-between text-xs font-semibold transition-colors cursor-pointer ${
+                        isDark ? 'bg-slate-800/60 hover:bg-slate-800 text-slate-200' : 'bg-slate-100/70 hover:bg-slate-100 text-slate-700'
                       }`}
                     >
                       <span>Photo guidelines</span>
@@ -1055,20 +1070,20 @@ export default function AddFoodWizard({
                     </button>
 
                     {showGuidelines && (
-                      <div className={`mt-2 p-3 rounded-lg text-left text-[11px] leading-relaxed space-y-2 border ${
-                        isDark ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-orange-50/50 border-orange-100 text-slate-600'
+                      <div className={`mt-2 p-3 rounded-lg text-left text-xs leading-relaxed space-y-2 border ${
+                        isDark ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-orange-50/60 border-orange-100 text-slate-700'
                       }`}>
                         <div>
-                          <strong className="text-orange-600 block">&bull; Recommended Resolution:</strong>
-                          1200 &times; 1200 px (Square 1:1) — Minimum 1000 &times; 1000 px for crisp 3D rendering.
+                          <strong className="text-orange-600 font-semibold block">&bull; Recommended Resolution:</strong>
+                          <span className="font-normal">1200 &times; 1200 px (Square 1:1) — Minimum 1000 &times; 1000 px for crisp 3D rendering.</span>
                         </div>
                         <div>
-                          <strong className="text-orange-600 block">&bull; Format & Transparency:</strong>
-                          Transparent Background PNG (.png) or WebP with tight cutout around the plate.
+                          <strong className="text-orange-600 font-semibold block">&bull; Format & Transparency:</strong>
+                          <span className="font-normal">Transparent Background PNG (.png) or WebP with tight cutout around the plate.</span>
                         </div>
                         <div>
-                          <strong className="text-orange-600 block">&bull; Framing & Zoom Guide:</strong>
-                          Food plate should occupy 85% – 90% of the canvas with minimal empty border.
+                          <strong className="text-orange-600 font-semibold block">&bull; Framing & Zoom Guide:</strong>
+                          <span className="font-normal">Food plate should occupy 85% – 90% of the canvas with minimal empty border.</span>
                         </div>
                       </div>
                     )}
@@ -1089,7 +1104,7 @@ export default function AddFoodWizard({
                   <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                     {hasDifferentSizes ? 'Sizes & pricing' : '2. Size & price'}
                   </h3>
-                  <p className="text-xs text-slate-400">
+                  <p className={`text-xs font-normal ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                     {hasDifferentSizes
                       ? 'Set a price and optional discount for each size.'
                       : 'Does this food come in single price or multiple sizes?'}
@@ -1098,13 +1113,13 @@ export default function AddFoodWizard({
 
                 {/* Currency Dropdown Selector */}
                 <div className="flex items-center gap-2 self-start sm:self-auto">
-                  <span className="text-xs font-semibold text-slate-500">Currency</span>
+                  <span className={`text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>Currency</span>
                   <div className="relative">
                     <select
                       value={currency}
                       onChange={(e) => setCurrency(e.target.value)}
-                      className={`appearance-none pl-3 pr-8 py-1.5 rounded-lg border text-xs font-bold cursor-pointer focus:outline-none focus:border-orange-500 ${
-                        isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'
+                      className={`appearance-none pl-3 pr-8 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer focus:outline-none focus:border-orange-500 ${
+                        isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-800'
                       }`}
                     >
                       <option value="৳">BDT (৳)</option>
@@ -1125,10 +1140,10 @@ export default function AddFoodWizard({
                 <button
                   type="button"
                   onClick={() => setHasDifferentSizes(false)}
-                  className={`px-6 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                  className={`px-6 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                     !hasDifferentSizes
                       ? 'bg-orange-600 text-white shadow-sm'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   Single price
@@ -1136,10 +1151,10 @@ export default function AddFoodWizard({
                 <button
                   type="button"
                   onClick={() => setHasDifferentSizes(true)}
-                  className={`px-6 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                  className={`px-6 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                     hasDifferentSizes
                       ? 'bg-orange-600 text-white shadow-sm'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   Multiple sizes
@@ -1152,25 +1167,25 @@ export default function AddFoodWizard({
                   {/* Row 1: Regular Price (MRP) & Discount Type */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                      <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                         Regular price (MRP) <span className="text-red-500">*</span>
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3.5 top-2.5 text-slate-500 font-bold">{currency}</span>
+                        <span className="absolute left-3.5 top-2.5 text-slate-600 font-bold">{currency}</span>
                         <input
                           type="number"
                           placeholder="280"
                           value={singleOldPrice || (discountMode === 'none' ? singlePrice : '')}
                           onChange={(e) => handleRegularPriceChange(e.target.value)}
                           className={`w-full pl-9 pr-3.5 py-2.5 rounded-lg border text-sm font-bold focus:outline-none focus:border-orange-500 transition-colors ${
-                            isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                            isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                           }`}
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                      <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                         Discount type
                       </label>
                       <div className={`grid grid-cols-3 gap-1 p-1 rounded-lg border ${
@@ -1185,10 +1200,10 @@ export default function AddFoodWizard({
                             key={t.id}
                             type="button"
                             onClick={() => handleDiscountModeChange(t.id)}
-                            className={`py-1.5 text-xs font-bold rounded-md transition-colors cursor-pointer ${
+                            className={`py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
                               discountMode === t.id
                                 ? 'bg-orange-600 text-white shadow-sm'
-                                : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                                : isDark ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-slate-900'
                             }`}
                           >
                             {t.label}
@@ -1201,11 +1216,11 @@ export default function AddFoodWizard({
                   {/* Row 2: Discount Amount (When active) */}
                   {discountMode !== 'none' && (
                     <div>
-                      <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                      <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                         {discountMode === 'percent' ? 'Discount percentage *' : 'Discount amount *'}
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3.5 top-2.5 text-slate-500 font-bold">
+                        <span className="absolute left-3.5 top-2.5 text-slate-600 font-bold">
                           {discountMode === 'percent' ? '%' : currency}
                         </span>
                         <input
@@ -1214,21 +1229,21 @@ export default function AddFoodWizard({
                           value={discountValue}
                           onChange={(e) => handleDiscountValueChange(e.target.value)}
                           className={`w-full sm:w-1/2 pl-9 pr-3.5 py-2.5 rounded-lg border text-sm font-bold focus:outline-none focus:border-orange-500 transition-colors ${
-                            isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                            isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                           }`}
                         />
                       </div>
                     </div>
                   )}
 
-                  {/* Selling Price Calculation Box (Soft Green Box matching Screenshot 2) */}
+                  {/* Selling Price Calculation Box */}
                   <div className={`p-4 rounded-xl border flex items-center justify-between ${
                     isDark
                       ? 'bg-emerald-950/20 border-emerald-800/40'
                       : 'bg-emerald-50/80 border-emerald-200/80'
                   }`}>
                     <div>
-                      <span className="text-xs text-slate-500 dark:text-slate-400 font-medium block mb-0.5">
+                      <span className={`text-xs font-semibold block mb-0.5 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
                         Selling price
                       </span>
                       <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
@@ -1238,9 +1253,9 @@ export default function AddFoodWizard({
 
                     {Number(singleOldPrice) > Number(singlePrice) && Number(singlePrice) > 0 && (
                       <>
-                        <div className="h-9 w-px bg-slate-200 dark:bg-slate-700 mx-2" />
+                        <div className="h-9 w-px bg-slate-300 dark:bg-slate-700 mx-2" />
                         <div>
-                          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium block mb-0.5">
+                          <span className={`text-xs font-semibold block mb-0.5 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
                             Customer saves
                           </span>
                           <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
@@ -1257,33 +1272,33 @@ export default function AddFoodWizard({
                     )}
                   </div>
 
-                  <span className="text-xs text-slate-400 block">
+                  <span className={`text-xs font-normal block ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                     Customers see the selling price on your menu.
                   </span>
                 </div>
               ) : (
-                /* MULTIPLE SIZES MODE (Screenshot 3) */
+                /* MULTIPLE SIZES MODE */
                 <div className="space-y-4">
                   {/* Bulk Discount Toolbar */}
-                  <div className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-3 ${
+                  <div className={`p-3.5 rounded-xl border flex flex-wrap items-center justify-between gap-3 ${
                     isDark ? 'bg-[#0B0F19] border-slate-800' : 'bg-slate-50 border-slate-200'
                   }`}>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span className={`text-xs font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                         Discount for all sizes
                       </span>
                       <div className="relative">
                         <select
                           value={bulkDiscountMode}
                           onChange={(e) => setBulkDiscountMode(e.target.value)}
-                          className={`appearance-none pl-2.5 pr-7 py-1 rounded-md border text-xs font-medium cursor-pointer ${
-                            isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'
+                          className={`appearance-none pl-3 pr-8 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer ${
+                            isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-800'
                           }`}
                         >
                           <option value="percent">Percent (%)</option>
                           <option value="fixed">Flat ({currency})</option>
                         </select>
-                        <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
                       </div>
 
                       <input
@@ -1291,15 +1306,15 @@ export default function AddFoodWizard({
                         placeholder="20"
                         value={bulkDiscountValue}
                         onChange={(e) => setBulkDiscountValue(e.target.value)}
-                        className={`w-16 px-2 py-1 rounded-md border text-xs font-bold ${
-                          isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'
+                        className={`w-20 px-2.5 py-1.5 rounded-lg border text-xs font-bold ${
+                          isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-800'
                         }`}
                       />
 
                       <button
                         type="button"
                         onClick={() => applyDiscountToAllPortions(bulkDiscountMode, bulkDiscountValue)}
-                        className="border border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30 px-3.5 py-1 rounded-md text-xs font-bold transition-colors cursor-pointer"
+                        className="border border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30 px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
                       >
                         Apply to all
                       </button>
@@ -1308,7 +1323,9 @@ export default function AddFoodWizard({
                     <button
                       type="button"
                       onClick={() => applyDiscountToAllPortions('none')}
-                      className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-semibold cursor-pointer"
+                      className={`text-xs font-semibold cursor-pointer transition-colors ${
+                        isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                      }`}
                     >
                       Reset
                     </button>
@@ -1342,7 +1359,7 @@ export default function AddFoodWizard({
                               <button
                                 type="button"
                                 onClick={() => setDefaultSizeIndex(idx)}
-                                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-orange-600 transition-colors cursor-pointer"
+                                className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-orange-600 transition-colors cursor-pointer"
                               >
                                 <div className="w-4 h-4 rounded-full border border-slate-300 dark:border-slate-600" />
                                 <span>Set as default</span>
@@ -1364,7 +1381,7 @@ export default function AddFoodWizard({
                         {/* Inputs Row 1: Name (English), Name (Native), Regular Price */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div>
-                            <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                            <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                               Name (English) <span className="text-red-500">*</span>
                             </label>
                             <input
@@ -1373,42 +1390,42 @@ export default function AddFoodWizard({
                               value={portion.name}
                               onChange={(e) => updatePortion(idx, 'name', e.target.value)}
                               className={`w-full px-3 py-2 rounded-lg border text-xs font-medium focus:outline-none focus:border-orange-500 ${
-                                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                               }`}
                             />
                           </div>
 
                           <div>
                             <div className="flex items-center gap-1.5 mb-1">
-                              <label className={`text-xs font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                              <label className={`text-xs font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                                 Name (Native language)
                               </label>
-                              <span className="text-slate-400 text-[10px] font-normal">Optional</span>
+                              <span className={`text-[10px] font-normal ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Optional</span>
                             </div>
                             <input
                               type="text"
                               placeholder="Local name"
                               value={portion.nameNative || ''}
                               onChange={(e) => updatePortion(idx, 'nameNative', e.target.value)}
-                              className={`w-full px-3 py-2 rounded-lg border text-xs font-medium focus:outline-none focus:border-orange-500 ${
-                                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                              className={`w-full px-3 py-2 rounded-lg border text-xs font-medium font-noto-bengali focus:outline-none focus:border-orange-500 ${
+                                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                               }`}
                             />
                           </div>
 
                           <div>
-                            <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                            <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                               Regular price <span className="text-red-500">*</span>
                             </label>
                             <div className="relative">
-                              <span className="absolute left-3 top-2 text-slate-500 font-bold text-xs">{currency}</span>
+                              <span className="absolute left-3 top-2 text-slate-600 font-bold text-xs">{currency}</span>
                               <input
                                 type="number"
                                 placeholder="180"
                                 value={portion.regularPrice || (portion.discountMode === 'none' ? portion.price : '')}
                                 onChange={(e) => updatePortion(idx, 'regularPrice', e.target.value)}
                                 className={`w-full pl-7 pr-3 py-2 rounded-lg border text-xs font-bold focus:outline-none focus:border-orange-500 ${
-                                  isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                                  isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                                 }`}
                               />
                             </div>
@@ -1418,15 +1435,15 @@ export default function AddFoodWizard({
                         {/* Inputs Row 2: Discount Type, Discount Value & Green Selling Price */}
                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
                           <div className={portion.discountMode !== 'none' ? 'sm:col-span-4' : 'sm:col-span-6'}>
-                            <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                            <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                               Discount type
                             </label>
                             <div className="relative">
                               <select
                                 value={portion.discountMode}
                                 onChange={(e) => updatePortion(idx, 'discountMode', e.target.value)}
-                                className={`w-full appearance-none pl-3 pr-8 py-2 rounded-lg border text-xs font-medium cursor-pointer ${
-                                  isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                                className={`w-full appearance-none pl-3 pr-8 py-2 rounded-lg border text-xs font-semibold cursor-pointer ${
+                                  isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                                 }`}
                               >
                                 <option value="none">No discount</option>
@@ -1439,11 +1456,11 @@ export default function AddFoodWizard({
 
                           {portion.discountMode !== 'none' && (
                             <div className="sm:col-span-3">
-                              <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                              <label className={`text-xs font-semibold block mb-1 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                                 Discount
                               </label>
                               <div className="relative">
-                                <span className="absolute right-3 top-2 text-slate-400 font-bold text-xs">
+                                <span className="absolute right-3 top-2 text-slate-600 font-bold text-xs">
                                   {portion.discountMode === 'percent' ? '%' : currency}
                                 </span>
                                 <input
@@ -1452,7 +1469,7 @@ export default function AddFoodWizard({
                                   value={portion.discountValue}
                                   onChange={(e) => updatePortion(idx, 'discountValue', e.target.value)}
                                   className={`w-full pl-3 pr-7 py-2 rounded-lg border text-xs font-bold ${
-                                    isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                                    isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                                   }`}
                                 />
                               </div>
@@ -1470,7 +1487,7 @@ export default function AddFoodWizard({
                                 : 'bg-emerald-50 border-emerald-200/80'
                             }`}>
                               <div>
-                                <span className="text-[10px] text-slate-500 block leading-tight">Selling price</span>
+                                <span className="text-[10px] text-slate-600 dark:text-slate-400 font-medium block leading-tight">Selling price</span>
                                 <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
                                   {currency} {portion.price || '0'}
                                 </span>
@@ -1493,7 +1510,7 @@ export default function AddFoodWizard({
                     onClick={addPortion}
                     className={`w-full py-3 rounded-xl border-2 border-dashed font-semibold text-xs sm:text-sm flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
                       isDark
-                        ? 'border-slate-700 text-slate-300 hover:border-orange-500 hover:text-orange-400'
+                        ? 'border-slate-700 text-slate-200 hover:border-orange-500 hover:text-orange-400'
                         : 'border-slate-300 text-slate-700 hover:border-orange-500 hover:text-orange-600'
                     }`}
                   >
@@ -1501,7 +1518,7 @@ export default function AddFoodWizard({
                     <span>Add size</span>
                   </button>
 
-                  <span className="text-xs text-slate-400 block">
+                  <span className={`text-xs font-normal block ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                     The default size appears first in your customer menu.
                   </span>
                 </div>
@@ -1518,7 +1535,7 @@ export default function AddFoodWizard({
                 <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                   Extra choices
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className={`text-xs font-normal ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                   {hasExtraChoices
                     ? 'Offer toppings, sides or drinks with this food.'
                     : 'Let customers add toppings, sides or drinks.'}
@@ -1547,7 +1564,7 @@ export default function AddFoodWizard({
                 </div>
               </div>
 
-              {/* If OFF: Centered Empty State (Screenshot 4) */}
+              {/* If OFF: Centered Empty State */}
               {!hasExtraChoices ? (
                 <div className="py-12 px-4 text-center space-y-2">
                   <div className="w-12 h-12 rounded-full border border-slate-300 dark:border-slate-700 text-slate-400 flex items-center justify-center mx-auto mb-3">
@@ -1556,12 +1573,12 @@ export default function AddFoodWizard({
                   <h4 className={`text-base font-bold ${isDark ? 'text-white' : 'text-slate-800'}`}>
                     No extras for this item
                   </h4>
-                  <p className="text-xs text-slate-400">
+                  <p className={`text-xs font-normal ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                     You can continue without adding extras.
                   </p>
                 </div>
               ) : (
-                /* If ON: Selection Settings and Table (Screenshot 5) */
+                /* If ON: Selection Settings and Table */
                 <div className="space-y-5">
                   {/* Selection Settings Section */}
                   <div className="space-y-4">
@@ -1571,7 +1588,7 @@ export default function AddFoodWizard({
 
                     {/* Group Name */}
                     <div>
-                      <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                      <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                         Group name
                       </label>
                       <input
@@ -1580,24 +1597,24 @@ export default function AddFoodWizard({
                         value={choiceGroupName}
                         onChange={(e) => setChoiceGroupName(e.target.value)}
                         className={`w-full px-3.5 py-2.5 rounded-lg border text-sm font-medium focus:outline-none focus:border-orange-500 ${
-                          isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                          isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                         }`}
                       />
                     </div>
 
                     {/* Customers can choose (One option vs Multiple options) */}
                     <div>
-                      <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                      <label className={`text-xs font-semibold block mb-1.5 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                         Customers can choose
                       </label>
                       <div className="inline-flex p-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
                         <button
                           type="button"
                           onClick={() => setSelectionType('single')}
-                          className={`px-6 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          className={`px-6 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                             selectionType === 'single'
                               ? 'bg-orange-600 text-white shadow-sm'
-                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                              : 'text-slate-700 dark:text-slate-300 hover:text-slate-900'
                           }`}
                         >
                           One option
@@ -1605,10 +1622,10 @@ export default function AddFoodWizard({
                         <button
                           type="button"
                           onClick={() => setSelectionType('multiple')}
-                          className={`px-6 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          className={`px-6 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                             selectionType === 'multiple'
                               ? 'bg-orange-600 text-white shadow-sm'
-                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                              : 'text-slate-700 dark:text-slate-300 hover:text-slate-900'
                           }`}
                         >
                           Multiple options
@@ -1622,7 +1639,7 @@ export default function AddFoodWizard({
                         <span className={`text-xs font-bold block ${isDark ? 'text-white' : 'text-slate-900'}`}>
                           Maximum selections
                         </span>
-                        <span className="text-[11px] text-slate-400">
+                        <span className={`text-xs font-normal ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
                           Up to {maxSelections} available options
                         </span>
                       </div>
@@ -1631,8 +1648,8 @@ export default function AddFoodWizard({
                         <select
                           value={maxSelections}
                           onChange={(e) => setMaxSelections(Number(e.target.value))}
-                          className={`appearance-none pl-3 pr-8 py-1.5 rounded-lg border text-xs font-bold cursor-pointer ${
-                            isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'
+                          className={`appearance-none pl-3 pr-8 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer ${
+                            isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-800'
                           }`}
                         >
                           <option value={1}>1</option>
@@ -1653,17 +1670,19 @@ export default function AddFoodWizard({
                       <h4 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                         Extra items
                       </h4>
-                      <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs px-2.5 py-0.5 rounded-full font-semibold">
+                      <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-slate-200 dark:border-slate-700">
                         {extraOptions.length} items
                       </span>
                     </div>
 
-                    {/* Table-like Header */}
-                    <div className="hidden sm:grid grid-cols-12 gap-3 px-3 text-[11px] font-semibold text-slate-400">
+                    {/* High-Contrast Table Header (Fixing circled low-contrast labels in Image 2) */}
+                    <div className={`hidden sm:grid grid-cols-12 gap-3 px-3 py-1.5 text-xs font-semibold ${
+                      isDark ? 'text-slate-300' : 'text-slate-700'
+                    }`}>
                       <div className="col-span-1"></div>
-                      <div className="col-span-4">Name (English) *</div>
-                      <div className="col-span-4">Name (Native language) Optional</div>
-                      <div className="col-span-2">Extra price ({currency}) *</div>
+                      <div className="col-span-4">Name (English) <span className="text-red-500">*</span></div>
+                      <div className="col-span-4">Name (Native language) <span className="font-normal text-slate-500">Optional</span></div>
+                      <div className="col-span-2">Extra price ({currency}) <span className="text-red-500">*</span></div>
                       <div className="col-span-1"></div>
                     </div>
 
@@ -1683,7 +1702,7 @@ export default function AddFoodWizard({
                           }`}
                         >
                           <div className="col-span-1 flex items-center gap-1 text-slate-400 cursor-grab active:cursor-grabbing self-start sm:self-center">
-                            <GripVertical className="w-4 h-4 text-slate-400" />
+                            <GripVertical className="w-4 h-4 text-slate-500 hover:text-orange-500 transition-colors" />
                           </div>
 
                           <div className="col-span-4 w-full">
@@ -1692,8 +1711,8 @@ export default function AddFoodWizard({
                               placeholder="Extra Egg"
                               value={opt.name}
                               onChange={(e) => updateExtraOption(idx, 'name', e.target.value)}
-                              className={`w-full px-3 py-1.5 rounded-lg border text-xs font-medium focus:outline-none focus:border-orange-500 ${
-                                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                              className={`w-full px-3 py-2 rounded-lg border text-xs font-medium focus:outline-none focus:border-orange-500 ${
+                                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                               }`}
                             />
                           </div>
@@ -1704,8 +1723,8 @@ export default function AddFoodWizard({
                               placeholder="Local name"
                               value={opt.nameNative || ''}
                               onChange={(e) => updateExtraOption(idx, 'nameNative', e.target.value)}
-                              className={`w-full px-3 py-1.5 rounded-lg border text-xs font-medium focus:outline-none focus:border-orange-500 ${
-                                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                              className={`w-full px-3 py-2 rounded-lg border text-xs font-medium font-noto-bengali focus:outline-none focus:border-orange-500 ${
+                                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                               }`}
                             />
                           </div>
@@ -1716,8 +1735,8 @@ export default function AddFoodWizard({
                               placeholder="30"
                               value={opt.price}
                               onChange={(e) => updateExtraOption(idx, 'price', e.target.value)}
-                              className={`w-full px-3 py-1.5 rounded-lg border text-xs font-bold focus:outline-none focus:border-orange-500 ${
-                                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+                              className={`w-full px-3 py-2 rounded-lg border text-xs font-bold focus:outline-none focus:border-orange-500 ${
+                                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                               }`}
                             />
                           </div>
@@ -1726,7 +1745,7 @@ export default function AddFoodWizard({
                             <button
                               type="button"
                               onClick={() => removeExtraOption(idx)}
-                              className="p-1 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                              className="p-1.5 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -1739,7 +1758,7 @@ export default function AddFoodWizard({
                     <button
                       type="button"
                       onClick={addExtraOption}
-                      className="w-full py-2.5 rounded-xl border border-dashed border-orange-400 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                      className="w-full py-2.5 rounded-xl border border-dashed border-orange-400 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Add extra item</span>
@@ -1751,7 +1770,7 @@ export default function AddFoodWizard({
           )}
 
           {/* ======================================================== */}
-          {/* STEP 4: PREVIEW & REVIEW (Screenshot 6)                  */}
+          {/* STEP 4: PREVIEW & REVIEW                                 */}
           {/* ======================================================== */}
           {currentStep === 4 && (() => {
             const previewBasePrice = hasDifferentSizes
@@ -1770,25 +1789,43 @@ export default function AddFoodWizard({
               );
             };
 
-            const displayName = previewLang === 'bn' && foodNameNative.trim() ? foodNameNative : (foodName || 'Food Item');
-            const displayDesc = previewLang === 'bn' && descriptionNative.trim() ? descriptionNative : (description || 'Prepared fresh with premium ingredients.');
+            const isBn = previewLang === 'bn';
+
+            // Fully localized customer menu variables matching frontend
+            const displayTitle = isBn
+              ? (foodNameNative.trim() || translateFoodTitle(foodName, 'bn'))
+              : (foodName || 'Food Item');
+
+            const displayCategory = isBn
+              ? `${translateCategoryName(category, 'bn')}${subcategory ? ` • ${translateSubcategoryName(subcategory, 'bn')}` : ''}`
+              : `${category}${subcategory ? ` • ${subcategory}` : ''}`;
+
+            const displayDescription = isBn
+              ? (descriptionNative.trim() || translateFoodDescription(description, 'bn'))
+              : (description || 'Prepared fresh with premium quality ingredients.');
+
+            const displayBadge = isBn && badgeTag && badgeTag !== 'No badge'
+              ? formatBadgeText(badgeTag, 'bn')
+              : badgeTag;
 
             return (
-              <div className="space-y-5">
+              <div className="space-y-6">
                 <div>
                   <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                     Review your food item
                   </h3>
-                  <p className="text-xs text-slate-400">
+                  <p className={`text-xs font-normal ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                     Check the customer view before saving.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                  {/* Left Column: Customer Preview with Mobile Phone Frame */}
-                  <div className="lg:col-span-5 space-y-3">
+                {/* 2-Column Layout: Customer Preview on Left (Size Increased) & Item Summary on Right */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 items-start">
+                  
+                  {/* LEFT COLUMN: Customer Preview Section (Size Increased & Authentic Live Experience) */}
+                  <div className="lg:col-span-6 space-y-3.5">
                     <div className="flex items-center justify-between">
-                      <span className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      <span className={`text-sm font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
                         Customer preview
                       </span>
 
@@ -1797,10 +1834,10 @@ export default function AddFoodWizard({
                         <button
                           type="button"
                           onClick={() => setPreviewLang('en')}
-                          className={`px-3 py-0.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                          className={`px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                             previewLang === 'en'
                               ? 'bg-orange-600 text-white shadow-sm'
-                              : 'text-slate-600 dark:text-slate-400'
+                              : 'text-slate-700 dark:text-slate-300'
                           }`}
                         >
                           English
@@ -1808,10 +1845,10 @@ export default function AddFoodWizard({
                         <button
                           type="button"
                           onClick={() => setPreviewLang('bn')}
-                          className={`px-3 py-0.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                          className={`px-3 py-1 rounded-full text-xs font-semibold font-noto-bengali transition-all cursor-pointer ${
                             previewLang === 'bn'
                               ? 'bg-orange-600 text-white shadow-sm'
-                              : 'text-slate-600 dark:text-slate-400'
+                              : 'text-slate-700 dark:text-slate-300'
                           }`}
                         >
                           {nativeLang.nativeName || 'বাংলা'}
@@ -1819,24 +1856,31 @@ export default function AddFoodWizard({
                       </div>
                     </div>
 
-                    {/* Dark Mobile Phone Device Frame */}
-                    <div className="bg-[#0B0F19] text-white rounded-2xl p-4 border border-slate-800 shadow-2xl space-y-3.5">
-                      {/* Phone Menu Header */}
-                      <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-5 h-5 rounded bg-orange-600 flex items-center justify-center text-white">
-                            <Utensils className="w-3 h-3" />
+                    {/* Dark Mobile Device Frame - Enhanced Width & Authentic Frontend Layout */}
+                    <div className="bg-[#080B11] text-white rounded-2xl p-4 sm:p-5 border border-slate-800/90 shadow-2xl space-y-4">
+                      {/* Phone Menu Header with Verified Tick Icon */}
+                      <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-md bg-orange-600 flex items-center justify-center text-white shadow-sm">
+                            <Utensils className="w-3.5 h-3.5" />
                           </div>
-                          <span className="text-xs font-bold tracking-tight">PhoneMenu</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-xs font-bold tracking-tight ${isBn ? 'font-noto-bengali' : ''}`}>
+                              {isBn ? 'মেনু ও স্পেশাল' : 'PhoneMenu'}
+                            </span>
+                            {isBn && (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20" />
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 text-slate-400">
-                          <Search className="w-3.5 h-3.5" />
-                          <Menu className="w-3.5 h-3.5" />
+                        <div className="flex items-center gap-2.5 text-slate-400">
+                          <Search className="w-4 h-4 cursor-pointer hover:text-white transition-colors" />
+                          <Menu className="w-4 h-4 cursor-pointer hover:text-white transition-colors" />
                         </div>
                       </div>
 
-                      {/* Food Image Card */}
-                      <div className="relative rounded-xl overflow-hidden bg-slate-900 h-36 flex items-center justify-center">
+                      {/* Food Image Card - Expanded Height */}
+                      <div className="relative rounded-xl overflow-hidden bg-slate-900 h-44 sm:h-48 flex items-center justify-center border border-slate-800/60 shadow-inner">
                         {imagePreview || foodImage ? (
                           <img
                             src={imagePreview || foodImage}
@@ -1844,59 +1888,75 @@ export default function AddFoodWizard({
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <Utensils className="w-10 h-10 text-slate-600" />
+                          <Utensils className="w-12 h-12 text-slate-600" />
                         )}
 
                         {badgeTag && badgeTag !== 'No badge' && (
-                          <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/60 backdrop-blur-md border border-amber-500/40 text-amber-400 text-[10px] font-bold flex items-center gap-1">
-                            <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
-                            <span>{badgeTag.toUpperCase()}</span>
+                          <div className={`absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-black/75 backdrop-blur-md border border-amber-500/50 text-amber-400 text-[10px] font-bold flex items-center gap-1 shadow-lg ${
+                            isBn ? 'font-noto-bengali' : ''
+                          }`}>
+                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                            <span>{displayBadge.toUpperCase()}</span>
                           </div>
                         )}
                       </div>
 
-                      {/* Food Title & Description */}
-                      <div>
-                        <h4 className="text-sm font-bold text-white leading-snug">
-                          {displayName}
+                      {/* Food Title & Description - Fully Localized */}
+                      <div className="space-y-1">
+                        <h4 className={`text-base font-bold text-white leading-snug ${isBn ? 'font-noto-bengali' : ''}`}>
+                          {displayTitle}
                         </h4>
-                        <span className="text-[11px] text-slate-400 block mt-0.5">
-                          {category} {subcategory ? `• ${subcategory}` : ''}
+                        <span className={`text-xs font-semibold text-orange-400 block ${isBn ? 'font-noto-bengali' : ''}`}>
+                          {displayCategory}
                         </span>
-                        <p className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                          {displayDesc}
+                        <p className={`text-xs font-normal text-slate-300 pt-0.5 line-clamp-3 leading-relaxed ${isBn ? 'font-noto-bengali' : ''}`}>
+                          {displayDescription}
                         </p>
                       </div>
 
-                      {/* Portion Interactive Selector */}
+                      {/* Portion Interactive Selector - Fully Localized in Bengali */}
                       {hasDifferentSizes && (
-                        <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                            Portion
+                        <div className="space-y-2 pt-2.5 border-t border-slate-800/80">
+                          <span className={`text-xs font-bold uppercase tracking-wider text-orange-400 block ${isBn ? 'font-noto-bengali' : ''}`}>
+                            {isBn ? 'পরিমাণ সাইজ' : 'PORTION'}
                           </span>
-                          <div className="space-y-1">
+                          <div className="space-y-1.5">
                             {portions.map((p, i) => {
                               const isSelected = previewSelectedPortion === i;
-                              const pName = previewLang === 'bn' && p.nameNative ? p.nameNative : (p.name || `Portion ${i+1}`);
+                              const pName = isBn
+                                ? (p.nameNative?.trim() || translatePortionName(p.name, 'bn'))
+                                : (p.name || `Portion ${i+1}`);
+                              const formattedPrice = isBn ? toBengaliDigits(p.price) : p.price;
+                              const formattedOldPrice = isBn ? toBengaliDigits(p.regularPrice) : p.regularPrice;
+
                               return (
                                 <div
                                   key={i}
                                   onClick={() => setPreviewSelectedPortion(i)}
-                                  className={`p-2 rounded-lg border flex items-center justify-between text-xs cursor-pointer transition-colors ${
+                                  className={`p-2.5 rounded-lg border flex items-center justify-between text-xs cursor-pointer transition-colors ${
                                     isSelected
-                                      ? 'bg-orange-950/20 border-orange-500/60 font-semibold'
-                                      : 'bg-slate-900/60 border-slate-800 text-slate-300'
+                                      ? 'bg-orange-950/30 border-orange-500/70 font-semibold'
+                                      : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:border-slate-700'
                                   }`}
                                 >
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                                  <div className="flex items-center gap-2.5">
+                                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
                                       isSelected ? 'border-orange-500' : 'border-slate-600'
                                     }`}>
-                                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />}
+                                      {isSelected && <div className="w-2 h-2 rounded-full bg-orange-500" />}
                                     </div>
-                                    <span>{pName}</span>
+                                    <span className={isBn ? 'font-noto-bengali font-semibold' : ''}>{pName}</span>
                                   </div>
-                                  <span className="text-white font-bold">{currency}{p.price}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-white font-bold ${isBn ? 'font-noto-bengali' : ''}`}>
+                                      {currency}{formattedPrice}
+                                    </span>
+                                    {Number(p.regularPrice) > Number(p.price) && (
+                                      <span className={`line-through text-slate-500 text-[11px] ${isBn ? 'font-noto-bengali' : ''}`}>
+                                        {currency}{formattedOldPrice}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               );
                             })}
@@ -1904,35 +1964,41 @@ export default function AddFoodWizard({
                         </div>
                       )}
 
-                      {/* Extras Interactive Selector */}
+                      {/* Extras Interactive Selector - Fully Localized in Bengali */}
                       {hasExtraChoices && extraOptions.length > 0 && (
-                        <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                            Extras
+                        <div className="space-y-2 pt-2.5 border-t border-slate-800/80">
+                          <span className={`text-xs font-bold uppercase tracking-wider text-orange-400 block ${isBn ? 'font-noto-bengali' : ''}`}>
+                            {isBn ? 'অতিরিক্ত আইটেম (অ্যাড-অন)' : 'EXTRAS'}
                           </span>
-                          <div className="space-y-1">
+                          <div className="space-y-1.5">
                             {extraOptions.map((opt, i) => {
                               const isChecked = previewSelectedAddons.includes(i);
-                              const optName = previewLang === 'bn' && opt.nameNative ? opt.nameNative : (opt.name || `Extra ${i+1}`);
+                              const optName = isBn
+                                ? (opt.nameNative?.trim() || translateAddonName(opt.name, 'bn'))
+                                : (opt.name || `Extra ${i+1}`);
+                              const formattedPrice = isBn ? toBengaliDigits(opt.price) : opt.price;
+
                               return (
                                 <div
                                   key={i}
                                   onClick={() => togglePreviewAddon(i)}
-                                  className={`p-2 rounded-lg border flex items-center justify-between text-xs cursor-pointer transition-colors ${
+                                  className={`p-2.5 rounded-lg border flex items-center justify-between text-xs cursor-pointer transition-colors ${
                                     isChecked
-                                      ? 'bg-orange-950/20 border-orange-500/60 font-semibold'
-                                      : 'bg-slate-900/60 border-slate-800 text-slate-300'
+                                      ? 'bg-orange-950/30 border-orange-500/70 font-semibold'
+                                      : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:border-slate-700'
                                   }`}
                                 >
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${
+                                  <div className="flex items-center gap-2.5">
+                                    <div className={`w-4 h-4 rounded border flex items-center justify-center ${
                                       isChecked ? 'border-orange-500 bg-orange-500 text-white' : 'border-slate-600'
                                     }`}>
-                                      {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                      {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
                                     </div>
-                                    <span>{optName}</span>
+                                    <span className={isBn ? 'font-noto-bengali font-medium' : ''}>{optName}</span>
                                   </div>
-                                  <span className="text-slate-300 font-bold">+{currency}{opt.price}</span>
+                                  <span className={`text-slate-200 font-bold ${isBn ? 'font-noto-bengali' : ''}`}>
+                                    +{currency}{formattedPrice}
+                                  </span>
                                 </div>
                               );
                             })}
@@ -1940,29 +2006,33 @@ export default function AddFoodWizard({
                         </div>
                       )}
 
-                      {/* Total Bar */}
-                      <div className="pt-2 border-t border-slate-800 flex items-center justify-between font-bold">
-                        <span className="text-xs text-slate-300">Total</span>
-                        <span className="text-base text-amber-500 font-black">
-                          {currency}{previewTotalPrice}
+                      {/* Total Settlement Bar */}
+                      <div className="pt-3 border-t border-slate-800 flex items-center justify-between font-bold">
+                        <span className={`text-xs text-slate-300 ${isBn ? 'font-noto-bengali font-semibold' : ''}`}>
+                          {isBn ? 'আইটেমের মোট মূল্য' : 'Total'}
+                        </span>
+                        <span className={`text-xl text-amber-400 font-black ${isBn ? 'font-noto-bengali' : ''}`}>
+                          {currency}{isBn ? toBengaliDigits(previewTotalPrice) : previewTotalPrice}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Right Column: Item Summary Cards (Screenshot 6) */}
-                  <div className="lg:col-span-7 space-y-4">
-                    <span className={`text-sm font-bold block ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  {/* RIGHT COLUMN: Item Summary Cards (High-Contrast Professional Typography) */}
+                  <div className="lg:col-span-6 space-y-4">
+                    <span className={`text-sm font-bold tracking-tight block ${isDark ? 'text-white' : 'text-slate-900'}`}>
                       Item summary
                     </span>
 
                     {/* Card 1: Food Details */}
-                    <div className={`p-4 rounded-xl border space-y-2.5 ${
-                      isDark ? 'bg-[#0B0F19] border-slate-800' : 'bg-white border-slate-200'
+                    <div className={`rounded-xl border overflow-hidden ${
+                      isDark ? 'bg-[#0B0F19] border-slate-700' : 'bg-white border-slate-200'
                     }`}>
-                      <div className="flex items-center justify-between border-b pb-2 border-slate-100 dark:border-slate-800">
+                      <div className={`px-4 py-2.5 border-b flex items-center justify-between ${
+                        isDark ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200'
+                      }`}>
                         <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-slate-400" />
+                          <FileText className="w-4 h-4 text-orange-600" />
                           <h4 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                             Food details
                           </h4>
@@ -1970,38 +2040,51 @@ export default function AddFoodWizard({
                         <button
                           type="button"
                           onClick={() => setCurrentStep(1)}
-                          className="text-xs font-bold text-orange-600 hover:text-orange-500 flex items-center gap-1 cursor-pointer"
+                          className="text-xs font-semibold text-orange-600 hover:text-orange-500 flex items-center gap-1 cursor-pointer"
                         >
                           <Pencil className="w-3 h-3" />
                           <span>Edit</span>
                         </button>
                       </div>
 
-                      <div className="space-y-1.5 text-xs">
-                        <div className="grid grid-cols-3">
-                          <span className="text-slate-400">Name</span>
-                          <span className="col-span-2 font-semibold text-slate-800 dark:text-slate-200">{foodName || '—'}</span>
+                      <div className="p-4 space-y-3 text-xs">
+                        {/* High-Contrast Clear Labels */}
+                        <div className="grid grid-cols-12 gap-2">
+                          <span className={`col-span-4 font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                            Name
+                          </span>
+                          <span className={`col-span-8 font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                            {foodName || '—'}
+                          </span>
                         </div>
-                        <div className="grid grid-cols-3">
-                          <span className="text-slate-400">Category</span>
-                          <span className="col-span-2 font-semibold text-slate-800 dark:text-slate-200">
+                        <div className="grid grid-cols-12 gap-2">
+                          <span className={`col-span-4 font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                            Category
+                          </span>
+                          <span className={`col-span-8 font-semibold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
                             {category} {subcategory ? `• ${subcategory}` : ''}
                           </span>
                         </div>
-                        <div className="grid grid-cols-3">
-                          <span className="text-slate-400">Food description</span>
-                          <span className="col-span-2 text-slate-600 dark:text-slate-400 line-clamp-2">{description || '—'}</span>
+                        <div className="grid grid-cols-12 gap-2">
+                          <span className={`col-span-4 font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                            Food description
+                          </span>
+                          <span className={`col-span-8 font-normal leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                            {description || '—'}
+                          </span>
                         </div>
                       </div>
                     </div>
 
                     {/* Card 2: Sizes & Pricing */}
-                    <div className={`p-4 rounded-xl border space-y-2.5 ${
-                      isDark ? 'bg-[#0B0F19] border-slate-800' : 'bg-white border-slate-200'
+                    <div className={`rounded-xl border overflow-hidden ${
+                      isDark ? 'bg-[#0B0F19] border-slate-700' : 'bg-white border-slate-200'
                     }`}>
-                      <div className="flex items-center justify-between border-b pb-2 border-slate-100 dark:border-slate-800">
+                      <div className={`px-4 py-2.5 border-b flex items-center justify-between ${
+                        isDark ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200'
+                      }`}>
                         <div className="flex items-center gap-2">
-                          <Tag className="w-4 h-4 text-slate-400" />
+                          <Tag className="w-4 h-4 text-orange-600" />
                           <h4 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                             Sizes & pricing
                           </h4>
@@ -2009,36 +2092,53 @@ export default function AddFoodWizard({
                         <button
                           type="button"
                           onClick={() => setCurrentStep(2)}
-                          className="text-xs font-bold text-orange-600 hover:text-orange-500 flex items-center gap-1 cursor-pointer"
+                          className="text-xs font-semibold text-orange-600 hover:text-orange-500 flex items-center gap-1 cursor-pointer"
                         >
                           <Pencil className="w-3 h-3" />
                           <span>Edit</span>
                         </button>
                       </div>
 
-                      <div className="space-y-1.5 text-xs">
+                      <div className="p-4 space-y-2.5 text-xs">
                         {!hasDifferentSizes ? (
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-400">Single Price</span>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-800 dark:text-slate-200">{currency}{singlePrice}</span>
+                          <div className="grid grid-cols-12 gap-2 items-center">
+                            <span className={`col-span-4 font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                              Single Price
+                            </span>
+                            <div className="col-span-8 flex items-center gap-2.5">
+                              <span className={`font-bold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                {currency}{singlePrice}
+                              </span>
                               {singleOldPrice && (
-                                <span className="line-through text-slate-400 text-[11px]">{currency}{singleOldPrice}</span>
+                                <span className="line-through text-slate-400 font-semibold text-xs">
+                                  {currency}{singleOldPrice}
+                                </span>
                               )}
                             </div>
                           </div>
                         ) : (
                           portions.map((p, i) => (
-                            <div key={i} className="flex items-center justify-between">
+                            <div key={i} className="flex items-center justify-between py-1 border-b last:border-b-0 border-slate-100 dark:border-slate-800/80">
                               <div className="flex items-center gap-2">
-                                <span className="text-slate-700 dark:text-slate-300 font-medium">{p.name || `Size ${i+1}`}</span>
+                                <span className={`font-semibold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                  {p.name || `Size ${i+1}`}
+                                </span>
                                 {defaultSizeIndex === i && (
-                                  <span className="bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-400 px-1.5 py-0.2 rounded text-[10px] font-bold">
+                                  <span className="bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-400 border border-orange-200/60 px-2 py-0.5 rounded text-[10px] font-bold">
                                     Default
                                   </span>
                                 )}
                               </div>
-                              <span className="font-bold text-slate-800 dark:text-slate-200">{currency}{p.price}</span>
+                              <div className="flex items-center gap-2">
+                                <span className={`font-bold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                  {currency}{p.price}
+                                </span>
+                                {Number(p.regularPrice) > Number(p.price) && (
+                                  <span className="line-through text-slate-400 text-xs">
+                                    {currency}{p.regularPrice}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           ))
                         )}
@@ -2046,12 +2146,14 @@ export default function AddFoodWizard({
                     </div>
 
                     {/* Card 3: Extra Choices */}
-                    <div className={`p-4 rounded-xl border space-y-2.5 ${
-                      isDark ? 'bg-[#0B0F19] border-slate-800' : 'bg-white border-slate-200'
+                    <div className={`rounded-xl border overflow-hidden ${
+                      isDark ? 'bg-[#0B0F19] border-slate-700' : 'bg-white border-slate-200'
                     }`}>
-                      <div className="flex items-center justify-between border-b pb-2 border-slate-100 dark:border-slate-800">
+                      <div className={`px-4 py-2.5 border-b flex items-center justify-between ${
+                        isDark ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200'
+                      }`}>
                         <div className="flex items-center gap-2">
-                          <SlidersHorizontal className="w-4 h-4 text-slate-400" />
+                          <SlidersHorizontal className="w-4 h-4 text-orange-600" />
                           <h4 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                             Extra choices
                           </h4>
@@ -2059,37 +2161,53 @@ export default function AddFoodWizard({
                         <button
                           type="button"
                           onClick={() => setCurrentStep(3)}
-                          className="text-xs font-bold text-orange-600 hover:text-orange-500 flex items-center gap-1 cursor-pointer"
+                          className="text-xs font-semibold text-orange-600 hover:text-orange-500 flex items-center gap-1 cursor-pointer"
                         >
                           <Pencil className="w-3 h-3" />
                           <span>Edit</span>
                         </button>
                       </div>
 
-                      <div className="space-y-1.5 text-xs">
+                      <div className="p-4 space-y-3 text-xs">
                         {!hasExtraChoices ? (
-                          <span className="text-slate-400">No extras for this item.</span>
+                          <span className={`font-normal ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                            No extras configured for this item.
+                          </span>
                         ) : (
                           <>
-                            <div className="grid grid-cols-3">
-                              <span className="text-slate-400">Group</span>
-                              <span className="col-span-2 font-semibold text-slate-800 dark:text-slate-200">{choiceGroupName}</span>
+                            <div className="grid grid-cols-12 gap-2">
+                              <span className={`col-span-4 font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                                Group
+                              </span>
+                              <span className={`col-span-8 font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                {choiceGroupName}
+                              </span>
                             </div>
-                            <div className="grid grid-cols-3">
-                              <span className="text-slate-400">Selection</span>
-                              <span className="col-span-2 text-slate-700 dark:text-slate-300">
+                            <div className="grid grid-cols-12 gap-2">
+                              <span className={`col-span-4 font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                                Selection
+                              </span>
+                              <span className={`col-span-8 font-normal ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                                 {selectionType === 'multiple' ? 'Choose multiple • Optional' : 'Choose one'}
                               </span>
                             </div>
-                            <div className="grid grid-cols-3">
-                              <span className="text-slate-400">Maximum</span>
-                              <span className="col-span-2 font-semibold text-slate-800 dark:text-slate-200">{maxSelections}</span>
+                            <div className="grid grid-cols-12 gap-2">
+                              <span className={`col-span-4 font-semibold ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                                Maximum
+                              </span>
+                              <span className={`col-span-8 font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                {maxSelections}
+                              </span>
                             </div>
-                            <div className="pt-1 space-y-1 border-t border-slate-100 dark:border-slate-800">
+                            <div className="pt-2 space-y-1.5 border-t border-slate-200 dark:border-slate-800">
                               {extraOptions.map((opt, i) => (
                                 <div key={i} className="flex items-center justify-between">
-                                  <span className="text-slate-600 dark:text-slate-400">{opt.name}</span>
-                                  <span className="font-bold text-slate-800 dark:text-slate-200">+{currency}{opt.price}</span>
+                                  <span className={`font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                                    {opt.name}
+                                  </span>
+                                  <span className={`font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                    +{currency}{opt.price}
+                                  </span>
                                 </div>
                               ))}
                             </div>
@@ -2098,9 +2216,9 @@ export default function AddFoodWizard({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                      <Info className="w-3.5 h-3.5" />
-                      <span>Preview selections do not change your saved defaults.</span>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <Info className="w-4 h-4 text-orange-500 shrink-0" />
+                      <span className="font-normal">Preview selections do not change your saved defaults.</span>
                     </div>
                   </div>
                 </div>
@@ -2117,10 +2235,10 @@ export default function AddFoodWizard({
             <button
               type="button"
               onClick={() => setCurrentStep(prev => prev - 1)}
-              className={`px-5 py-2.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+              className={`px-5 py-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
                 isDark
-                  ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-750'
+                  : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
               }`}
             >
               <ChevronLeft className="w-4 h-4" />
@@ -2133,10 +2251,10 @@ export default function AddFoodWizard({
                 resetForm();
                 onClose();
               }}
-              className={`px-5 py-2.5 rounded-lg border text-xs font-bold transition-colors cursor-pointer ${
+              className={`px-5 py-2.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
                 isDark
-                  ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-750'
+                  : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
               }`}
             >
               Cancel
@@ -2149,7 +2267,7 @@ export default function AddFoodWizard({
                 type="button"
                 disabled={isOptimizingImage || !canProceedStep1}
                 onClick={handleFinalSave}
-                className={`px-5 py-2.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm ${
+                className={`px-5 py-2.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm ${
                   isOptimizingImage || !canProceedStep1
                     ? 'bg-emerald-600/50 text-white/70 cursor-not-allowed'
                     : 'bg-[#059669] hover:bg-[#047857] text-white'
@@ -2174,7 +2292,7 @@ export default function AddFoodWizard({
                 type="button"
                 disabled={isOptimizingImage || (currentStep === 1 ? !canProceedStep1 : !canProceedStep2)}
                 onClick={() => setCurrentStep(prev => prev + 1)}
-                className={`px-6 py-2.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
+                className={`px-6 py-2.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
                   !isOptimizingImage && (currentStep === 1 ? canProceedStep1 : canProceedStep2)
                     ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-sm'
                     : isDark
@@ -2199,7 +2317,7 @@ export default function AddFoodWizard({
                 type="button"
                 disabled={isOptimizingImage}
                 onClick={handleFinalSave}
-                className="px-6 py-2.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs flex items-center gap-2 cursor-pointer transition-colors shadow-sm"
+                className="px-6 py-2.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-semibold text-xs flex items-center gap-2 cursor-pointer transition-colors shadow-sm"
               >
                 <span>{editingFood ? 'Save changes' : 'Publish Food Item'}</span>
                 <ChevronRight className="w-4 h-4" />
