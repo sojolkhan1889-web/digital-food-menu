@@ -232,7 +232,7 @@
 .restaurant-welcome {
   margin: 0;
   color: var(--rh-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 1.4;
 }
@@ -378,7 +378,7 @@
   }
 
   .restaurant-welcome {
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .restaurant-menu-pill {

@@ -120,7 +120,7 @@ export default function RestaurantHeader({
             )}
           </div>
 
-          <p className="restaurant-welcome">{welcomeText}</p>
+          <p className={`restaurant-welcome ${currentLanguage === 'bn' ? 'font-bengali' : ''}`}>{welcomeText}</p>
         </div>
 
         <div className="restaurant-actions">
