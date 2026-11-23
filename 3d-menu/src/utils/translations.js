@@ -431,7 +431,12 @@ export const initialCategoryTranslations = {
   'Snacks': 'স্ন্যাকস',
   'Chinees': 'চাইনিজ',
   'Chinese': 'চাইনিজ',
-  'Smash Burgers': 'স্ম্যাশ বার্গার'
+  'Smash Burgers': 'স্ম্যাশ বার্গার',
+  'LANUNCH ITEMS': 'লাঞ্চ আইটেমস',
+  'Lanunch Items': 'লাঞ্চ আইটেমস',
+  'Launch Items': 'লাঞ্চ আইটেমস',
+  'Lunch Items': 'লাঞ্চ আইটেমস',
+  'Lunch': 'লাঞ্চ'
 };
 
 export const initialSubcategoryTranslations = {
@@ -488,6 +493,7 @@ export const translateCategoryName = (categoryName, lang = 'en', customTranslati
   // 4. Fallback dictionary translations
   const lower = clean.toLowerCase();
   if (lower === 'all items' || lower === 'all') return 'সব আইটেম';
+  if (lower.includes('launch') || lower.includes('lanunch') || lower.includes('lunch')) return 'লাঞ্চ আইটেমস';
   if (lower === 'fast food items' || lower === 'fast food') return 'ফাস্ট ফুড আইটেম';
   if (lower === 'smash burgers' || lower === 'smash burger' || lower === 'burgers' || lower === 'burger') return 'স্ম্যাশ বার্গার';
   if (lower === 'main course') return 'মেইন কোর্স';

@@ -169,6 +169,8 @@ flowchart TD
    - Setting `VITE_CDN_URL=https://cdn.example.com` automatically routes all `/uploads/...` images through Cloudflare / CDN.
 4. **Image Resolver Rule:**
    - `resolveFoodImage()` in `menuStore.js` must **NEVER** use hardcoded title matching to override `/uploads/...` paths. Any path starting with `/uploads/` is a genuine asset and must be preserved as-is.
+5. **Static Hosting Asset Tracking (Vercel/Netlify):**
+   - Media uploaded locally into `3d-menu/public/uploads/` during local development must be committed to Git so that static CI/CD builders like Vercel package those assets into `dist/uploads/`. If not committed, missing `/uploads/` files trigger the `onError` fallback, displaying `/Food.gif` (the default burger animation).
 
 ### 5.3 In-Memory Cache & Invalidation
 - `remoteDataCache` caches tenant catalog fetches for 25 seconds to protect against rapid reload spikes.
@@ -180,6 +182,7 @@ flowchart TD
 
 | Date | Category | Key Implementation & Solved Issues |
 | :--- | :--- | :--- |
+| **2026-11-23** | **Vercel Media 404 & Launch Items Bengali Translation Fix** | Committed newly uploaded dish image `dish_loaded_cheesy_beef_fries_1795374475902.webp` to Git so Vercel includes it in static build (preventing 404 fallback to `/Food.gif` burger animation). Added `LANUNCH ITEMS`, `Launch Items`, and `Lunch Items` to `initialCategoryTranslations` and added regex in `translateCategoryName` in `translations.js` ensuring the category translates to 'লাঞ্চ আইটেমস' even for fresh visitors in Incognito mode with empty LocalStorage. |
 | **2026-11-23** | **Top Bar Welcome Message 12px Font Size** | In `RestaurantHeader.css` and `RestaurantHeader.jsx`, updated `.restaurant-welcome` font size from 10px/11px to strictly **12px** across all screen sizes for both English ("Welcome, Our Dear Guest") and Bengali ("স্বাগতম, আমাদের সম্মানিত অতিথি") modes. |
 | **2026-11-23** | **Wizard Dark Mode Formula Numbers & Frontend English 13px Titles** | Fixed invisible formula numbers in Dark Mode on Step 2 of `AddFoodWizard.jsx` by binding text color to `${isDark ? 'text-white' : 'text-slate-900'}` (previously suppressed under `dark:text-white` when parent lacked `.dark` class). In `App.jsx`, refined 'Featured Specials' and 'Menu Categories' header titles to strictly 13px (`text-[13px]`) in English mode while preserving 14px (`text-[14px] font-bengali`) in Bengali/Native mode. |
 | **2026-11-23** | **Language Selection Modal Typography & Glowing Accent (#fd6e00)** | In `LanguageSelectionModal.jsx`, styled "Choose your language" title in `font-inter font-bold sm:font-extrabold` (700-800) and subtitle "আপনার পছন্দের ভাষা বেছে নিন" in `font-hind-siliguri font-medium sm:font-semibold` (500-600) with strictly 13px font size (`text-[13px]`). Upgraded Continue button to `#fd6e00` background with pure white text and arrow. Changed active language selection border, radio dot, and glowing outline aura from amber to vibrant `#fd6e00` (`border-[#fd6e00]`, `bg-[#fd6e00]/15`, `shadow-[0_0_18px_rgba(253,110,0,0.30)]`). |
