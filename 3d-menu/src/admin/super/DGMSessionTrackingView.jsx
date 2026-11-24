@@ -26,6 +26,7 @@ import {
   fetchSuperAdminDGMMetrics,
   fetchDGMBillingLedger
 } from '../../data/dgmSessionStore';
+import { getUniversalDgmOrderId } from './digitalBillsStore';
 import './dgmSessionTracking.css';
 
 const RESTAURANT_COLORS = {
@@ -728,7 +729,7 @@ export default function DGMSessionTrackingView({
               <tr>
                 <th>Restaurant</th>
                 <th>Table</th>
-                <th>Session</th>
+                <th>Order / Session</th>
                 <th>Started At</th>
                 <th>Expires In</th>
                 <th>Confirmed</th>
@@ -804,9 +805,14 @@ export default function DGMSessionTrackingView({
                         </span>
                       </td>
 
-                      {/* Session Code */}
+                      {/* Universal Order ID & Session Code */}
                       <td>
-                        <span className="dgm-session-code">{row.session_code}</span>
+                        <span className="dgm-session-code" style={{ fontWeight: 700, color: '#0f172a' }}>
+                          {getUniversalDgmOrderId(row)}
+                        </span>
+                        <span style={{ display: 'block', fontSize: 11, color: '#6d28d9', marginTop: 2 }}>
+                          {row.session_code}
+                        </span>
                       </td>
 
                       {/* Started At */}
@@ -883,7 +889,7 @@ export default function DGMSessionTrackingView({
             <thead>
               <tr>
                 <th>Ledger ID</th>
-                <th>Session Code</th>
+                <th>Order / Session ID</th>
                 <th>Restaurant</th>
                 <th>Table</th>
                 <th>Fee Amount</th>
@@ -918,7 +924,12 @@ export default function DGMSessionTrackingView({
                         <span className="dgm-session-code">#LEDG-{item.id.slice(0, 6)}</span>
                       </td>
                       <td>
-                        <span className="dgm-session-code" style={{ color: '#6d28d9' }}>{item.session_code}</span>
+                        <span className="dgm-session-code" style={{ fontWeight: 700, color: '#0f172a' }}>
+                          {getUniversalDgmOrderId(item)}
+                        </span>
+                        <span style={{ display: 'block', fontSize: 11, color: '#6d28d9', marginTop: 2 }}>
+                          {item.session_code}
+                        </span>
                       </td>
                       <td>
                         <span style={{ fontWeight: 700 }}>{resto.name}</span>

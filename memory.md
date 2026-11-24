@@ -217,3 +217,16 @@ Before writing or editing code for any new task, verify:
 - [ ] If changing a database sync function, did I ensure `invalidateRemoteDataCache(restaurantId)` is called?
 - [ ] Did I run `npm --prefix 3d-menu run build` to ensure 0 build errors?
 - [ ] Did I record significant database changes in [`Database_Work.md`](file:///f:/Project%20Digital%20Menu/Database_Work.md)?
+
+## Universal DGM Order ID & Digital Bills Sync Architecture (November 2026)
+- **Universal Order ID**: Derived from `#S-XXXX` as `DGM-XXXX` (e.g. `#S-4738` -> `DGM-4738`). Displayed in:
+  1. `DGM Session Tracking` -> `All Sessions` (Session column: `DGM-XXXX` + `#S-XXXX` subtext).
+  2. `DGM Session Tracking` -> `Billing Ledger` (Session Code column: `DGM-XXXX` + `#S-XXXX` subtext).
+  3. `Digital Bills` -> `Settlement Details` -> `Order Transactions` (Order ID column: `DGM-XXXX`).
+- **Fine Dine Order Aggregation**: In Fine Dine restaurants, completed table visits are billed at ৳5 in `dgm_billing_ledger`. Settlement cycle orders map from ledger rows so order counts match the 10 ledger entries identically.
+- **Transactions Table Columns**:
+  - `Order ID` | `Order Date & Time` | `Table No` | `Order Amount` | `Platform Fee` | `Order From` | `Order Type`
+  - `Table No`: Pure table string (e.g. `Table 01`).
+  - `Order From`: `Fine Dine` / `Non-Fine Dine`.
+  - `Order Type`: `Online Order` (placed via menu 'Confirm Your Order') vs `Regular` (placed via waiter).
+- **Custom Date Range Filter**: Uses calendar day strings `getLocalDateString` (`YYYY-MM-DD`) to avoid UTC/BST timezone clipping.

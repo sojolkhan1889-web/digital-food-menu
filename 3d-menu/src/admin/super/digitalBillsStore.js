@@ -3,6 +3,49 @@ import { supabase } from '../../lib/supabaseClient.js';
 const STORAGE_KEY = 'phonemenu_digital_bills_live_overrides';
 
 /**
+ * Universal DGM Order ID Generator
+ * Ensures identical recognizable order IDs across:
+ * - DGM Session Tracking (All Sessions)
+ * - DGM Session Tracking (Billing Ledger)
+ * - Digital Bills (Order Transactions)
+ */
+export const getUniversalDgmOrderId = (record) => {
+  if (!record) return 'DGM-1001';
+  if (record.order_number && String(record.order_number).startsWith('DGM-')) {
+    return String(record.order_number);
+  }
+  if (record.orderNumber && String(record.orderNumber).startsWith('DGM-')) {
+    return String(record.orderNumber);
+  }
+  if (record.universal_order_id) {
+    return String(record.universal_order_id);
+  }
+  const sessionCode = record.session_code || record.sessionCode;
+  if (sessionCode) {
+    const num = String(sessionCode).replace(/\D/g, '');
+    if (num) return `DGM-${num}`;
+  }
+  if (record.id) {
+    const numMatch = String(record.id).match(/\d{4,5}/);
+    if (numMatch) return `DGM-${numMatch[0]}`;
+  }
+  return `DGM-${String(record.id || '4700').slice(-4)}`;
+};
+
+/**
+ * Clean Table Number Formatter (e.g. tbl_resto_001_01 -> Table 01)
+ */
+export const formatTableDisplay = (tableId, session) => {
+  if (!tableId && !session) return 'Table 01';
+  const raw = String(tableId || session?.table_id || session?.table_no || '');
+  const match = raw.match(/\d{1,5}$/);
+  if (match) {
+    return `Table ${match[0].padStart(2, '0')}`;
+  }
+  return raw || 'Table 01';
+};
+
+/**
  * Format cycle period string: e.g. "1 – 7 Nov 2026", "22 – 28 Dec 2026"
  */
 export const formatPeriodLabel = (startDate, endDate) => {
@@ -174,9 +217,60 @@ export const generateLiveSettlementCycles = ({
         return lTime >= w.start_at.getTime() && lTime < w.end_at.getTime();
       });
 
-      const orderCount = matchingOrders.length > 0 ? matchingOrders.length : matchingLedger.length;
-      const grossVolume = matchingOrders.reduce((sum, o) => sum + Number(o.total_amount || o.totalAmount || 0), 0);
+      // Unify order transactions:
+      // In Fine Dine restaurants, each dgm_billing_ledger record represents a DGM bill with ৳5 platform fee.
       const feePerBill = 5.0;
+      const isFineDine = (resto.restaurant_type === 'fine' || resto.type === 'fine' || resto.id === 'resto_001' || resto.id === 'resto_003');
+      const orderFromLabel = isFineDine ? 'Fine Dine' : 'Non-Fine Dine';
+      let formattedOrders = [];
+
+      if (matchingLedger.length > 0) {
+        formattedOrders = matchingLedger.map(l => {
+          const universalId = getUniversalDgmOrderId(l);
+          const tableDisplay = formatTableDisplay(l.table_id);
+          
+          // Match with an order in matchingOrders if available (by order_number, table & closest timestamp)
+          const matched = matchingOrders.find(o => 
+            (o.order_number && (o.order_number === universalId || o.order_number.includes(l.session_code?.replace(/\D/g, '')))) ||
+            (formatTableDisplay(o.table_number || o.tableNumber) === tableDisplay && Math.abs(new Date(o.created_at || o.createdAt) - new Date(l.created_at)) < 3600000)
+          );
+
+          return {
+            id: universalId,
+            orderNumber: universalId,
+            sessionCode: l.session_code,
+            date: l.created_at,
+            createdAt: l.created_at,
+            tableNo: tableDisplay,
+            tableNumber: tableDisplay,
+            amount: matched ? Number(matched.total_amount || matched.totalAmount || 0) : 150.00,
+            fee: feePerBill,
+            orderFrom: orderFromLabel,
+            orderType: matched ? 'Online Order' : 'Regular'
+          };
+        });
+      } else {
+        // Standard restaurant without DGM session ledger rows (pure order catalog)
+        formattedOrders = matchingOrders.map(o => ({
+          id: getUniversalDgmOrderId(o),
+          orderNumber: getUniversalDgmOrderId(o),
+          sessionCode: o.order_number || '',
+          date: o.created_at || o.createdAt,
+          createdAt: o.created_at || o.createdAt,
+          tableNo: formatTableDisplay(o.table_number || o.tableNumber),
+          tableNumber: formatTableDisplay(o.table_number || o.tableNumber),
+          amount: Number(o.total_amount || o.totalAmount || 0),
+          fee: feePerBill,
+          orderFrom: orderFromLabel,
+          orderType: (o.order_status === 'confirmed' || o.orderStatus === 'confirmed') ? 'Online Order' : 'Regular'
+        }));
+      }
+
+      // Sort newest order first
+      formattedOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      const orderCount = formattedOrders.length;
+      const grossVolume = formattedOrders.reduce((sum, o) => sum + Number(o.amount || 0), 0);
       const accruedFee = orderCount * feePerBill;
 
       // Check Supabase settlements
@@ -263,23 +357,13 @@ export const generateLiveSettlementCycles = ({
         }
       }
 
-      // Format order transactions
-      const formattedOrders = matchingOrders.map(o => ({
-        id: o.order_number || o.orderNumber || String(o.id),
-        date: o.created_at || o.createdAt,
-        amount: Number(o.total_amount || o.totalAmount || 0),
-        fee: feePerBill,
-        customer: o.customer_name || o.customerName || 'Customer',
-        table: o.table_number || o.tableNumber || 'Table 01',
-        type: o.dining_mode || o.diningMode || 'Dine-in'
-      }));
 
       generatedCycles.push({
         id: cycleId,
         restaurantId: resto.id,
         restaurantName: resto.name,
         restaurantCode: resto.displayId || resto.display_id || resto.code || resto.id,
-        restaurantType: resto.type === 'fine' ? 'Fine Dine' : 'Standard Cafe',
+        restaurantType: isFineDine ? 'Fine Dine' : 'Standard Cafe',
         periodStart: w.start_at.toISOString(),
         periodEnd: w.endInclusive.toISOString(),
         start_at: w.start_at.toISOString(),

@@ -40,6 +40,16 @@ import { fetchDGMBillingLedger } from '../../data/dgmSessionStore';
 import { supabase } from '../../lib/supabaseClient';
 import './digitalBills.css';
 
+const getLocalDateString = (d) => {
+  if (!d) return '';
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function DigitalBillsView({
   restaurants = [],
   orders = [],
@@ -175,8 +185,10 @@ export default function DigitalBillsView({
       } else if (periodFilter !== 'all' && periodFilter !== 'custom') {
         if (!c.periodLabel.toLowerCase().includes(periodFilter.toLowerCase())) return false;
       } else if (periodFilter === 'custom') {
-        if (customPeriodFrom && new Date(c.periodStart) < new Date(customPeriodFrom)) return false;
-        if (customPeriodTo && new Date(c.periodEnd) > new Date(`${customPeriodTo}T23:59:59`)) return false;
+        const cStartDay = getLocalDateString(c.periodStart);
+        const cEndDay = getLocalDateString(c.periodEnd);
+        if (customPeriodFrom && cEndDay < customPeriodFrom) return false;
+        if (customPeriodTo && cStartDay > customPeriodTo) return false;
       }
 
       // Search query
@@ -184,7 +196,12 @@ export default function DigitalBillsView({
         const q = searchQuery.toLowerCase();
         const matchesId = c.id.toLowerCase().includes(q);
         const matchesResto = c.restaurantName.toLowerCase().includes(q);
-        if (!matchesId && !matchesResto) return false;
+        const matchesOrder = (c.orders || []).some(o => 
+          (o.id && o.id.toLowerCase().includes(q)) ||
+          (o.sessionCode && o.sessionCode.toLowerCase().includes(q)) ||
+          (o.tableNo && o.tableNo.toLowerCase().includes(q))
+        );
+        if (!matchesId && !matchesResto && !matchesOrder) return false;
       }
 
       return true;
@@ -271,14 +288,15 @@ export default function DigitalBillsView({
       showToast('No orders recorded to export.');
       return;
     }
-    const headers = ['Order ID', 'Date & Time', 'Amount (BDT)', 'Platform Fee (BDT)', 'Customer', 'Type'];
+    const headers = ['Order ID', 'Date & Time', 'Table No', 'Order Amount (BDT)', 'Platform Fee (BDT)', 'Order From', 'Order Type'];
     const rows = cycle.orders.map(o => [
       o.id,
-      o.date,
-      o.amount,
-      o.fee,
-      `"${o.customer}"`,
-      o.type
+      `"${new Date(o.date).toLocaleString('en-US')}"`,
+      `"${o.tableNo || o.tableNumber || 'Table 01'}"`,
+      Number(o.amount).toFixed(2),
+      Number(o.fee).toFixed(2),
+      `"${o.orderFrom || 'Fine Dine'}"`,
+      `"${o.orderType || 'Online Order'}"`
     ]);
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -551,9 +569,10 @@ export default function DigitalBillsView({
                 <tr>
                   <th>Order ID</th>
                   <th>Order Date & Time</th>
+                  <th>Table No</th>
                   <th>Order Amount</th>
                   <th>Platform Fee</th>
-                  <th>Customer</th>
+                  <th>Order From</th>
                   <th>Order Type</th>
                 </tr>
               </thead>
@@ -573,6 +592,9 @@ export default function DigitalBillsView({
                         hour12: true
                       }).format(new Date(o.date))}
                     </td>
+                    <td>
+                      <span className="order-table-pill">{o.tableNo || o.tableNumber || 'Table 01'}</span>
+                    </td>
                     <td style={{ fontWeight: 700, color: '#0f172a' }}>
                       ৳{Number(o.amount).toFixed(2)}
                     </td>
@@ -580,11 +602,13 @@ export default function DigitalBillsView({
                       ৳{Number(o.fee).toFixed(2)}
                     </td>
                     <td>
-                      <span style={{ color: '#334155', fontWeight: 600 }}>{o.customer}</span>
+                      <span className={`status-pill ${o.orderFrom === 'Fine Dine' ? 'status-fine-dine' : 'status-non-fine'}`}>
+                        {o.orderFrom || 'Fine Dine'}
+                      </span>
                     </td>
                     <td>
-                      <span className="status-pill status-in-progress" style={{ textTransform: 'capitalize' }}>
-                        {o.type}
+                      <span className={`status-pill ${o.orderType === 'Online Order' ? 'status-online' : 'status-regular'}`}>
+                        {o.orderType || 'Online Order'}
                       </span>
                     </td>
                   </tr>
@@ -1171,6 +1195,32 @@ export default function DigitalBillsView({
                   onChange={(e) => setCustomPeriodTo(e.target.value)}
                   title="To Date"
                 />
+                {(customPeriodFrom || customPeriodTo) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomPeriodFrom('');
+                      setCustomPeriodTo('');
+                    }}
+                    style={{
+                      border: '1px solid #cbd5e1',
+                      background: '#ffffff',
+                      borderRadius: 5,
+                      padding: '4px 8px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: '#64748b',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}
+                    title="Clear custom range"
+                  >
+                    <X size={12} />
+                    <span>Clear</span>
+                  </button>
+                )}
               </div>
             )}
 

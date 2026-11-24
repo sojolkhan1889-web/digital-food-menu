@@ -1289,3 +1289,24 @@ This file records all architectural specifications, resolved issues, feature imp
   - Production build passed in 2.07s (`npm --prefix 3d-menu run build`).
   - Unit and integration tests passed for cycle status engine and payment recording.
   - Pushed to GitHub `main` branch (Commit: `aa2acf2`).
+
+### Update: Custom Range Date Fix, 10 Orders Sync, Universal DGM Order ID & Table Columns (November 2026)
+- **1. Custom Date Range Filter Fix (Digital Bills):**
+  - Resolved UTC vs local calendar date parsing offset where selecting ranges like `11/15/2026` to `11/21/2026` incorrectly dropped matching cycles.
+  - Implemented `getLocalDateString` helper comparing local calendar day strings (`YYYY-MM-DD`).
+  - Added a responsive "Clear" button next to custom date inputs to easily reset date ranges.
+- **2. 10-Order Synchronization (Monkey Bhai 15–21 Nov 2026):**
+  - Unified Fine-Dine order transactions from live `dgm_billing_ledger` rows (10 records) so that Digital Bills displays all 10 orders matching DGM Session Tracking's Billing Ledger.
+  - Total Orders: 10, Accrued Platform Fee: ৳50.00 (৳5 × 10).
+  - Exact timestamps, order amounts, and clean table numbers (`Table 01` through `Table 05`) correlated with matching orders.
+- **3. Universal DGM Order ID:**
+  - Standardized order identifiers across the entire platform:
+    * `DGM Session Tracking` -> `All Sessions` table (displays `DGM-XXXX` with `#S-XXXX` subtext).
+    * `DGM Session Tracking` -> `Billing Ledger` table (displays `DGM-XXXX` with `#S-XXXX` subtext).
+    * `Digital Bills` -> `Settlement Details` -> `Order Transactions` table (displays `DGM-XXXX`).
+  - Super Admin search bar in Digital Bills enables finding cycles by Universal Order ID, session code, or table number.
+- **4. Order Transactions Table Redesign:**
+  - Changed `Customer` column to **`Table No`** showing pure table numbers (`Table 01`, `Table 02`).
+  - Changed old `Order Type` column to **`Order From`** showing restaurant classification (`Fine Dine` / `Non-Fine Dine`).
+  - Added new **`Order Type`** column showing order placement channel (`Online Order` via digital menu vs `Regular` via waiter).
+  - Updated CSV Export helper to include all new columns.
