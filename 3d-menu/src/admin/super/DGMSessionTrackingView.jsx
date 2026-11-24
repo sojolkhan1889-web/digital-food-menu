@@ -63,6 +63,68 @@ const formatFullDate = (iso) => {
   }
 };
 
+/**
+ * Format table display cleanly as "Table 01", "Table 02", etc.
+ * Avoids distorted numbers like "Table 00101" caused by regex digit stripping on "tbl_resto_001_01".
+ */
+export const formatTableDisplay = (tableIdOrNo, matchedSession = null) => {
+  if (matchedSession?.table_number) return matchedSession.table_number;
+  if (matchedSession?.table_no) return `Table ${String(matchedSession.table_no).padStart(2, '0')}`;
+  if (!tableIdOrNo) return 'Table 01';
+
+  const str = String(tableIdOrNo).trim();
+  if (/^Table\s+\d+/i.test(str)) {
+    const num = parseInt(str.replace(/\D/g, ''), 10);
+    return isNaN(num) ? str : `Table ${String(num).padStart(2, '0')}`;
+  }
+
+  const parts = str.split(/[_-\s]+/);
+  const lastPart = parts[parts.length - 1];
+  const numMatch = lastPart.match(/\d+/);
+  if (numMatch) {
+    const num = parseInt(numMatch[0], 10);
+    return `Table ${String(num).padStart(2, '0')}`;
+  }
+
+  const trailingDigits = str.match(/\d+$/);
+  if (trailingDigits) {
+    const num = parseInt(trailingDigits[0], 10);
+    return `Table ${String(num).padStart(2, '0')}`;
+  }
+
+  return `Table ${str}`;
+};
+
+const formatDateToYMD = (date) => {
+  if (!date || isNaN(date.getTime())) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const isDateInRange = (isoDate, fromYmd, toYmd) => {
+  if (!fromYmd && !toYmd) return true;
+  if (!isoDate) return false;
+
+  const itemTime = new Date(isoDate).getTime();
+  if (isNaN(itemTime)) return false;
+
+  if (fromYmd) {
+    const [y, m, d] = fromYmd.split('-').map(Number);
+    const fromTime = new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+    if (itemTime < fromTime) return false;
+  }
+
+  if (toYmd) {
+    const [y, m, d] = toYmd.split('-').map(Number);
+    const toTime = new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+    if (itemTime > toTime) return false;
+  }
+
+  return true;
+};
+
 export default function DGMSessionTrackingView({
   restaurants = [],
   onBack,
@@ -74,6 +136,11 @@ export default function DGMSessionTrackingView({
   const [selectedTable, setSelectedTable] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Date Range filter states (supports all, today, week, month, year, custom range)
+  const [datePreset, setDatePreset] = useState('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
 
   const [metrics, setMetrics] = useState({
     totalDgmOrders: 0,
@@ -109,12 +176,13 @@ export default function DGMSessionTrackingView({
         fetchSuperAdminDGMMetrics(),
         fetchSuperAdminDGMSessions({
           restaurantId: selectedResto,
-          tableNo: selectedTable,
-          status: selectedStatus,
-          tab: activeTab === 'ledger' ? 'all' : activeTab
+          tableNo: 'all',
+          status: 'all',
+          tab: 'all'
         }),
         fetchDGMBillingLedger({
-          restaurantId: selectedResto
+          restaurantId: selectedResto,
+          limit: 500
         })
       ]);
 
@@ -127,7 +195,7 @@ export default function DGMSessionTrackingView({
       setIsRefreshing(false);
       setLoading(false);
     }
-  }, [selectedResto, selectedTable, selectedStatus, activeTab, timerTick]);
+  }, [selectedResto, timerTick]);
 
   useEffect(() => {
     loadData();
@@ -159,30 +227,170 @@ export default function DGMSessionTrackingView({
     return m;
   }, [restaurants]);
 
-  // Unique tables list for the filter
-  const tableFilterOptions = useMemo(() => {
-    const set = new Set();
-    sessions.forEach(s => {
-      if (s.table_number) set.add(s.table_number);
-      else if (s.table_no) set.add(`Table ${String(s.table_no).padStart(2, '0')}`);
+  // Fast session lookup map by id or session_code
+  const sessionMap = useMemo(() => {
+    const map = {};
+    (sessions || []).forEach(s => {
+      if (s.id) map[s.id] = s;
+      if (s.session_code) map[s.session_code] = s;
     });
-    return Array.from(set).sort();
+    return map;
   }, [sessions]);
 
-  // Filtered & Paginated records
-  const totalCount = activeTab === 'ledger' ? ledger.length : sessions.length;
+  // Unique tables list collected from both sessions and billing ledger
+  const tableFilterOptions = useMemo(() => {
+    const set = new Set();
+    (sessions || []).forEach(s => {
+      if (selectedResto === 'all' || s.restaurant_id === selectedResto) {
+        set.add(formatTableDisplay(s.table_id || s.table_no, s));
+      }
+    });
+    (ledger || []).forEach(item => {
+      if (selectedResto === 'all' || item.restaurant_id === selectedResto) {
+        const matched = sessionMap[item.session_id] || sessionMap[item.session_code];
+        set.add(formatTableDisplay(item.table_id, matched));
+      }
+    });
+    return Array.from(set).sort((a, b) => {
+      const numA = parseInt(a.replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(b.replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
+    });
+  }, [sessions, ledger, selectedResto, sessionMap]);
+
+  // If selectedTable is no longer in options (e.g. restaurant changed), reset to 'all'
+  useEffect(() => {
+    if (selectedTable !== 'all' && !tableFilterOptions.includes(selectedTable)) {
+      setSelectedTable('all');
+    }
+  }, [tableFilterOptions, selectedTable]);
+
+  // Date filter presets handler
+  const handlePresetChange = (preset) => {
+    setDatePreset(preset);
+    setPage(1);
+    const now = new Date();
+
+    if (preset === 'all') {
+      setCustomFrom('');
+      setCustomTo('');
+    } else if (preset === 'today') {
+      const todayStr = formatDateToYMD(now);
+      setCustomFrom(todayStr);
+      setCustomTo(todayStr);
+    } else if (preset === 'week') {
+      const weekAgo = new Date(now);
+      weekAgo.setDate(weekAgo.getDate() - 6);
+      setCustomFrom(formatDateToYMD(weekAgo));
+      setCustomTo(formatDateToYMD(now));
+    } else if (preset === 'month') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      setCustomFrom(formatDateToYMD(firstDay));
+      setCustomTo(formatDateToYMD(now));
+    } else if (preset === 'year') {
+      const firstDay = new Date(now.getFullYear(), 0, 1);
+      setCustomFrom(formatDateToYMD(firstDay));
+      setCustomTo(formatDateToYMD(now));
+    } else if (preset === 'custom') {
+      if (!customFrom && !customTo) {
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+        setCustomFrom(formatDateToYMD(firstDay));
+        setCustomTo(formatDateToYMD(now));
+      }
+    }
+  };
+
+  const handleCustomDateChange = (field, value) => {
+    setDatePreset('custom');
+    setPage(1);
+    if (field === 'from') {
+      setCustomFrom(value);
+    } else {
+      setCustomTo(value);
+    }
+  };
+
+  const handleClearDate = () => {
+    setDatePreset('all');
+    setCustomFrom('');
+    setCustomTo('');
+    setPage(1);
+  };
+
+  // Filtered Sessions (Tab, Restaurant, Table, Status, Date Range)
+  const filteredSessions = useMemo(() => {
+    return (sessions || []).filter(s => {
+      // Restaurant filter
+      if (selectedResto !== 'all' && s.restaurant_id !== selectedResto) {
+        return false;
+      }
+
+      // Table filter (matches Table 01, Table 02, etc.)
+      if (selectedTable !== 'all') {
+        const t = formatTableDisplay(s.table_id || s.table_no, s);
+        if (t !== selectedTable) return false;
+      }
+
+      // Status filter
+      if (selectedStatus !== 'all') {
+        const norm = (s.computedStatus || '').toLowerCase().replace(/\s+/g, '_');
+        if (norm !== selectedStatus.toLowerCase()) return false;
+      }
+
+      // Tab filter
+      if (activeTab === 'live') {
+        if (s.isExpired) return false;
+      } else if (activeTab === 'today') {
+        if (!s.isToday) return false;
+      }
+
+      // Date Range filter
+      if (!isDateInRange(s.started_at || s.created_at, customFrom, customTo)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [sessions, selectedResto, selectedTable, selectedStatus, activeTab, customFrom, customTo]);
+
+  // Filtered Ledger (Restaurant, Table, Date Range)
+  const filteredLedger = useMemo(() => {
+    return (ledger || []).filter(item => {
+      // Restaurant filter
+      if (selectedResto !== 'all' && item.restaurant_id !== selectedResto) {
+        return false;
+      }
+
+      // Table filter (matches Table 01, Table 02, etc.)
+      if (selectedTable !== 'all') {
+        const matched = sessionMap[item.session_id] || sessionMap[item.session_code];
+        const t = formatTableDisplay(item.table_id, matched);
+        if (t !== selectedTable) return false;
+      }
+
+      // Date Range filter
+      if (!isDateInRange(item.created_at, customFrom, customTo)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [ledger, sessionMap, selectedResto, selectedTable, customFrom, customTo]);
+
+  // Total counts & pagination
+  const totalCount = activeTab === 'ledger' ? filteredLedger.length : filteredSessions.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentPage = Math.min(page, totalPages);
 
   const paginatedSessions = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
-    return sessions.slice(start, start + pageSize);
-  }, [sessions, currentPage, pageSize]);
+    return filteredSessions.slice(start, start + pageSize);
+  }, [filteredSessions, currentPage, pageSize]);
 
   const paginatedLedger = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
-    return ledger.slice(start, start + pageSize);
-  }, [ledger, currentPage, pageSize]);
+    return filteredLedger.slice(start, start + pageSize);
+  }, [filteredLedger, currentPage, pageSize]);
 
   const todayFormatted = useMemo(() => {
     try {
@@ -441,6 +649,64 @@ export default function DGMSessionTrackingView({
         </div>
 
         <div className="dgm-tab-right-tools">
+          {/* Date Range Filter Section (Monthly, Weekly, Yearly, Custom) */}
+          <div className="dgm-date-filter-box" title="Filter both Sessions and Billing Ledger by date range">
+            <div className="dgm-date-preset-pill">
+              <Calendar size={14} className="dgm-date-icon" />
+              <select
+                className="dgm-date-preset-select"
+                value={datePreset}
+                onChange={(e) => handlePresetChange(e.target.value)}
+                aria-label="Date Range Filter Preset"
+              >
+                <option value="all">All Dates</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+                <option value="year">This Year</option>
+                <option value="custom">Custom Range</option>
+              </select>
+            </div>
+
+            <div className="dgm-date-inputs-group">
+              <div className="dgm-date-input-wrap">
+                <span className="dgm-date-lbl">From:</span>
+                <input
+                  type="date"
+                  className="dgm-date-input"
+                  value={customFrom}
+                  onChange={(e) => handleCustomDateChange('from', e.target.value)}
+                  title="Filter From Date"
+                />
+              </div>
+
+              <span className="dgm-date-sep">–</span>
+
+              <div className="dgm-date-input-wrap">
+                <span className="dgm-date-lbl">To:</span>
+                <input
+                  type="date"
+                  className="dgm-date-input"
+                  value={customTo}
+                  onChange={(e) => handleCustomDateChange('to', e.target.value)}
+                  title="Filter To Date"
+                />
+              </div>
+
+              {(datePreset !== 'all' || customFrom || customTo) && (
+                <button
+                  type="button"
+                  className="dgm-date-clear-pill"
+                  onClick={handleClearDate}
+                  title="Clear Date Filter"
+                >
+                  <X size={13} />
+                  <span>Clear</span>
+                </button>
+              )}
+            </div>
+          </div>
+
           <button
             type="button"
             className="dgm-refresh-btn"
@@ -484,7 +750,7 @@ export default function DGMSessionTrackingView({
               ) : paginatedSessions.length === 0 ? (
                 <tr>
                   <td colSpan={9} style={{ textAlign: 'center', padding: '48px', color: '#64748b' }}>
-                    No sessions match the selected filters or tab.
+                    No sessions match the selected filters or date range.
                   </td>
                 </tr>
               ) : (
@@ -635,12 +901,17 @@ export default function DGMSessionTrackingView({
               ) : paginatedLedger.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', padding: '48px', color: '#64748b' }}>
-                    No billing ledger records found.
+                    No billing ledger records match the selected filters or date range.
                   </td>
                 </tr>
               ) : (
                 paginatedLedger.map((item) => {
-                  const resto = restoMap[item.restaurant_id] || { name: item.restaurant_id };
+                  const resto = restoMap[item.restaurant_id] || {
+                    name: item.restaurant_id === 'resto_001' ? 'Monkey Bhai' : (item.restaurant_id === 'resto_003' ? 'Spice Lounge' : item.restaurant_id)
+                  };
+                  const matchedSession = sessionMap[item.session_id] || sessionMap[item.session_code];
+                  const tableDisplay = formatTableDisplay(item.table_id, matchedSession);
+
                   return (
                     <tr key={item.id}>
                       <td>
@@ -653,7 +924,7 @@ export default function DGMSessionTrackingView({
                         <span style={{ fontWeight: 700 }}>{resto.name}</span>
                       </td>
                       <td>
-                        <span className="dgm-table-badge">Table {item.table_id.replace(/\D/g, '') || '01'}</span>
+                        <span className="dgm-table-badge">{tableDisplay}</span>
                       </td>
                       <td>
                         <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '14px' }}>

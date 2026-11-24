@@ -384,6 +384,130 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Date Range Filter Section */
+.dgm-date-filter-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 4px 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  flex-wrap: wrap;
+}
+
+.dgm-date-filter-box:focus-within {
+  border-color: #c4b5fd;
+  box-shadow: 0 0 0 2px rgba(109, 40, 217, 0.1);
+}
+
+.dgm-date-preset-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.dgm-date-icon {
+  color: #7c3aed;
+  flex-shrink: 0;
+}
+
+.dgm-date-preset-select {
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  outline: none;
+}
+
+.dgm-date-inputs-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.dgm-date-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dgm-date-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dgm-date-input {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #0f172a;
+  outline: none;
+  font-family: inherit;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.dgm-date-input:focus {
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.12);
+}
+
+.dgm-date-sep {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dgm-date-clear-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dgm-date-clear-pill:hover {
+  background: #fecaca;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+@media (max-width: 900px) {
+  .dgm-tab-right-tools {
+    width: 100%;
+    justify-content: space-between;
+    margin-top: 6px;
+  }
+  .dgm-date-filter-box {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 
 .dgm-refresh-btn {
