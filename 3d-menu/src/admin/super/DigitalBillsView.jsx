@@ -29,19 +29,21 @@ import {
   Bell
 } from 'lucide-react';
 import {
-  getStoredSettlementCycles,
-  saveStoredSettlementCycles,
+  generateLiveSettlementCycles,
+  getSettlementStatus,
   computeSettlementStatus,
   computeSettlementSummary,
   recordCyclePayment,
-  recordCycleReminder,
-  DEFAULT_DEMO_REFERENCE_DATE
+  recordCycleReminder
 } from './digitalBillsStore';
+import { fetchDGMBillingLedger } from '../../data/dgmSessionStore';
+import { supabase } from '../../lib/supabaseClient';
 import './digitalBills.css';
 
 export default function DigitalBillsView({
   restaurants = [],
   orders = [],
+  settlements = [],
   subRoute = 'Digital Bills',
   onBack
 }) {
@@ -50,31 +52,71 @@ export default function DigitalBillsView({
     subRoute === 'Customer Confirmations' ? 'confirmations' : 'ledger'
   );
 
-  // Settlement cycles state
-  const [cycles, setCycles] = useState(getStoredSettlementCycles);
+  // Live billing ledger from Supabase
+  const [billingLedger, setBillingLedger] = useState([]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Fetch live billing ledger for fine-dine fee ledger tracking
+  useEffect(() => {
+    fetchDGMBillingLedger({ limit: 500 }).then(data => {
+      if (Array.isArray(data)) setBillingLedger(data);
+    });
+  }, [refreshTrigger]);
+
+  // Realtime subscription to live Supabase orders, billing ledger, and settlements
+  useEffect(() => {
+    const channel = supabase
+      .channel('realtime_digital_bills_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        setRefreshTrigger(t => t + 1);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dgm_billing_ledger' }, () => {
+        setRefreshTrigger(t => t + 1);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'settlements' }, () => {
+        setRefreshTrigger(t => t + 1);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   // Filter States
   const [selectedResto, setSelectedResto] = useState('all'); // 'all' | 'resto_001' | 'resto_002' | 'resto_003'
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'in_progress' | 'pending' | 'overdue' | 'settled'
-  const [periodFilter, setPeriodFilter] = useState('all'); // 'all' | 'current' | 'previous' | '22 – 28 Dec 2026' ... | 'custom'
+  const [periodFilter, setPeriodFilter] = useState('all'); // 'all' | 'current' | specific period | 'custom'
   const [customPeriodFrom, setCustomPeriodFrom] = useState('');
   const [customPeriodTo, setCustomPeriodTo] = useState('');
 
-  // Reference Date State (Defaults to 23 Dec 2026 matching Image 4 & Image 5)
-  const [referenceDateMode, setReferenceDateMode] = useState('demo'); // 'demo' (23 Dec 2026) | 'live' (Today) | 'custom'
-  const [customRefDate, setCustomRefDate] = useState(DEFAULT_DEMO_REFERENCE_DATE);
+  // Effective Reference Date: Always live current system date
+  const effectiveRefDate = useMemo(() => new Date(), [refreshTrigger]);
 
-  // Current effective date for status computations
-  const effectiveRefDate = useMemo(() => {
-    if (referenceDateMode === 'demo') {
-      return new Date('2026-12-23T12:00:00.000Z');
-    } else if (referenceDateMode === 'live') {
-      return new Date();
-    } else {
-      return customRefDate ? new Date(customRefDate) : new Date();
-    }
-  }, [referenceDateMode, customRefDate]);
+  // 100% Live Settlement Cycles generated directly from live database state
+  const cycles = useMemo(() => {
+    return generateLiveSettlementCycles({
+      restaurants,
+      orders,
+      billingLedger,
+      settlements,
+      currentDate: effectiveRefDate
+    });
+  }, [restaurants, orders, billingLedger, settlements, effectiveRefDate, refreshTrigger]);
+
+  // Distinct period labels collected from live generated cycles
+  const distinctPeriods = useMemo(() => {
+    const seen = new Set();
+    const list = [];
+    cycles.forEach(c => {
+      if (c.periodLabel && !seen.has(c.periodLabel)) {
+        seen.add(c.periodLabel);
+        list.push(c.periodLabel);
+      }
+    });
+    return list;
+  }, [cycles]);
 
   // Selected Settlement Cycle for "View Details" page
   const [selectedCycleId, setSelectedCycleId] = useState(null);
@@ -130,8 +172,6 @@ export default function DigitalBillsView({
       // Period filter
       if (periodFilter === 'current') {
         if (!c.isCurrentCycle) return false;
-      } else if (periodFilter === 'previous') {
-        if (c.id !== 'ST-2026-005') return false;
       } else if (periodFilter !== 'all' && periodFilter !== 'custom') {
         if (!c.periodLabel.toLowerCase().includes(periodFilter.toLowerCase())) return false;
       } else if (periodFilter === 'custom') {
@@ -192,7 +232,7 @@ export default function DigitalBillsView({
     });
 
     if (res.success) {
-      setCycles(getStoredSettlementCycles());
+      setRefreshTrigger(t => t + 1);
       setRecordPaymentModalCycle(null);
       showToast(`Payment of ৳${paymentForm.amount} recorded for ${recordPaymentModalCycle.id}. Settlement is now Settled.`);
     }
@@ -201,7 +241,7 @@ export default function DigitalBillsView({
   // Quick reminder sender
   const handleSendReminder = (cycle, type = 'Payment Reminder') => {
     recordCycleReminder(cycle.id, cycle.restaurantId, type);
-    setCycles(getStoredSettlementCycles());
+    setRefreshTrigger(t => t + 1);
     setOpenMenuId(null);
     showToast(`${type} successfully sent to ${cycle.restaurantName}.`);
   };
@@ -1105,11 +1145,9 @@ export default function DigitalBillsView({
               >
                 <option value="all">All Settlement Periods</option>
                 <option value="current">Current Settlement Period</option>
-                <option value="previous">Previous Settlement Period</option>
-                <option value="22 – 28 Dec 2026">22 – 28 Dec 2026</option>
-                <option value="15 – 21 Dec 2026">15 – 21 Dec 2026</option>
-                <option value="8 – 14 Dec 2026">08 – 14 Dec 2026</option>
-                <option value="1 – 7 Dec 2026">01 – 07 Dec 2026</option>
+                {distinctPeriods.map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
                 <option value="custom">Custom Date Range</option>
               </select>
             </div>
@@ -1136,17 +1174,12 @@ export default function DigitalBillsView({
               </div>
             )}
 
-            {/* Reference Date Selector (Image 4: As of 23 Dec 2026) */}
-            <div className="reference-date-pill" title="Settlement Timeline Reference Date">
-              <Calendar size={14} />
-              <select
-                className="reference-date-select"
-                value={referenceDateMode}
-                onChange={(e) => setReferenceDateMode(e.target.value)}
-              >
-                <option value="demo">As of 23 Dec 2026 (Demo)</option>
-                <option value="live">Live Current Date (Today)</option>
-              </select>
+            {/* Live Real-Time Indicator (100% Live Database State) */}
+            <div className="reference-date-pill" title="100% Live System Time & Supabase Multi-Tenant Data" style={{ background: '#f0fdf4', borderColor: '#bbf7d0', cursor: 'default' }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>
+                Live Time: {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
             </div>
           </div>
 

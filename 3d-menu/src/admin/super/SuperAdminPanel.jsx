@@ -774,6 +774,7 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
               <DigitalBillsView
                 restaurants={restaurants}
                 orders={orders}
+                settlements={settlements}
                 subRoute={current}
                 onBack={() => setCurrent('Dashboard')}
               />

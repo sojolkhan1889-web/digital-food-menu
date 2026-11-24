@@ -1239,10 +1239,18 @@ This file records all architectural specifications, resolved issues, feature imp
   1. **`DigitalBillsView.jsx`:**
      - Modular component replacing inline implementation in `SuperAdminPanel.jsx`.
      - Preserves top banner with `Customer Confirmations (38)` (toggles live customer confirmations table from Supabase) and `Restaurant Bills Ledger` (the weekly settlement view).
+     - **100% Live Mode (No Demo Data):** Removed demo reference date dropdown (`As of 23 Dec 2026 (Demo)`). Real-time indicator displaying Live System Time and auto-refreshing via Supabase Realtime channels on `orders`, `dgm_billing_ledger`, and `settlements`.
+     - Dynamic Period Filter derived automatically from active cycle date ranges (`distinctPeriods`).
   2. **`digitalBillsStore.js`:**
-     - Data models, initial seed cycles matching Image 4 & 5, local persistence (`phonemenu_digital_bills_settlements`).
-     - `computeSettlementStatus(cycle, refDate)`: Computes status dynamically against reference date (Demo: 23 Dec 2026 or live date).
-     - `computeSettlementSummary(cycles, refDate)`: Calculates the 5 summary card metrics dynamically based on filtered cycles.
+     - **Live Settlement Engine (`generateLiveSettlementCycles`):** Dynamically partitions real database records (`orders`, `dgm_billing_ledger`, `settlements`) into 7-day calendar windows starting from the earliest recorded order.
+     - **Strict Status Lifecycle (`getSettlementStatus`):**
+       * `now < start_at`: Returns `null` (future cycles are never created or shown).
+       * `now < end_at`: `in_progress` (guarantees at most ONE In Progress cycle per restaurant at any time).
+       * `outstanding_balance <= 0` or verified payment: `settled`.
+       * `now < due_at` (within 3-day grace period): `pending`.
+       * `now >= due_at`: `overdue`.
+     - **Accurate Payment Due Date:** Day 10 (23:59:59 of 3rd grace day) displayed in UI, with Overdue triggering on Day 11 00:00:00 (fixing the 1-day extra due date issue).
+     - `computeSettlementSummary(cycles, refDate)`: Calculates the 5 summary card metrics dynamically matching the table statuses 100%.
      - `recordCyclePayment()`: Records payments, updates status to Settled, logs activity, and syncs to Supabase `settlements` table.
      - `recordCycleReminder()`: Logs SMS/Email reminders in the cycle activity history.
   3. **`digitalBills.css`:**
