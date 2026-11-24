@@ -1190,3 +1190,94 @@ This file records all architectural specifications, resolved issues, feature imp
 - **Verification:**
   - `npm --prefix 3d-menu run build` passed in 3.22s with 0 errors.
   - Supabase `REPLICA IDENTITY FULL` verified.
+
+---
+
+## 43. DGM Session Tracking: Table Filtering, Synchronized Date Range Filter & Clean Table Number Formatting (2026-11-24)
+- **Objective & User Requirements:**
+  1. Fix distorted table numbers in the Billing Ledger table: strings like `tbl_resto_001_01`, `tbl_resto_003_003`, and `tbl_resto_001_05` were displaying as `Table 00101`, `Table 003003`, and `Table 00105`.
+  2. Implement Table-wise filtering for Billing Ledger: selecting a table from the Table dropdown must filter Billing Ledger records as well as Sessions records.
+  3. Add a dedicated Date Range Filter control bar in the tabs row right beside the Billing Ledger tab (where the user drew a red `+` sign) supporting Monthly, Weekly, Yearly, and Custom From/To date selection, filtering both All Sessions (and live/today tabs) AND Billing Ledger synchronously.
+- **Root Cause Analysis:**
+  - In `DGMSessionTrackingView.jsx`, line 656 previously used `.replace(/\D/g, '')` which stripped all letters and underscores, merging restaurant ID numbers with table numbers (e.g. `tbl_resto_001_01` became `00101`).
+  - `selectedTable` was only passed to `fetchSuperAdminDGMSessions` and was completely ignored when rendering the Billing Ledger table (`paginatedLedger`).
+  - No date filter existed on the tabs row.
+- **Implementation Details:**
+  1. **Clean Table Number Formatting (`formatTableDisplay`):**
+     - Inspects session lookup map (`sessionMap[item.session_id] || sessionMap[item.session_code]`) and extracts `matchedSession.table_number` or splits table IDs by `[_-\s]+` to take the final numeric component.
+     - Formats cleanly as `Table 01`, `Table 02`, `Table 03`, `Table 04`, `Table 05`.
+  2. **Unified Table Filter Options & Dual Filtering:**
+     - `tableFilterOptions` collects unique formatted tables from both `sessions` and `ledger` arrays, sorted in natural numerical order.
+     - Both `filteredSessions` and `filteredLedger` use `formatTableDisplay()` against `selectedTable`.
+  3. **Synchronized Date Range Filter Bar:**
+     - Added `.dgm-date-filter-box` into `.dgm-tabs-row` on the right side of `.dgm-tabs-group` (beside the Refresh button).
+     - Preset dropdown: `All Dates`, `Today`, `This Week` (last 7 days), `This Month` (1st of month to today), `This Year` (1st of year to today), `Custom Range`.
+     - Direct `From: [yyyy-mm-dd]` and `To: [yyyy-mm-dd]` date pickers with `Clear (✕)` button.
+     - Timezone-safe local boundary comparison (`fromBound <= itemTime && itemTime <= toBound`) filtering `started_at`/`created_at` on both Sessions and Billing Ledger synchronously.
+- **Verification:**
+  - Build passed with 0 errors (`npm --prefix 3d-menu run build`).
+  - Verified edge cases: `tbl_resto_001_01` -> `Table 01`, `tbl_resto_003_003` -> `Table 03`, `tbl_resto_001_05` -> `Table 05`.
+  - Pushed to GitHub `main` branch (Commit: `676dfce`).
+
+---
+
+## 44. PhoneMenu Weekly Settlement System & Digital Bills Dashboard (2026-11-24)
+- **Objective & User Requirements:**
+  - Rebuild the Super Admin `Orders & Bills -> Digital Bills` page into an end-to-end Weekly Settlement & Platform Fee Ledger dashboard matching the user's detailed specification and uploaded mockups (Images 4 & 5).
+  - Business Rule: Digital Food Menu SaaS charges a flat ৳5 platform fee per customer digital bill. Restaurant owners settle fees weekly (every 7 days) with a 3-day payment grace period.
+- **Core Architecture & Settlement Lifecycle:**
+  1. **Weekly Settlement Cycle (7 Days) with 3-Day Grace Period:**
+     - **`In Progress` (Days 1–7):** Active collection period. Fees accumulate at ৳5/bill. Restaurant is not required to pay yet.
+     - **`Pending` (Days 8–10):** 7-day period closes at 11:59:59 PM. Cycle fee locks and enters 3-day payment grace period.
+     - **`Overdue` (Day 11+):** Grace period expires. Status automatically shifts to Overdue. Late payment tracking active.
+     - **`Settled`:** Marked when full payment is received and recorded.
+  2. **Independence of Cycles:**
+     - Settlement cycles are independent per `Settlement ID` (`ST-2026-006`, `ST-2026-005`, `ST-2026-004`, `ST-2026-003`).
+     - A previous cycle being Pending or Overdue NEVER stops fee collection for the new active cycle (`In Progress`).
+     - Settlement status is cycle-scoped, not a single restaurant-wide status.
+- **Key Modules & Component Structure:**
+  1. **`DigitalBillsView.jsx`:**
+     - Modular component replacing inline implementation in `SuperAdminPanel.jsx`.
+     - Preserves top banner with `Customer Confirmations (38)` (toggles live customer confirmations table from Supabase) and `Restaurant Bills Ledger` (the weekly settlement view).
+  2. **`digitalBillsStore.js`:**
+     - Data models, initial seed cycles matching Image 4 & 5, local persistence (`phonemenu_digital_bills_settlements`).
+     - `computeSettlementStatus(cycle, refDate)`: Computes status dynamically against reference date (Demo: 23 Dec 2026 or live date).
+     - `computeSettlementSummary(cycles, refDate)`: Calculates the 5 summary card metrics dynamically based on filtered cycles.
+     - `recordCyclePayment()`: Records payments, updates status to Settled, logs activity, and syncs to Supabase `settlements` table.
+     - `recordCycleReminder()`: Logs SMS/Email reminders in the cycle activity history.
+  3. **`digitalBills.css`:**
+     - Dedicated, pixel-perfect CSS with 100% Inter typography, custom card themes (Orange, Blue, Amber, Red, Green), status pills, and context menus.
+- **Main Dashboard Features (Image 4):**
+  - **5 Metric Cards:**
+    - `Total Accrued Fee` (৳1,835 / ৳1,840) — All settlement cycles.
+    - `Current Cycle Fee` (৳800) — 22 – 28 Dec 2026 (In Progress).
+    - `Pending Settlement` (৳485) — 1 cycle (awaiting payment).
+    - `Overdue Settlement` (৳155) — 1 cycle (payment overdue).
+    - `Total Settled` (৳400) — 1 cycle (paid).
+  - **Filter Toolbar:**
+    - Search by Settlement ID or Restaurant name.
+    - Restaurant Filter dropdown (`All Restaurants`, `Monkey Bhai`, `Hungry Bite Café`, `Spice Lounge`).
+    - Status Filter dropdown (`All Status`, `In Progress`, `Pending`, `Overdue`, `Settled`).
+    - Settlement Period Filter dropdown (Presets + Custom From/To range).
+    - Reference Date dropdown (`As of 23 Dec 2026 (Demo)` / `Live Current Date (Today)`).
+  - **Table Columns:**
+    - `Settlement ID | Restaurant | Settlement Period | Total Orders | Gross Order Volume | Accrued Fee (৳5/bill) | Payment Due Date | Settlement Status | Action`.
+  - **Three-Dot Quick Actions Menu:**
+    - Contextual actions based on status: Record Payment, Mark as Settled, Send Reminder, Overdue Reminder, Download Invoice, Download Receipt, View Orders, View Activity Log, Export CSV.
+- **Settlement Details View (Image 5):**
+  - Triggered via `View Details` button.
+  - Header with `← Back to Digital Bills`, Download Invoice, View Orders, and Record Payment buttons.
+  - Key Information card: Restaurant name (`Monkey Bhai` verified) + ID (`RST-1024`), Settlement ID, Period, Due Date, Status badge.
+  - 5-Metric Breakdown: Total Orders, Gross Order Volume, Platform Fee (৳5/bill), Created At, Last Updated.
+  - 3 Tabs:
+    1. `Order Transactions`: Details of all billable orders with ID, date/time, amount, ৳5 fee, customer, and dine-in badge.
+    2. `Payment History`: Detailed payment logs (bKash, Bank, Nagad), txn refs, amounts, admin notes.
+    3. `Activity Log`: Interactive vertical timeline tracking cycle creation, grace period alerts, reminders, and payment settlements.
+    4. `Export CSV`: Real CSV download helper.
+- **Modals:**
+  - **Record Payment Modal:** Form to enter amount, payment method (bKash, Nagad, Bank, Cash), transaction ref, date, notes. Automatically marks cycle as Settled upon full payment and syncs to Supabase.
+  - **PhoneMenu SaaS Invoice / Statement Modal:** Branded invoice view with print/PDF capability.
+- **Verification:**
+  - Production build passed in 2.07s (`npm --prefix 3d-menu run build`).
+  - Unit and integration tests passed for cycle status engine and payment recording.
+  - Pushed to GitHub `main` branch (Commit: `aa2acf2`).
