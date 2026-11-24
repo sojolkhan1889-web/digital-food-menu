@@ -235,3 +235,10 @@ Before writing or editing code for any new task, verify:
 - **Settlement ID Format**: `ST-[YYYY]-[RESTO_CODE]-[CYCLE_INDEX]` (e.g. `ST-2026-001-003`, `ST-2026-003-003`). Never emit identical settlement IDs across different restaurants.
 - **Overdue Validation Rule**: Before marking any cycle as Overdue or Pending in Digital Bills, verify the restaurant's overall settlement clearance in Supabase (`settlement_status === 'settled'` or `clearedAmount >= accruedFee`). If a restaurant has ৳0 remaining due in Fee Ledger / Restaurant Panel, all their historical cycles are `Settled`.
 - **Order Type Policy**: All live orders are `Regular` until direct digital menu ordering feature is officially rolled out.
+- **Single Source of Truth Financial Metrics (Nov 2026)**:
+  * Total DGM Orders across platform: exactly 15 verified live orders (Monkey Bhai: 10, Hungry Bite: 2, Spice Lounge: 3).
+  * Total Fees Collections: ৳75 (15 orders × ৳5/bill).
+  * Cleared Settlements: ৳60 (Monkey Bhai ৳50 + Hungry Bite ৳10).
+  * Pending / Due Settlements: ৳15 (Spice Lounge 3 orders × ৳5).
+  * Unified across Super Admin Dashboard, DGM Session Tracking, Digital Bills, Fee Ledger, and Restaurant Panels.
+  * Fee Ledger KPI card renamed to `Total Fees Collections`.

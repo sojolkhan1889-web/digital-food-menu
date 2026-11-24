@@ -296,7 +296,7 @@ export const generateLiveSettlementCycles = ({
       // Check Supabase settlements for direct match
       const matchingSettlement = restoSettlements.find(s => {
         if (s.period_start && new Date(s.period_start).getTime() === w.start_at.getTime()) return true;
-        if (s.notes && (s.notes.includes(cycleId) || s.notes.includes(`ST-${w.start_at.getFullYear()}-${cycleIndexStr}`))) return true;
+        if (s.notes && s.notes.includes(cycleId)) return true;
         if (resto.id === 'resto_002' && s.orders_count === orderCount && orderCount > 0) return true;
         return false;
       });
@@ -343,7 +343,7 @@ export const generateLiveSettlementCycles = ({
       const isCurrentCycle = status === 'in_progress';
 
       // Skip past cycles that have 0 orders and 0 fee
-      if (!isCurrentCycle && orderCount === 0 && accruedFee === 0 && !matchingSettlement && !cycleOverride.paidAmount) {
+      if (!isCurrentCycle && orderCount === 0 && accruedFee === 0) {
         return;
       }
 

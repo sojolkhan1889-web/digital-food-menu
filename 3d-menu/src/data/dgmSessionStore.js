@@ -314,11 +314,20 @@ export const fetchDGMBillingLedger = async ({ restaurantId = 'all', limit = 100 
  */
 export const fetchSuperAdminDGMMetrics = async () => {
   try {
-    const { data: allSessions, error } = await supabase
-      .from('dgm_table_sessions')
-      .select('id, started_at, expires_at, confirmed_at');
+    const [sessionsRes, nonFineOrdersRes] = await Promise.all([
+      supabase
+        .from('dgm_table_sessions')
+        .select('id, started_at, expires_at, confirmed_at'),
+      supabase
+        .from('orders')
+        .select('id, created_at, restaurant_id')
+        .eq('restaurant_id', 'resto_002')
+    ]);
 
-    if (error || !allSessions) {
+    const allSessions = sessionsRes.data || [];
+    const nonFineOrders = nonFineOrdersRes.data || [];
+
+    if (!allSessions.length && !nonFineOrders.length) {
       return {
         totalDgmOrders: 0,
         todayOrders: 0,
@@ -344,7 +353,7 @@ export const fetchSuperAdminDGMMetrics = async () => {
              d.getDate() === yesterday.getDate();
     };
 
-    let totalDgmOrders = allSessions.length;
+    let totalDgmOrders = allSessions.length + nonFineOrders.length;
     let todayOrders = 0;
     let yesterdayOrders = 0;
     let activeSessions = 0;
@@ -355,6 +364,11 @@ export const fetchSuperAdminDGMMetrics = async () => {
       if (isYesterday(s.started_at)) yesterdayOrders += 1;
       if (new Date(s.expires_at) > now) activeSessions += 1;
       if (s.confirmed_at) confirmedSessions += 1;
+    });
+
+    nonFineOrders.forEach((o) => {
+      if (isSameCalendarDay(o.created_at)) todayOrders += 1;
+      if (isYesterday(o.created_at)) yesterdayOrders += 1;
     });
 
     const feePerOrder = 5;

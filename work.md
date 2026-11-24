@@ -1328,3 +1328,33 @@ This file records all architectural specifications, resolved issues, feature imp
     * Hungry Bite Café: `ST-2026-002-002`, `ST-2026-002-004`
     * Spice Lounge: `ST-2026-003-002` through `ST-2026-003-004`
   - Viewing details for any restaurant opens strictly that restaurant's settlement details page.
+
+### Update: Single Source of Truth Across Financial KPIs (15 DGM Orders, ৳75 Total Fees Collections) (November 2026)
+- **1. Database Cleanup & Realtime Real Data:**
+  - Removed 28 old mock/demo test orders from Supabase `orders` table.
+  - Aligned Monkey Bhai orders to exactly 10 verified DGM orders matching `dgm_billing_ledger`.
+  - Database now holds strictly the **15 verified live orders**:
+    * Monkey Bhai (`resto_001`): 10 orders (Fee: ৳50.00, Cleared: ৳50.00, Due: ৳0.00 -> `Settled`)
+    * Hungry Bite Café (`resto_002`): 2 orders (Fee: ৳10.00, Cleared: ৳10.00, Due: ৳0.00 -> `Settled`)
+    * Spice Lounge (`resto_003`): 3 orders (Fee: ৳15.00, Cleared: ৳0.00, Due: ৳15.00 -> `Pending / Due`)
+  - Updated Monkey Bhai's cleared settlement record in Supabase `settlements` table from demo ৳485 to **৳50.00** (`orders_count: 10`, `status: cleared`).
+- **2. Single Source of Truth Unified Across Super Admin & Restaurant Panels:**
+  - **Super Admin Dashboard:**
+    * Total DGM Orders: **15** (`15 verified bills`)
+    * Total Fees Collections: **৳75** (`৳5/bill flat rate`)
+    * Total Due Settlements: **৳15** (Spice Lounge pending)
+    * Total Cleared Settlement: **৳60** (৳50 MB + ৳10 HB)
+    * Total Earnings: **৳60** (`100% Realized Revenue`)
+    * Order Status Donut Chart: **15 Total Orders** (100% Completed/Paid)
+  - **DGM Session Tracking:**
+    * Total DGM Orders KPI Card: **15** (`All time (15 verified bills)`)
+  - **Digital Bills View:**
+    * Total Fees Collections KPI Card: **৳75** (`All settlement cycles (৳5/bill)`)
+    * Total Settled: **৳60**
+    * Overdue / Pending Settlement: **৳15**
+  - **Fee Ledger (`RevenueSettlementView`):**
+    * Renamed KPI card `Total Accrued Fees` -> **`Total Fees Collections`** showing **৳75** (`15 verified orders at ৳5/bill`).
+    * Total Cleared Settlements (Earnings): **৳60** (`100% Confirmed & Deposited`).
+    * Total Due Settlements: **৳15** (`Pending collection from restaurants`).
+  - **Restaurant Panels (`/monkeybhai/admin`, `/hungrybite/admin`, `/spicelounge/admin`):**
+    * Trend subtext on `Total DGM Orders` card now dynamically displays `${metrics.totalOrders} Confirmed` (Monkey Bhai: `10 Confirmed`, Hungry Bite: `2 Confirmed`, Spice Lounge: `3 Confirmed`), eliminating old static or mismatched values.

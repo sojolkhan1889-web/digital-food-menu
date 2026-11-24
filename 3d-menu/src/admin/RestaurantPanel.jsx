@@ -1793,7 +1793,7 @@ export default function RestaurantPanel({
                       title: 'Total DGM Orders',
                       value: metrics.totalOrders,
                       icon: ShoppingCart,
-                      trend: `${orders.filter(o => o.orderStatus === 'completed' || o.orderStatus === 'confirmed').length} Confirmed`,
+                      trend: `${metrics.totalOrders} Confirmed`,
                       comparison: 'All-time bills',
                       trendType: metrics.totalOrders > 0 ? 'up' : 'neutral',
                       sparkColor: metrics.totalOrders > 0 ? 'orange' : 'gray',

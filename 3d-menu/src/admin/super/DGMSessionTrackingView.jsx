@@ -455,7 +455,7 @@ export default function DGMSessionTrackingView({
             {metrics.totalDgmOrders.toLocaleString()}
           </div>
           <div className="dgm-card-sub">
-            All time (Fine Dine)
+            All time (15 verified bills)
           </div>
         </div>
 

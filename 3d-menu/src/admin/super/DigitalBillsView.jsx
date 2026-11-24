@@ -1047,10 +1047,10 @@ export default function DigitalBillsView({
                 <div className="metric-card-icon">
                   <Coins size={20} strokeWidth={2.4} />
                 </div>
-                <span className="metric-card-title">Total Accrued Fee</span>
+                <span className="metric-card-title">Total Fees Collections</span>
               </div>
               <div className="metric-card-value">৳{metrics.totalAccruedFee.toLocaleString()}</div>
-              <div className="metric-card-sub">All settlement cycles</div>
+              <div className="metric-card-sub">All settlement cycles (৳5/bill)</div>
             </div>
 
             {/* 2. Current Cycle Fee */}

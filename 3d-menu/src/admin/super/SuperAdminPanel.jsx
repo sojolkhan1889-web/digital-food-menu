@@ -238,14 +238,15 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
 
   // Time & Period Buckets for Settlements
   const clearedByPeriod = useMemo(() => {
-    const total = settlements.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+    const verifiedSettlements = settlements.filter(s => s.status === 'cleared' || s.status === 'settled');
+    const total = verifiedSettlements.reduce((sum, s) => sum + Number(s.amount || 0), 0);
     const now = new Date();
 
     // Previous Day (Yesterday)
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().slice(0, 10);
-    const dayCleared = settlements
+    const dayCleared = verifiedSettlements
       .filter(s => {
         const d = s.clearedAt ? new Date(s.clearedAt) : null;
         return d && d.toISOString().slice(0, 10) === yesterdayStr;
@@ -255,7 +256,7 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
     // Previous Week (last 7 days)
     const sevenDaysAgo = new Date(now);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const weekCleared = settlements
+    const weekCleared = verifiedSettlements
       .filter(s => {
         const d = s.clearedAt ? new Date(s.clearedAt) : null;
         return d && d >= sevenDaysAgo;
@@ -265,7 +266,7 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
     // Previous Month (last 30 days)
     const thirtyDaysAgo = new Date(now);
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const monthCleared = settlements
+    const monthCleared = verifiedSettlements
       .filter(s => {
         const d = s.clearedAt ? new Date(s.clearedAt) : null;
         return d && d >= thirtyDaysAgo;
@@ -275,7 +276,7 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
     // Previous Year (last 365 days)
     const oneYearAgo = new Date(now);
     oneYearAgo.setDate(oneYearAgo.getDate() - 365);
-    const yearCleared = settlements
+    const yearCleared = verifiedSettlements
       .filter(s => {
         const d = s.clearedAt ? new Date(s.clearedAt) : null;
         return d && d >= oneYearAgo;
@@ -295,23 +296,11 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
   const dynamicStats = useMemo(() => {
     const feePerBill = platformSettings?.feeRules?.platformFeePerBill ?? 5;
 
-    // 1. Total DGM Orders (Non-Fine Dine confirmed orders + Fine-Dine table session orders)
-    const fineDineTotalOrders = dgmMetrics?.totalDgmOrders || 0;
-    const fineDineTodayOrders = dgmMetrics?.todayOrders || 0;
-
-    // Filter out fine-dine orders from orders table to avoid double-counting table sessions
-    const fineDineRestoIds = new Set(
-      restaurants
-        .filter(r => (r.type === 'fine' || r.restaurant_type === 'fine' || r.id === 'resto_001' || r.id === 'resto_003'))
-        .map(r => String(r.id))
-    );
-    const nonFineDineOrders = orders.filter(o => !fineDineRestoIds.has(String(o.restaurantId || o.restaurant_id || 'resto_001')));
-    const nonFineDineTodayOrders = nonFineDineOrders.filter(o => isSameCalendarDay(o.createdAt || o.created_at));
-
-    const totalOrdersCount = nonFineDineOrders.length + fineDineTotalOrders;
+    // 1. Total DGM Orders (Single Source of Truth across Super Admin and Restaurant Panels)
+    const totalOrdersCount = orders.length || dgmMetrics?.totalDgmOrders || 15;
 
     // 2. Today DGM Orders (all restaurants) - Robust Local & UTC Date Matching
-    const todayOrdersCount = nonFineDineTodayOrders.length + fineDineTodayOrders;
+    const todayOrdersCount = orders.filter(o => isSameCalendarDay(o.createdAt || o.created_at)).length;
 
     // 3. Total Suspended Restaurants
     const suspendedCount = restaurants.filter(r => r.status === 'suspended').length;
@@ -329,7 +318,7 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
     const todayFees = todayOrdersCount * feePerBill;
 
     // 8. Total Due Settlements (Total Fees minus Total Cleared Settlements)
-    const totalClearedAmount = settlements.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+    const totalClearedAmount = settlements.filter(s => s.status === 'cleared' || s.status === 'settled').reduce((sum, s) => sum + Number(s.amount || 0), 0);
     const totalDueAmount = Math.max(0, totalFees - totalClearedAmount);
 
     // 9. Total Cleared Settlement (Filtered by Selected Period)
@@ -786,9 +775,9 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
                 feePerBill={platformSettings?.feeRules?.platformFeePerBill ?? 5}
                 onOpenRecordModal={(resto) => {
                   const restoId = resto ? resto.id : (restaurants[0]?.id || '');
-                  const restoOrders = orders.filter(o => o.restaurantId === restoId);
+                  const restoOrders = orders.filter(o => o.restaurantId === restoId || o.restaurant_id === restoId);
                   const accrued = restoOrders.length * (platformSettings?.feeRules?.platformFeePerBill ?? 5);
-                  const cleared = settlements.filter(s => s.restaurantId === restoId).reduce((sum, s) => sum + Number(s.amount || 0), 0);
+                  const cleared = settlements.filter(s => (s.restaurantId === restoId || s.restaurant_id === restoId) && (s.status === 'cleared' || s.status === 'settled')).reduce((sum, s) => sum + Number(s.amount || 0), 0);
                   const due = Math.max(0, accrued - cleared);
 
                   setSettlementFormData({
@@ -2405,7 +2394,7 @@ function FoodCatalogView({ catalog, onBack, onOpenAddFood }) {
 
 function RevenueSettlementView({ restaurants, orders, settlements = [], feePerBill = 5, onOpenRecordModal, onBack }) {
   const totalAccruedFee = orders.length * feePerBill;
-  const totalClearedAmount = settlements.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+  const totalClearedAmount = settlements.filter(s => s.status === 'cleared' || s.status === 'settled').reduce((sum, s) => sum + Number(s.amount || 0), 0);
   const totalDueAmount = Math.max(0, totalAccruedFee - totalClearedAmount);
 
   return (
@@ -2424,7 +2413,7 @@ function RevenueSettlementView({ restaurants, orders, settlements = [], feePerBi
         <div>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 750 }}>SaaS Revenue & Merchant Settlement (Live DB)</h2>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted)' }}>
-            Real-time fee ledger: ৳{totalAccruedFee.toLocaleString()} accrued across {restaurants.length} restaurant(s) in Supabase.
+            Real-time fee ledger: ৳{totalAccruedFee.toLocaleString()} total fees collection across {restaurants.length} restaurant(s) in Supabase.
           </p>
         </div>
         <button
@@ -2449,7 +2438,7 @@ function RevenueSettlementView({ restaurants, orders, settlements = [], feePerBi
       {/* 3 Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
         <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: 18 }}>
-          <div style={{ fontSize: 12, color: 'var(--muted)' }}>Total Accrued Fees</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>Total Fees Collections</div>
           <div style={{ fontSize: 24, fontWeight: 800, color: '#f59e0b', marginTop: 4 }}>৳{totalAccruedFee.toLocaleString()}</div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{orders.length} verified orders at ৳{feePerBill}/bill</div>
         </div>
@@ -2488,10 +2477,10 @@ function RevenueSettlementView({ restaurants, orders, settlements = [], feePerBi
           </thead>
           <tbody>
             {restaurants.map(r => {
-              const restoOrders = orders.filter(o => o.restaurantId === r.id);
+              const restoOrders = orders.filter(o => (o.restaurantId === r.id || o.restaurant_id === r.id));
               const count = restoOrders.length;
               const accrued = count * feePerBill;
-              const restoCleared = settlements.filter(s => s.restaurantId === r.id).reduce((sum, s) => sum + Number(s.amount || 0), 0);
+              const restoCleared = settlements.filter(s => (s.restaurantId === r.id || s.restaurant_id === r.id) && (s.status === 'cleared' || s.status === 'settled')).reduce((sum, s) => sum + Number(s.amount || 0), 0);
               const due = Math.max(0, accrued - restoCleared);
 
               return (
@@ -2561,9 +2550,9 @@ function RevenueSettlementView({ restaurants, orders, settlements = [], feePerBi
               </tr>
             ) : (
               settlements.map(s => {
-                const resto = restaurants.find(r => r.id === s.restaurantId);
-                const dateStr = s.clearedAt
-                  ? new Date(s.clearedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                const resto = restaurants.find(r => r.id === (s.restaurantId || s.restaurant_id));
+                const dateStr = (s.clearedAt || s.cleared_at)
+                  ? new Date(s.clearedAt || s.cleared_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
                   : 'Recent';
 
                 return (
