@@ -230,3 +230,8 @@ Before writing or editing code for any new task, verify:
   - `Order From`: `Fine Dine` / `Non-Fine Dine`.
   - `Order Type`: `Online Order` (placed via menu 'Confirm Your Order') vs `Regular` (placed via waiter).
 - **Custom Date Range Filter**: Uses calendar day strings `getLocalDateString` (`YYYY-MM-DD`) to avoid UTC/BST timezone clipping.
+
+## Settlement ID Uniqueness & Real-Time Due Sync Rules (November 2026)
+- **Settlement ID Format**: `ST-[YYYY]-[RESTO_CODE]-[CYCLE_INDEX]` (e.g. `ST-2026-001-003`, `ST-2026-003-003`). Never emit identical settlement IDs across different restaurants.
+- **Overdue Validation Rule**: Before marking any cycle as Overdue or Pending in Digital Bills, verify the restaurant's overall settlement clearance in Supabase (`settlement_status === 'settled'` or `clearedAmount >= accruedFee`). If a restaurant has ৳0 remaining due in Fee Ledger / Restaurant Panel, all their historical cycles are `Settled`.
+- **Order Type Policy**: All live orders are `Regular` until direct digital menu ordering feature is officially rolled out.

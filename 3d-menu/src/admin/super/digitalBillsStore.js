@@ -197,8 +197,26 @@ export const generateLiveSettlementCycles = ({
   const generatedCycles = [];
 
   (restaurants || []).forEach(resto => {
+    // Unique restaurant code for globally distinct Settlement IDs (e.g. ST-2026-001-003, ST-2026-003-003)
+    const restoNum = String(resto.display_id || resto.displayId || resto.id || '001')
+      .replace(/\D/g, '')
+      .padStart(3, '0');
+
+    // Real-time cleared settlements for this restaurant from live Supabase
+    const restoSettlements = (settlements || []).filter(s => {
+      const rId = s.restaurant_id || s.restaurantId;
+      return rId === resto.id && (s.status === 'cleared' || s.status === 'settled');
+    });
+    const totalClearedAmount = restoSettlements.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+    const isRestoSettled = resto.settlement_status === 'settled' || resto.settlementStatus === 'settled';
+
+    // Chronological pool of cleared payments to apply across historical cycles
+    let clearedPoolRemaining = totalClearedAmount;
+
     windows.forEach(w => {
-      const cycleId = `ST-${w.start_at.getFullYear()}-${String(w.index).padStart(3, '0')}`;
+      const cycleIndexStr = String(w.index).padStart(3, '0');
+      // Globally unique Settlement ID per restaurant & per period
+      const cycleId = `ST-${w.start_at.getFullYear()}-${restoNum}-${cycleIndexStr}`;
       const overrideKey = `${resto.id}_${cycleId}`;
       const cycleOverride = overrides[overrideKey] || {};
 
@@ -246,7 +264,8 @@ export const generateLiveSettlementCycles = ({
             amount: matched ? Number(matched.total_amount || matched.totalAmount || 0) : 150.00,
             fee: feePerBill,
             orderFrom: orderFromLabel,
-            orderType: matched ? 'Online Order' : 'Regular'
+            // Currently all restaurants operate via waiter/regular ordering. Only future direct digital ordering gets 'Online Order'.
+            orderType: (matched?.is_online_order || matched?.order_type === 'online') ? 'Online Order' : 'Regular'
           };
         });
       } else {
@@ -262,7 +281,8 @@ export const generateLiveSettlementCycles = ({
           amount: Number(o.total_amount || o.totalAmount || 0),
           fee: feePerBill,
           orderFrom: orderFromLabel,
-          orderType: (o.order_status === 'confirmed' || o.orderStatus === 'confirmed') ? 'Online Order' : 'Regular'
+          // Currently all restaurants operate via waiter/regular ordering. Only future direct digital ordering gets 'Online Order'.
+          orderType: (o?.is_online_order || o?.order_type === 'online') ? 'Online Order' : 'Regular'
         }));
       }
 
@@ -273,24 +293,39 @@ export const generateLiveSettlementCycles = ({
       const grossVolume = formattedOrders.reduce((sum, o) => sum + Number(o.amount || 0), 0);
       const accruedFee = orderCount * feePerBill;
 
-      // Check Supabase settlements
-      const matchingSettlement = (settlements || []).find(s => {
-        if (s.restaurant_id !== resto.id) return false;
+      // Check Supabase settlements for direct match
+      const matchingSettlement = restoSettlements.find(s => {
         if (s.period_start && new Date(s.period_start).getTime() === w.start_at.getTime()) return true;
-        if (s.notes && s.notes.includes(cycleId)) return true;
-        if (resto.id === 'resto_002' && s.orders_count === orderCount && orderCount > 0 && s.status === 'cleared') return true;
+        if (s.notes && (s.notes.includes(cycleId) || s.notes.includes(`ST-${w.start_at.getFullYear()}-${cycleIndexStr}`))) return true;
+        if (resto.id === 'resto_002' && s.orders_count === orderCount && orderCount > 0) return true;
         return false;
       });
 
-      let paidAmount = cycleOverride.paidAmount != null 
-        ? cycleOverride.paidAmount 
-        : (matchingSettlement ? Number(matchingSettlement.amount || accruedFee) : 0);
-      
-      let isPaid = cycleOverride.isPaid != null 
-        ? cycleOverride.isPaid 
-        : (matchingSettlement?.status === 'cleared' || (accruedFee > 0 && paidAmount >= accruedFee));
+      // Real-time Settlement Clearance Check:
+      // If restaurant has 0 due / marked settled in DB, or if cleared payments pool covers this cycle,
+      // it is marked Settled (paid) and will NEVER show Overdue!
+      let isPaid = false;
+      let paidAmount = 0;
 
-      const settledAt = cycleOverride.settledAt || matchingSettlement?.cleared_at || null;
+      if (cycleOverride.isPaid != null) {
+        isPaid = Boolean(cycleOverride.isPaid);
+        paidAmount = cycleOverride.paidAmount != null ? Number(cycleOverride.paidAmount) : (isPaid ? accruedFee : 0);
+      } else if (matchingSettlement) {
+        isPaid = true;
+        paidAmount = Number(matchingSettlement.amount || accruedFee);
+      } else if (isRestoSettled || (clearedPoolRemaining >= accruedFee && accruedFee > 0)) {
+        isPaid = true;
+        paidAmount = accruedFee;
+        if (clearedPoolRemaining >= accruedFee) {
+          clearedPoolRemaining -= accruedFee;
+        }
+      } else if (clearedPoolRemaining > 0) {
+        paidAmount = clearedPoolRemaining;
+        clearedPoolRemaining = 0;
+        isPaid = paidAmount >= accruedFee;
+      }
+
+      const settledAt = cycleOverride.settledAt || matchingSettlement?.cleared_at || (isPaid ? (matchingSettlement?.cleared_at || w.endInclusive.toISOString()) : null);
 
       // Compute status using the exact user-specified logic
       const status = getSettlementStatus({
@@ -307,8 +342,8 @@ export const generateLiveSettlementCycles = ({
 
       const isCurrentCycle = status === 'in_progress';
 
-      // Skip past cycles that have 0 orders and 0 fee and no payments
-      if (!isCurrentCycle && orderCount === 0 && accruedFee === 0 && !isPaid) {
+      // Skip past cycles that have 0 orders and 0 fee
+      if (!isCurrentCycle && orderCount === 0 && accruedFee === 0 && !matchingSettlement && !cycleOverride.paidAmount) {
         return;
       }
 
@@ -357,12 +392,33 @@ export const generateLiveSettlementCycles = ({
         }
       }
 
+      const cyclePayments = cycleOverride.payments || (matchingSettlement ? [
+        {
+          id: matchingSettlement.id,
+          date: matchingSettlement.cleared_at || matchingSettlement.created_at,
+          amount: Number(matchingSettlement.amount || paidAmount),
+          method: matchingSettlement.payment_method || 'bKash Merchant Pay',
+          transactionRef: matchingSettlement.transaction_ref || 'TRX-LIVE-001',
+          notes: matchingSettlement.notes || 'Full settlement payment',
+          recordedBy: 'Super Admin'
+        }
+      ] : (isPaid && paidAmount > 0 ? [
+        {
+          id: `stl_${cycleId}_auto`,
+          date: settledAt || w.endInclusive.toISOString(),
+          amount: paidAmount,
+          method: restoSettlements[0]?.payment_method || 'bKash Merchant Pay',
+          transactionRef: restoSettlements[0]?.transaction_ref || `TRX-${cycleId}`,
+          notes: `Settlement cleared (${resto.name})`,
+          recordedBy: 'Super Admin'
+        }
+      ] : []));
 
       generatedCycles.push({
         id: cycleId,
         restaurantId: resto.id,
         restaurantName: resto.name,
-        restaurantCode: resto.displayId || resto.display_id || resto.code || resto.id,
+        restaurantCode: resto.display_id || resto.displayId || resto.code || resto.id,
         restaurantType: isFineDine ? 'Fine Dine' : 'Standard Cafe',
         periodStart: w.start_at.toISOString(),
         periodEnd: w.endInclusive.toISOString(),
@@ -382,17 +438,7 @@ export const generateLiveSettlementCycles = ({
         lastUpdatedAt: isCurrentCycle ? now.toISOString() : w.endInclusive.toISOString(),
         isPaid,
         settledAt,
-        payments: cycleOverride.payments || (matchingSettlement ? [
-          {
-            id: matchingSettlement.id,
-            date: matchingSettlement.cleared_at,
-            amount: Number(matchingSettlement.amount),
-            method: matchingSettlement.payment_method || 'bKash Merchant Pay',
-            transactionRef: matchingSettlement.transaction_ref || 'TRX-LIVE-001',
-            notes: matchingSettlement.notes || 'Full settlement payment',
-            recordedBy: 'Super Admin'
-          }
-        ] : []),
+        payments: cyclePayments,
         activities,
         orders: formattedOrders
       });

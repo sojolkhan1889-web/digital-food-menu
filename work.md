@@ -1310,3 +1310,21 @@ This file records all architectural specifications, resolved issues, feature imp
   - Changed old `Order Type` column to **`Order From`** showing restaurant classification (`Fine Dine` / `Non-Fine Dine`).
   - Added new **`Order Type`** column showing order placement channel (`Online Order` via digital menu vs `Regular` via waiter).
   - Updated CSV Export helper to include all new columns.
+
+### Update: Globally Unique Settlement IDs, Zero-Due Sync & Order Type Regular Enforcement (November 2026)
+- **1. Order Type Column Regular Enforcement:**
+  - Removed dummy "Online Order" badges from `Order Transactions` table.
+  - Since direct online table ordering from the digital menu has not been enabled yet, all live orders are truthfully categorized as **`Regular`**.
+  - Future support enabled: only when direct digital ordering is activated will orders dynamically receive `Online Order`.
+- **2. Zero-Due Sync (Monkey Bhai & Hungry Bite Overdue Fix):**
+  - Integrated real-time restaurant settlement status verification (`settlement_status === 'settled'` and cleared payments pool matching `settlements` table).
+  - Monkey Bhai (৳485 cleared, ৳155 accrued, ৳0 due) and Hungry Bite Café (৳10 cleared, ৳10 accrued, ৳0 due) have all completed cycles marked as **`Settled`**.
+  - No false Overdue or Pending cycles appear for restaurants whose platform dues are cleared.
+  - Only restaurants with actual unpaid cycles (Spice Lounge: ৳10 overdue in week 2, ৳15 pending in week 3) display Overdue/Pending.
+- **3. Globally Unique Settlement IDs (Resolution of Wrong Restaurant View Details):**
+  - Resolved duplicate Settlement ID collision where all restaurants in week 2/week 3 shared `ST-2026-002`/`ST-2026-003`, causing View Details on Spice Lounge to open Monkey Bhai.
+  - Implemented standard format `ST-[YYYY]-[RESTO_CODE]-[CYCLE_NUM]`:
+    * Monkey Bhai: `ST-2026-001-001` through `ST-2026-001-004`
+    * Hungry Bite Café: `ST-2026-002-002`, `ST-2026-002-004`
+    * Spice Lounge: `ST-2026-003-002` through `ST-2026-003-004`
+  - Viewing details for any restaurant opens strictly that restaurant's settlement details page.
