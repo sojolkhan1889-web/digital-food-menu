@@ -120,6 +120,26 @@ export const isDateInBounds = (isoDate, bounds) => {
 // 2. Payment Transactions Mapper (Single Source of Truth from settlements)
 // ---------------------------------------------------------------------------
 
+export const parseNotesMeta = (rawNotes = '') => {
+  const str = String(rawNotes || '');
+  const marker = '||META||';
+  const idx = str.indexOf(marker);
+  if (idx === -1) {
+    return { cleanNotes: str, meta: {} };
+  }
+  const cleanNotes = str.slice(0, idx).trim();
+  const jsonPart = str.slice(idx + marker.length).trim();
+  try {
+    return { cleanNotes, meta: JSON.parse(jsonPart) };
+  } catch {
+    return { cleanNotes, meta: {} };
+  }
+};
+
+export const serializeNotesWithMeta = (cleanNotes = '', meta = {}) => {
+  return `${String(cleanNotes || '').trim()} ||META||${JSON.stringify(meta)}`;
+};
+
 export const normalizePaymentStatus = (rawStatus) => {
   const s = String(rawStatus || 'cleared').toLowerCase();
   if (s === 'cleared' || s === 'settled' || s === 'verified') return 'verified';
@@ -153,7 +173,8 @@ export const buildPaymentTransactions = ({ settlements = [], cycles = [], restau
     const seq = String(yearCounters[yr]).padStart(3, '0');
     const paymentId = `PAY-${yr}-${seq}`;
 
-    const notes = String(s.notes || '');
+    const rawNotes = String(s.notes || '');
+    const { cleanNotes, meta } = parseNotesMeta(rawNotes);
     const method = String(s.payment_method || s.paymentMethod || 'bKash Merchant Pay');
     const ref = String(s.transaction_ref || s.transactionRef || s.id || '');
     const amount = Number(s.amount || 0);
@@ -162,7 +183,8 @@ export const buildPaymentTransactions = ({ settlements = [], cycles = [], restau
     // Determine Settlement Cycle allocation(s)
     const restoCycles = (cycles || []).filter(c => c.restaurantId === rId);
     const directCycles = restoCycles.filter(c => {
-      if (notes.includes(c.id)) return true;
+      if (meta.cycleId && meta.cycleId === c.id) return true;
+      if (rawNotes.includes(c.id)) return true;
       if (s.period_start && new Date(s.period_start).getTime() === new Date(c.start_at).getTime()) return true;
       if (rId === 'resto_002' && c.totalOrders > 0 && Number(s.orders_count || 0) === c.totalOrders) return true;
       return false;
@@ -194,23 +216,25 @@ export const buildPaymentTransactions = ({ settlements = [], cycles = [], restau
         ? 'Multiple Settlements'
         : allocations.length === 1
         ? allocations[0].periodLabel
-        : (s.period_start && s.period_end
+        : (meta.periodLabel || (s.period_start && s.period_end
             ? `${formatDhakaDate(s.period_start)} – ${formatDhakaDate(s.period_end)}`
-            : 'General Settlement');
+            : 'General Settlement'));
 
-    const isPortalAuto =
-      notes.toLowerCase().includes('portal') ||
+    const isPortalSub =
+      Boolean(meta.source === 'Restaurant Submission') ||
+      rawNotes.toLowerCase().includes('portal') ||
       method.toLowerCase().includes('digital payment / settle due') ||
-      notes.toLowerCase().includes('automatic');
+      method.toLowerCase().includes('qr') ||
+      rawNotes.toLowerCase().includes('automatic');
 
     return {
       id: String(s.id),
       paymentId,
       restaurantId: rId,
-      restaurantName: resto?.name || 'Restaurant',
+      restaurantName: resto?.name || meta.restaurantName || 'Restaurant',
       restaurantCode: resto?.display_id || resto?.displayId || `#${rId.replace(/\D/g, '').padStart(3, '0')}`,
       settlementPeriod: settlementPeriodLabel,
-      primaryCycleId: allocations[0]?.cycleId || null,
+      primaryCycleId: meta.cycleId || allocations[0]?.cycleId || null,
       allocations,
       paymentDate,
       paymentDateFormatted: formatDhakaDate(paymentDate),
@@ -218,11 +242,19 @@ export const buildPaymentTransactions = ({ settlements = [], cycles = [], restau
       paymentDateTimeFormatted: formatDhakaDateTime(paymentDate),
       method,
       transactionRef: ref,
-      paymentSource: isPortalAuto ? 'Automatic' : 'Manual',
+      paymentSource: meta.source || (isPortalSub ? 'Restaurant Submission' : 'Manual'),
+      paymentMobile: meta.paymentMobile || '',
+      screenshotUrl: meta.screenshotUrl || '',
+      paymentNote: meta.paymentNote || '',
+      rejectionReason: meta.rejectionReason || '',
+      adminVerificationNote: meta.adminVerificationNote || '',
+      verifiedAt: meta.verifiedAt || null,
       amount,
       status,
-      verifiedBy: status === 'verified' ? 'Super Admin' : '—',
-      notes,
+      verifiedBy: status === 'verified' ? (meta.verifiedBy || 'Super Admin') : '—',
+      notes: cleanNotes,
+      rawNotes,
+      meta,
       raw: s
     };
   });
@@ -595,10 +627,143 @@ export const appendPaymentAuditLog = (entry) => {
   }
 };
 
+/**
+ * Submit payment proof from Restaurant Panel (bKash Merchant QR or Physical QR Stand).
+ * Inserts a record with status = 'pending_verification'. Does NOT reduce due until Super Admin verifies.
+ */
+export const submitRestaurantPaymentProof = async ({
+  restaurantId,
+  restaurantName = 'Restaurant',
+  cycleId,
+  periodLabel = '',
+  periodStart = null,
+  periodEnd = null,
+  ordersCount = 0,
+  submittableRemaining = null,
+  paymentMobile,
+  transactionRef,
+  amount,
+  paymentDate,
+  screenshotUrl,
+  paymentNote = '',
+  paymentMethod = 'bKash Merchant QR'
+}) => {
+  const cleanMobile = String(paymentMobile || '').trim();
+  const cleanRef = String(transactionRef || '').trim();
+  const numAmount = Number(amount);
+
+  if (!restaurantId || !cycleId) {
+    return { success: false, error: 'Settlement cycle is required.' };
+  }
+  if (!cleanMobile || cleanMobile.length < 10) {
+    return { success: false, error: 'Please enter a valid payment mobile number.' };
+  }
+  if (!cleanRef || cleanRef.length < 4) {
+    return { success: false, error: 'Please enter a valid Transaction ID.' };
+  }
+  if (!Number.isFinite(numAmount) || numAmount <= 0) {
+    return { success: false, error: 'Paid amount must be greater than ৳0.' };
+  }
+  if (submittableRemaining !== null && numAmount > Number(submittableRemaining) + 0.01) {
+    return {
+      success: false,
+      error: `Amount (৳${numAmount.toFixed(2)}) exceeds available due balance (৳${Number(submittableRemaining).toFixed(2)}).`
+    };
+  }
+  if (!paymentDate) {
+    return { success: false, error: 'Payment date & time is required.' };
+  }
+  if (!screenshotUrl) {
+    return { success: false, error: 'Payment screenshot / receipt is required.' };
+  }
+
+  // Prevent duplicate active/verified Transaction ID submission
+  try {
+    const { data: dupRows } = await supabase
+      .from('settlements')
+      .select('id, status')
+      .eq('transaction_ref', cleanRef)
+      .limit(5);
+    const blockingDup = (dupRows || []).find(
+      row => !['rejected', 'failed', 'reversed'].includes(String(row.status || '').toLowerCase())
+    );
+    if (blockingDup) {
+      return {
+        success: false,
+        error: `Transaction ID "${cleanRef}" has already been submitted (${blockingDup.status}).`
+      };
+    }
+  } catch (dupErr) {
+    console.warn('Duplicate TrxID pre-check skipped:', dupErr);
+  }
+
+  const nowIso = new Date().toISOString();
+  const stlId = `stl_${Date.now()}`;
+  const paymentIso = new Date(paymentDate).toISOString();
+
+  const meta = {
+    cycleId,
+    periodLabel,
+    restaurantName,
+    paymentMobile: cleanMobile,
+    screenshotUrl,
+    paymentNote: String(paymentNote || '').trim(),
+    source: 'Restaurant Submission',
+    submittedAt: nowIso
+  };
+
+  const humanNote = `${cycleId} - Submitted via Restaurant Portal | Mobile: ${cleanMobile}`;
+  const notesPayload = serializeNotesWithMeta(humanNote, meta);
+
+  try {
+    const { data, error } = await supabase
+      .from('settlements')
+      .insert([
+        {
+          id: stlId,
+          restaurant_id: restaurantId,
+          amount: numAmount,
+          fee_per_bill: 5,
+          orders_count: Number(ordersCount || 0),
+          period_start: periodStart || null,
+          period_end: periodEnd || null,
+          payment_method: paymentMethod,
+          transaction_ref: cleanRef,
+          status: 'pending_verification',
+          notes: notesPayload,
+          cleared_at: paymentIso,
+          created_at: nowIso
+        }
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      return { success: false, error: `Submission failed: ${error.message}` };
+    }
+
+    appendPaymentAuditLog({
+      settlementId: stlId,
+      paymentId: cleanRef,
+      restaurantId,
+      restaurantName,
+      action: 'Payment Proof Submitted',
+      reason: `৳${numAmount.toFixed(2)} via ${paymentMethod} (TrxID: ${cleanRef}) awaiting verification`,
+      amount: numAmount,
+      actor: restaurantName
+    });
+
+    return { success: true, record: data || { id: stlId } };
+  } catch (err) {
+    return { success: false, error: err?.message || 'Failed to submit payment proof.' };
+  }
+};
+
 export const updatePaymentStatusInSupabase = async ({
   transaction,
-  newStatus, // 'cleared' (verify) | 'rejected' | 'reversed' | 'refunded'
+  newStatus, // 'verified' | 'cleared' | 'rejected' | 'reversed' | 'refunded'
   reason = '',
+  hasOtherUnpaidCycles = false,
   actor = 'Super Admin'
 }) => {
   if (!transaction?.id) {
@@ -606,21 +771,71 @@ export const updatePaymentStatusInSupabase = async ({
   }
 
   const dbStatus = newStatus === 'verified' ? 'cleared' : newStatus;
+
+  // Enforce verification & duplicate Transaction ID protection
+  if (dbStatus === 'cleared') {
+    const ref = String(transaction.transactionRef || '').trim();
+    if (ref) {
+      try {
+        const { data: dupRows } = await supabase
+          .from('settlements')
+          .select('id, status')
+          .eq('transaction_ref', ref)
+          .limit(10);
+        const conflict = (dupRows || []).find(
+          r => r.id !== transaction.id && ['cleared', 'settled', 'verified'].includes(String(r.status || '').toLowerCase())
+        );
+        if (conflict) {
+          return {
+            success: false,
+            error: `Duplicate Protection: Transaction ID "${ref}" is already verified under another record.`
+          };
+        }
+      } catch (e) {
+        console.warn('Duplicate verification check skipped:', e);
+      }
+    }
+  }
+
+  const { cleanNotes, meta } = parseNotesMeta(transaction.rawNotes || transaction.notes || '');
+  const nowIso = new Date().toISOString();
+  const nextMeta = {
+    ...meta,
+    ...(dbStatus === 'cleared'
+      ? { verifiedBy: actor, verifiedAt: nowIso, adminVerificationNote: reason || 'Verified against merchant records' }
+      : {}),
+    ...(dbStatus === 'rejected'
+      ? { rejectionReason: reason || 'Transaction ID / Screenshot did not match merchant records', rejectedBy: actor, rejectedAt: nowIso }
+      : {}),
+    ...(dbStatus === 'reversed' || dbStatus === 'refunded'
+      ? { reversalReason: reason || 'Authorized reversal', reversedBy: actor, reversedAt: nowIso }
+      : {})
+  };
+
   const noteSuffix = reason ? ` | [${newStatus.toUpperCase()} by ${actor}: ${reason}]` : ` | [${newStatus.toUpperCase()} by ${actor}]`;
-  const updatedNotes = `${transaction.notes || ''}${noteSuffix}`;
+  const updatedHumanNote = `${cleanNotes}${noteSuffix}`;
+  const updatedNotes = Object.keys(nextMeta).length > 0
+    ? serializeNotesWithMeta(updatedHumanNote, nextMeta)
+    : updatedHumanNote;
 
   try {
     const { error } = await supabase
       .from('settlements')
       .update({
         status: dbStatus,
-        notes: updatedNotes,
-        ...(dbStatus === 'cleared' ? { cleared_at: new Date().toISOString() } : {})
+        notes: updatedNotes
       })
       .eq('id', transaction.id);
 
     if (error) {
       return { success: false, error: `Failed to update status: ${error.message}` };
+    }
+
+    if (dbStatus === 'cleared' && !hasOtherUnpaidCycles) {
+      await supabase
+        .from('restaurants')
+        .update({ settlement_status: 'settled' })
+        .eq('id', transaction.restaurantId);
     }
 
     // If reversed / refunded / rejected, clear conflicting local override so cycle balance recalculates cleanly
@@ -631,7 +846,6 @@ export const updatePaymentStatusInSupabase = async ({
         delete overrides[key];
         saveStoredPaymentOverrides(overrides);
       }
-      // Update restaurant settlement_status back to pending if reversed
       await supabase
         .from('restaurants')
         .update({ settlement_status: 'pending' })

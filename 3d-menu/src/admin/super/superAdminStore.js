@@ -669,6 +669,70 @@ export const savePlatformSettings = (settings) => {
   }
 };
 
+// Merchant QR & Payment Configuration (Controlled exclusively from Super Admin)
+const MERCHANT_QR_STORAGE_KEY = `${SUPER_ADMIN_STORAGE_PREFIX}merchant_qr_config`;
+export const defaultMerchantQRConfig = {
+  merchantNumber: '01854386847',
+  merchantName: 'PhoneMenu bKash Merchant',
+  paymentMethod: 'bKash Merchant QR',
+  qrImageUrl: ''
+};
+
+export const getMerchantQRConfig = () => {
+  try {
+    const raw = localStorage.getItem(MERCHANT_QR_STORAGE_KEY);
+    if (raw) return { ...defaultMerchantQRConfig, ...JSON.parse(raw) };
+  } catch (e) {
+    console.warn('Failed reading merchant QR config:', e);
+  }
+  return defaultMerchantQRConfig;
+};
+
+export const fetchMerchantQRConfigFromSupabase = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('platform_settings')
+      .select('platform_name')
+      .eq('id', 'merchant_qr_config')
+      .single();
+
+    if (!error && data?.platform_name) {
+      const parsed = { ...defaultMerchantQRConfig, ...JSON.parse(data.platform_name) };
+      localStorage.setItem(MERCHANT_QR_STORAGE_KEY, JSON.stringify(parsed));
+      return parsed;
+    }
+  } catch (e) {
+    console.warn('Supabase fetch merchant QR config warning:', e);
+  }
+  return getMerchantQRConfig();
+};
+
+export const saveMerchantQRConfigToSupabase = async (cfg) => {
+  const clean = { ...defaultMerchantQRConfig, ...cfg };
+  try {
+    localStorage.setItem(MERCHANT_QR_STORAGE_KEY, JSON.stringify(clean));
+    const { error } = await supabase.from('platform_settings').upsert([
+      {
+        id: 'merchant_qr_config',
+        fee_per_bill: 5,
+        min_eligible_bill: 50,
+        platform_name: JSON.stringify(clean),
+        updated_at: new Date().toISOString()
+      }
+    ]);
+    if (error) {
+      console.warn('Supabase save merchant QR config error:', error);
+      return { success: false, error: error.message };
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('phonemenu_merchant_qr_updated', { detail: clean }));
+    }
+    return { success: true, config: clean };
+  } catch (err) {
+    return { success: false, error: err?.message || 'Failed saving QR config.' };
+  }
+};
+
 // Super Admin Session Storage
 const SUPER_ADMIN_AUTH_KEY = 'dgm_super_admin_auth_session';
 

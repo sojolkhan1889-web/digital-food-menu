@@ -1382,3 +1382,24 @@ This file records all architectural specifications, resolved issues, feature imp
     * `RecordPaymentModal` reuses centralized `recordCyclePayment()` with partial payment support (`isPaid` only when full balance paid), overpayment rejection, duplicate `transaction_ref` idempotency protection, double-submit locking, and automatic restaurant status sync.
     * `PaymentDetailsModal` supports Receipt printing/download, Activity Log, Verification/Rejection (for pending payments), and Authorized Payment Reversal with audit trail (never hard-deleting verified payments).
     * `ExportReportModal` exports PDF (print view), Excel (`.xls`), and CSV reports clearly distinguishing Date-Filtered Revenue Summary vs Current Settlement Balances (As of Today).
+
+### Update: Table Action Portal Menu Fix & End-to-End Restaurant QR Payment Proof Verification (November 2026)
+- **1. Fixed Clipped 3-Dots Dropdown Menu (`ActionPortalMenu`):**
+  - Tables in `RestaurantDuesView`, `PaymentTransactionsView`, and `RevenueOverviewView` previously clipped `.rs-menu-dropdown` inside `.rs-table-wrap` (`overflow-x: auto`) on single-row tables.
+  - Replaced inline dropdown with React `createPortal` (`ActionPortalMenu` in `RevenueModals.jsx`) using viewport `getBoundingClientRect()` fixed positioning and automatic upward flip near viewport bottom.
+- **2. 5-State Compact Payment Reminder Banner (`RestaurantPanel.jsx`):**
+  - Renders compact Traditional SaaS notification banner under Restaurant Top Bar synced with live 7-day cycle logic:
+    * `In Progress`: hidden
+    * `Pending`: Orange reminder + due date + `Settle Due`
+    * `Overdue`: Red reminder + overdue days + `Settle Due`
+    * `Payment Pending Verification`: Blue notice ("Payment Verification in Progress — Please do not pay again") + `View Status`
+    * `Fully Settled`: auto-clears banner and notifies on verification completion.
+  - Pending Verification and Rejected submissions NEVER reduce `dueSettlementAmount` prematurely.
+- **3. Redesigned `Platform Fee Due Settlement` Modal (`RestaurantDueSettlementModal.jsx`):**
+  - Two-column layout: Left (`1 Pay with bKash` Bangla QR using live `Merchant QR Settings` configured from Super Admin `Platform Settings`) + Right (`2 Submit payment details` supporting both Restaurant Panel QR and Physical QR Stand payments).
+  - Enforces mandatory Payment Mobile Number, Transaction ID, Paid Amount, Payment Date & Time, and Payment Screenshot (JPG/PNG/WebP compressed via `compressImage` + `uploadMediaFile`, or PDF up to 5 MB).
+  - Prevents duplicate submission on cycles already awaiting verification; displays Rejection Reason and allows clean resubmission if rejected.
+- **4. Super Admin Payment Verification, Screenshot Zoom & Merchant QR Settings:**
+  - `SuperAdminPanel.jsx` Notification Bell highlights incoming `pending_verification` submissions in Realtime.
+  - `PaymentDetailsModal` displays submitted Payment Screenshot with full-screen zoom lightbox (`+ / - / Download`), `Admin Verification Note`, `Reject Payment` (requires reason), and `Verify & Confirm` (enforces duplicate `transaction_ref` check, updates existing `settlements` row to `cleared` atomically, and updates `restaurants.settlement_status`).
+  - `PlatformSettingsView` manages live `Merchant QR Settings` (`merchant_qr_config` in `platform_settings` table: Merchant Number, Account Name, Official QR Image).

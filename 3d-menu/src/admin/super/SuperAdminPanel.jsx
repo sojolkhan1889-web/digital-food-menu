@@ -31,8 +31,13 @@ import {
   recordSettlementInSupabase,
   fetchLiveScansFromSupabase,
   getPlatformSettings,
-  savePlatformSettings
+  savePlatformSettings,
+  getMerchantQRConfig,
+  fetchMerchantQRConfigFromSupabase,
+  saveMerchantQRConfigToSupabase
 } from './superAdminStore';
+import { compressImage } from '../../lib/imageCompressor';
+import { uploadMediaFile } from '../../lib/mediaStorageService';
 import AllRestaurantsView from './AllRestaurantsView';
 import DGMSessionTrackingView from './DGMSessionTrackingView';
 import DigitalBillsView from './DigitalBillsView';
@@ -503,9 +508,15 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
     ];
   }, [restaurants, tickets, orders, catalog, platformSettings]);
 
+  const pendingVerificationPayments = useMemo(() => {
+    return (settlements || []).filter(s =>
+      ['pending', 'pending_verification'].includes(String(s.status || '').toLowerCase())
+    );
+  }, [settlements]);
+
   const totalPendingCount = useMemo(() => {
-    return pendingActions.reduce((sum, p) => sum + (p.count || 0), 0);
-  }, [pendingActions]);
+    return pendingActions.reduce((sum, p) => sum + (p.count || 0), 0) + pendingVerificationPayments.length;
+  }, [pendingActions, pendingVerificationPayments]);
 
   // Create new restaurant and sync to Supabase
   const handleCreateRestaurant = async (e) => {
@@ -722,6 +733,12 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
             isRefreshing={isRefreshing}
             pendingCount={totalPendingCount}
             openTicketsCount={openTicketsCount}
+            pendingPaymentAlerts={pendingVerificationPayments.map(p => ({
+              id: p.id,
+              restaurantName: restaurants.find(r => r.id === (p.restaurantId || p.restaurant_id))?.name || 'Restaurant',
+              amount: Number(p.amount || 0),
+              transactionRef: p.transactionRef || p.transaction_ref || ''
+            }))}
             dateFilter={headerDateFilter}
             onChangeDateFilter={setHeaderDateFilter}
             customDateFrom={headerCustomFrom}
@@ -1024,6 +1041,7 @@ function Header({
   isRefreshing,
   pendingCount,
   openTicketsCount,
+  pendingPaymentAlerts = [],
   dateFilter = 'All Time (Live)',
   onChangeDateFilter,
   customDateFrom = '',
@@ -1140,8 +1158,29 @@ function Header({
             {pendingCount > 0 && <span className="notification-dot">{pendingCount}</span>}
           </button>
           {notice && (
-            <div className="dropdown notice-dropdown">
+            <div className="dropdown notice-dropdown" style={{ minWidth: 270 }}>
               <strong>Notifications</strong>
+              {pendingPaymentAlerts.length > 0 && (
+                <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 8, padding: '8px 10px', margin: '8px 0' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#C2410C', marginBottom: 4 }}>
+                    {pendingPaymentAlerts.length} Pending Payment Verification{pendingPaymentAlerts.length === 1 ? '' : 's'}
+                  </div>
+                  {pendingPaymentAlerts.slice(0, 3).map(al => (
+                    <div key={al.id} style={{ fontSize: 11.5, color: '#475569', marginBottom: 3 }}>
+                      • <strong>{al.restaurantName}</strong> submitted <strong>৳{al.amount}</strong> ({al.transactionRef})
+                    </div>
+                  ))}
+                  <button
+                    style={{ marginTop: 4, background: '#F97316', color: '#fff', borderRadius: 6, padding: '5px 10px', fontSize: 11.5, fontWeight: 700 }}
+                    onClick={() => {
+                      onNavigate('Payment Transactions');
+                      setNotice(false);
+                    }}
+                  >
+                    Review in Payment Transactions
+                  </button>
+                </div>
+              )}
               <p>{openTicketsCount} active support ticket(s) needing attention.</p>
               <button
                 onClick={() => {
@@ -2790,6 +2829,48 @@ function SupportCenterView({ tickets, restaurants, onResolveTicket, onBack }) {
 function PlatformSettingsView({ settings, onSaveSettings, onBack }) {
   const [fee, setFee] = useState(settings?.feeRules?.platformFeePerBill ?? 5.0);
   const [minBill, setMinBill] = useState(settings?.feeRules?.minEligibleBillAmount ?? 50.0);
+  const [qrConfig, setQrConfig] = useState(getMerchantQRConfig);
+  const [qrStatusMsg, setQrStatusMsg] = useState('');
+  const [uploadingQr, setUploadingQr] = useState(false);
+
+  useEffect(() => {
+    fetchMerchantQRConfigFromSupabase().then(cfg => {
+      if (cfg) setQrConfig(cfg);
+    });
+  }, []);
+
+  const handleQrImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingQr(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const compressed = await compressImage(String(reader.result || ''), {
+          maxWidth: 640,
+          maxHeight: 640,
+          quality: 0.85,
+          preferWebP: true
+        });
+        const uploaded = await uploadMediaFile(compressed.dataUrl, {
+          filename: `merchant_qr_${Date.now()}`,
+          folder: 'merchant_qr'
+        });
+        setQrConfig(prev => ({ ...prev, qrImageUrl: uploaded.url || compressed.dataUrl }));
+      } catch {
+        setQrStatusMsg('Failed processing QR image.');
+      } finally {
+        setUploadingQr(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveMerchantQr = async () => {
+    setQrStatusMsg('');
+    const res = await saveMerchantQRConfigToSupabase(qrConfig);
+    setQrStatusMsg(res.success ? '✓ Official Merchant QR & Number saved to Supabase!' : (res.error || 'Save failed.'));
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -2799,23 +2880,49 @@ function PlatformSettingsView({ settings, onSaveSettings, onBack }) {
         borderRadius: 12,
         padding: '18px 22px'
       }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 750 }}>Platform Fee Rules & Supabase Configuration</h2>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 750 }}>Platform Fee Rules &amp; Merchant QR Configuration</h2>
         <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted)' }}>
-          Configure global platform service fee rules applied across all multi-tenant digital menus in Supabase.
+          Configure global platform service fee rules and official bKash Merchant QR settings in Supabase.
         </p>
       </div>
 
-      <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: 24, maxWidth: 600 }}>
-        <div style={{ marginBottom: 18 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--foreground)', marginBottom: 6 }}>
-            Platform Fee per Customer Digital Bill (৳ BDT)
-          </label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16, alignItems: 'start' }}>
+        {/* Fee Rules Card */}
+        <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: 24 }}>
+          <h3 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700 }}>Service Fee Rules</h3>
+          <div style={{ marginBottom: 18 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--foreground)', marginBottom: 6 }}>
+              Platform Fee per Customer Digital Bill (৳ BDT)
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input
+                type="number"
+                step="0.5"
+                value={fee}
+                onChange={(e) => setFee(Number(e.target.value))}
+                style={{
+                  width: 120,
+                  padding: '9px 12px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg)',
+                  color: 'var(--foreground)',
+                  fontSize: 14,
+                  fontWeight: 700
+                }}
+              />
+              <span style={{ fontSize: 13, color: 'var(--muted)' }}>Default: ৳5 Flat Fee</span>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--foreground)', marginBottom: 6 }}>
+              Minimum Eligible Bill Amount (৳ BDT)
+            </label>
             <input
               type="number"
-              step="0.5"
-              value={fee}
-              onChange={(e) => setFee(Number(e.target.value))}
+              value={minBill}
+              onChange={(e) => setMinBill(Number(e.target.value))}
               style={{
                 width: 120,
                 padding: '9px 12px',
@@ -2827,58 +2934,141 @@ function PlatformSettingsView({ settings, onSaveSettings, onBack }) {
                 fontWeight: 700
               }}
             />
-            <span style={{ fontSize: 13, color: 'var(--muted)' }}>Default: ৳5 Flat Fee</span>
+            <span style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+              Customer orders below this threshold are exempt from platform fee.
+            </span>
           </div>
-        </div>
 
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--foreground)', marginBottom: 6 }}>
-            Minimum Eligible Bill Amount (৳ BDT)
-          </label>
-          <input
-            type="number"
-            value={minBill}
-            onChange={(e) => setMinBill(Number(e.target.value))}
+          <div style={{ padding: 12, borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#15803d', fontWeight: 700, fontSize: 12 }}>
+              <ShieldCheck size={16} />
+              <span>Supabase Row Level Security (RLS) is Active</span>
+            </div>
+            <div style={{ fontSize: 11, color: '#166534', marginTop: 2 }}>
+              All database tables are synchronized with live read and write access policies.
+            </div>
+          </div>
+
+          <button
+            onClick={() => onSaveSettings(fee, minBill)}
             style={{
-              width: 120,
-              padding: '9px 12px',
+              background: '#f45100',
+              color: '#fff',
+              border: 0,
+              padding: '10px 22px',
               borderRadius: 8,
-              border: '1px solid var(--border)',
-              background: 'var(--bg)',
-              color: 'var(--foreground)',
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 700
             }}
-          />
-          <span style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-            Customer orders below this threshold are exempt from platform fee.
-          </span>
+          >
+            Save Configuration to Supabase
+          </button>
         </div>
 
-        <div style={{ padding: 12, borderRadius: 8, background: '#f0fdf4', border: '1px solid #bbf7d0', marginBottom: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#15803d', fontWeight: 700, fontSize: 12 }}>
-            <ShieldCheck size={16} />
-            <span>Supabase Row Level Security (RLS) is Active</span>
-          </div>
-          <div style={{ fontSize: 11, color: '#166534', marginTop: 2 }}>
-            All 11 database tables are synchronized with public read and write access policies.
-          </div>
-        </div>
+        {/* Official bKash Merchant QR Settings Card */}
+        <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: 24 }}>
+          <h3 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700 }}>Merchant QR Settings (bKash / Bangla QR)</h3>
+          <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--muted)' }}>
+            Displayed inside Restaurant Panels when settling platform fee dues.
+          </p>
 
-        <button
-          onClick={() => onSaveSettings(fee, minBill)}
-          style={{
-            background: '#f45100',
-            color: '#fff',
-            border: 0,
-            padding: '10px 22px',
-            borderRadius: 8,
-            fontSize: 13,
-            fontWeight: 700
-          }}
-        >
-          Save Configuration to Supabase
-        </button>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 5 }}>
+              Merchant Account Number *
+            </label>
+            <input
+              type="text"
+              value={qrConfig.merchantNumber || ''}
+              onChange={(e) => setQrConfig(prev => ({ ...prev, merchantNumber: e.target.value }))}
+              placeholder="01854386847"
+              style={{
+                width: '100%',
+                padding: '9px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--border)',
+                background: 'var(--bg)',
+                color: 'var(--foreground)',
+                fontSize: 13,
+                fontWeight: 700
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 5 }}>
+              Merchant Account Name
+            </label>
+            <input
+              type="text"
+              value={qrConfig.merchantName || ''}
+              onChange={(e) => setQrConfig(prev => ({ ...prev, merchantName: e.target.value }))}
+              placeholder="PhoneMenu bKash Merchant"
+              style={{
+                width: '100%',
+                padding: '9px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--border)',
+                background: 'var(--bg)',
+                color: 'var(--foreground)',
+                fontSize: 13
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
+              Official Merchant QR Image (Production PNG/JPG/WebP)
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              {qrConfig.qrImageUrl ? (
+                <img
+                  src={qrConfig.qrImageUrl}
+                  alt="Merchant QR"
+                  style={{ width: 84, height: 84, objectFit: 'contain', borderRadius: 8, border: '1px solid var(--border)', background: '#fff', padding: 4 }}
+                />
+              ) : (
+                <div style={{ width: 84, height: 84, borderRadius: 8, border: '1px dashed var(--border)', display: 'grid', placeItems: 'center', fontSize: 11, color: 'var(--muted)', textAlign: 'center', padding: 6 }}>
+                  Auto QR Preview
+                </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <input type="file" accept="image/*" onChange={handleQrImageUpload} style={{ fontSize: 12 }} />
+                {qrConfig.qrImageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setQrConfig(prev => ({ ...prev, qrImageUrl: '' }))}
+                    style={{ alignSelf: 'flex-start', padding: '4px 10px', fontSize: 11, borderRadius: 6, border: '1px solid #fecaca', color: '#dc2626', background: '#fef2f2' }}
+                  >
+                    Remove Custom QR Image
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {qrStatusMsg && (
+            <div style={{ marginBottom: 12, fontSize: 12, fontWeight: 600, color: qrStatusMsg.startsWith('✓') ? '#16a34a' : '#dc2626' }}>
+              {qrStatusMsg}
+            </div>
+          )}
+
+          <button
+            type="button"
+            disabled={uploadingQr}
+            onClick={handleSaveMerchantQr}
+            style={{
+              background: '#16a34a',
+              color: '#fff',
+              border: 0,
+              padding: '10px 22px',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 700
+            }}
+          >
+            {uploadingQr ? 'Processing Image...' : 'Save Merchant QR Settings'}
+          </button>
+        </div>
       </div>
 
       <button className="placeholder-button" onClick={onBack} style={{ alignSelf: 'flex-start' }}>

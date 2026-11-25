@@ -78,12 +78,22 @@ import AddFoodWizard from './AddFoodWizard';
 import FeaturedSliderWizard from './FeaturedSliderWizard';
 import TableQRManagement from './TableQRManagement';
 import RestaurantTopBar from './components/RestaurantTopBar';
-import { getSuperAdminRestaurants } from './super/superAdminStore';
+import RestaurantDueSettlementModal from './components/RestaurantDueSettlementModal';
+import {
+  getSuperAdminRestaurants,
+  fetchMerchantQRConfigFromSupabase,
+  getMerchantQRConfig
+} from './super/superAdminStore';
+import { generateLiveSettlementCycles, computeSettlementStatus } from './super/digitalBillsStore';
+import { fetchDGMBillingLedger } from '../data/dgmSessionStore';
 import { supabaseTableRepository } from '../data/supabaseTableRepository';
 import { supabase } from '../lib/supabaseClient';
 import {
   getRestaurantReminders,
-  acknowledgeRestaurantReminder
+  acknowledgeRestaurantReminder,
+  buildPaymentTransactions,
+  formatDhakaDate,
+  normalizePaymentStatus
 } from './super/revenueSettlementService';
 import {
   getAdminTheme,
@@ -836,8 +846,10 @@ export default function RestaurantPanel({
     };
   }, []);
 
-  // Live settlements state from Supabase (Instant Realtime WebSocket)
+  // Live settlements, billing ledger & merchant QR config from Supabase (Instant Realtime WebSocket)
   const [settlements, setSettlements] = useState([]);
+  const [billingLedger, setBillingLedger] = useState([]);
+  const [merchantQRConfig, setMerchantQRConfig] = useState(getMerchantQRConfig);
   const [activeReminder, setActiveReminder] = useState(() => {
     const list = getRestaurantReminders(panelRestoId);
     return list.find(r => !r.acknowledged) || null;
@@ -860,14 +872,19 @@ export default function RestaurantPanel({
   useEffect(() => {
     let isMounted = true;
     const syncSettlements = async () => {
-      const live = await fetchRestaurantSettlementsFromSupabase(panelRestoId);
-      if (isMounted && Array.isArray(live)) {
-        setSettlements(live);
-      }
+      const [live, ledgerRes, qrRes] = await Promise.all([
+        fetchRestaurantSettlementsFromSupabase(panelRestoId),
+        fetchDGMBillingLedger({ restaurantId: panelRestoId, limit: 300 }),
+        fetchMerchantQRConfigFromSupabase()
+      ]);
+      if (!isMounted) return;
+      if (Array.isArray(live)) setSettlements(live);
+      if (Array.isArray(ledgerRes)) setBillingLedger(ledgerRes);
+      if (qrRes) setMerchantQRConfig(qrRes);
     };
     syncSettlements();
 
-    // 1. Instant Realtime WebSocket sync when settlement is recorded or cleared
+    // 1. Instant Realtime WebSocket sync when settlement, ledger or merchant QR updates
     const settlementsChannel = supabase
       .channel(`realtime_settlements_resto_panel_${panelRestoId}`)
       .on(
@@ -879,7 +896,26 @@ export default function RestaurantPanel({
           }
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dgm_billing_ledger' },
+        () => {
+          if (isMounted) syncSettlements();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'platform_settings' },
+        () => {
+          if (isMounted) fetchMerchantQRConfigFromSupabase().then(qr => qr && setMerchantQRConfig(qr));
+        }
+      )
       .subscribe();
+
+    const handleQrLocalUpdate = (e) => {
+      if (e?.detail) setMerchantQRConfig(e.detail);
+    };
+    window.addEventListener('phonemenu_merchant_qr_updated', handleQrLocalUpdate);
 
     // 2. Refresh when window is focused or tab becomes active
     const handleVisibilityOrFocus = () => {
@@ -900,6 +936,7 @@ export default function RestaurantPanel({
     return () => {
       isMounted = false;
       supabase.removeChannel(settlementsChannel);
+      window.removeEventListener('phonemenu_merchant_qr_updated', handleQrLocalUpdate);
       window.removeEventListener('focus', handleVisibilityOrFocus);
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       clearInterval(interval);
@@ -907,39 +944,131 @@ export default function RestaurantPanel({
   }, [panelRestoId]);
 
   // Platform Fees & Due Settlement Calculation: Real ৳5 fee per confirmed order
+  // Pending Verification & Rejected submissions NEVER reduce dueSettlementAmount!
   const todayFeesAmount = (metrics.todayOrders || 0) * 5;
   const totalAccruedFees = (metrics.totalOrders || orders.filter(o => o.orderStatus !== 'cancelled').length) * 5;
   const totalClearedAmount = useMemo(() => {
-    return settlements.reduce((sum, s) => sum + Number(s.amount || 0), 0);
+    return settlements
+      .filter(s => ['cleared', 'settled', 'verified'].includes(String(s.status || '').toLowerCase()))
+      .reduce((sum, s) => sum + Number(s.amount || 0), 0);
   }, [settlements]);
 
   const dueSettlementAmount = useMemo(() => {
-    const isPaid = localStorage.getItem('dgm_restaurant_due_settled') === 'true';
-    if (isPaid && totalClearedAmount >= totalAccruedFees) return 0;
     return Math.max(0, totalAccruedFees - totalClearedAmount);
   }, [totalAccruedFees, totalClearedAmount]);
+
+  // Compute exact 7-day Settlement Cycles & Submission Verification State for this Restaurant
+  const settlementLifecycle = useMemo(() => {
+    const now = new Date();
+    const restoEntity = {
+      id: panelRestoId,
+      name: restaurantProfile?.name || 'Restaurant',
+      restaurant_type: (panelRestoId === 'resto_001' || panelRestoId === 'resto_003') ? 'fine' : 'standard',
+      settlement_status: dueSettlementAmount === 0 ? 'settled' : 'pending'
+    };
+    const rawCycles = generateLiveSettlementCycles({
+      restaurants: [restoEntity],
+      orders,
+      billingLedger,
+      settlements,
+      currentDate: now
+    });
+    const txns = buildPaymentTransactions({
+      settlements,
+      cycles: rawCycles,
+      restaurants: [restoEntity]
+    });
+
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    const unpaidCycles = [];
+
+    rawCycles.forEach(c => {
+      const status = computeSettlementStatus(c, now);
+      if (status !== 'pending' && status !== 'overdue') return;
+      const remainingDue = Math.max(0, Number(c.accruedFee || 0) - Number(c.paidAmount || 0));
+      if (remainingDue <= 0) return;
+
+      const matchingPendingTxns = txns.filter(
+        t => t.status === 'pending_verification' && (t.primaryCycleId === c.id || t.rawNotes?.includes(c.id))
+      );
+      const pendingVerificationAmount = matchingPendingTxns.reduce((s, t) => s + Number(t.amount || 0), 0);
+      const submittableRemaining = Math.max(0, remainingDue - pendingVerificationAmount);
+
+      const matchingRejectedTxns = txns.filter(
+        t => t.status === 'rejected' && (t.primaryCycleId === c.id || t.rawNotes?.includes(c.id))
+      );
+      const latestPendingTxn = matchingPendingTxns[0] || null;
+      const latestRejectedTxn = (!latestPendingTxn && matchingRejectedTxns[0]) || null;
+
+      const dueTime = new Date(c.overdueStartDate || c.due_at || c.paymentDueDate).getTime();
+      const daysOverdue = status === 'overdue' ? Math.max(1, Math.ceil((now.getTime() - dueTime) / MS_PER_DAY)) : 0;
+
+      unpaidCycles.push({
+        ...c,
+        status,
+        remainingDue,
+        pendingVerificationAmount,
+        submittableRemaining,
+        latestPendingTxn,
+        latestRejectedTxn,
+        daysOverdue
+      });
+    });
+
+    const overdueCycles = unpaidCycles.filter(c => c.status === 'overdue');
+    const pendingCycles = unpaidCycles.filter(c => c.status === 'pending');
+    const pendingVerificationTotal = txns
+      .filter(t => t.status === 'pending_verification')
+      .reduce((s, t) => s + Number(t.amount || 0), 0);
+    const totalSubmittableRemaining = unpaidCycles.reduce((s, c) => s + c.submittableRemaining, 0);
+    const anyRejected = unpaidCycles.find(c => c.latestRejectedTxn)?.latestRejectedTxn || null;
+
+    let reminderMode = 'none'; // 'none' | 'verification_pending' | 'overdue' | 'pending'
+    if (pendingVerificationTotal > 0 && totalSubmittableRemaining <= 0) {
+      reminderMode = 'verification_pending';
+    } else if (overdueCycles.length > 0 && totalSubmittableRemaining > 0) {
+      reminderMode = 'overdue';
+    } else if (pendingCycles.length > 0 && totalSubmittableRemaining > 0) {
+      reminderMode = 'pending';
+    }
+
+    return {
+      unpaidCycles,
+      overdueCycles,
+      pendingCycles,
+      txns,
+      pendingVerificationTotal,
+      totalSubmittableRemaining,
+      anyRejected,
+      reminderMode,
+      overdueTotal: overdueCycles.reduce((s, c) => s + c.submittableRemaining, 0),
+      pendingTotal: pendingCycles.reduce((s, c) => s + c.submittableRemaining, 0),
+      maxDaysOverdue: overdueCycles.reduce((m, c) => Math.max(m, c.daysOverdue), 0),
+      primaryCycle: overdueCycles[0] || pendingCycles[0] || unpaidCycles[0] || null
+    };
+  }, [panelRestoId, restaurantProfile?.name, orders, billingLedger, settlements, dueSettlementAmount]);
 
   const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
   const [settlementSuccessMsg, setSettlementSuccessMsg] = useState('');
   const [sliderSuccessNotice, setSliderSuccessNotice] = useState('');
 
-  const handleSettleDue = async () => {
-    const settleAmt = dueSettlementAmount;
-    if (settleAmt > 0) {
-      await recordRestaurantSettlementInSupabase(panelRestoId, settleAmt, `Settled from ${restaurantProfile?.name || 'Restaurant'} Portal`);
-      const live = await fetchRestaurantSettlementsFromSupabase(panelRestoId);
-      if (live) setSettlements(live);
+  // Auto-notify restaurant owner when a pending payment is verified & dues drop to 0
+  const prevClearedRef = React.useRef(null);
+  useEffect(() => {
+    if (prevClearedRef.current !== null && totalClearedAmount > prevClearedRef.current && dueSettlementAmount === 0) {
+      setSettlementSuccessMsg('Payment verified & confirmed by Super Admin! All platform fee dues are settled (৳0 balance).');
+      setTimeout(() => setSettlementSuccessMsg(''), 6000);
     }
-    settlePlatformDues();
-    setIsSettlementModalOpen(false);
-    setSettlementSuccessMsg(`Payment of ৳${settleAmt} successfully settled! Total Due is now ৳0.`);
-    setTimeout(() => setSettlementSuccessMsg(''), 5000);
-  };
+    prevClearedRef.current = totalClearedAmount;
+  }, [totalClearedAmount, dueSettlementAmount]);
 
-  const handleResetDue = () => {
-    setIsSettlementModalOpen(false);
-    setSettlementSuccessMsg(`Settlement history and dues refreshed.`);
-    setTimeout(() => setSettlementSuccessMsg(''), 4000);
+  const handlePaymentProofSubmitted = async (submittedAmount, cycle) => {
+    const live = await fetchRestaurantSettlementsFromSupabase(panelRestoId);
+    if (live) setSettlements(live);
+    setSettlementSuccessMsg(
+      `Payment proof of ৳${Number(submittedAmount).toFixed(2)} for ${cycle.periodLabel} submitted for verification.`
+    );
+    setTimeout(() => setSettlementSuccessMsg(''), 6000);
   };
 
   // Filtered Foods
@@ -1594,36 +1723,117 @@ export default function RestaurantPanel({
           </div>
         )}
 
-        {/* Super Admin Payment Reminder Notification */}
-        {activeReminder && dueSettlementAmount > 0 && (
-          <div className="mx-4 sm:mx-6 mt-3 p-3.5 rounded-[5px] bg-amber-500/10 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-xs flex items-center justify-between gap-3 animate-[fadeIn_0.2s_ease-out]">
-            <div className="flex items-center gap-2.5">
-              <Bell className="w-4 h-4 shrink-0 text-amber-500" />
-              <div>
-                <strong>Platform Fee Payment Reminder:</strong> Outstanding Balance{' '}
-                <strong className="font-mono">৳{dueSettlementAmount}</strong> ({activeReminder.periodsText})
+        {/* 5-State Compact Payment Reminder Banner (Under Top Bar) */}
+        {settlementLifecycle.reminderMode === 'verification_pending' && (
+          <div className={`mx-4 sm:mx-6 mt-3 px-4 py-3 rounded-[8px] border flex items-center justify-between gap-3 ${
+            isDark ? 'bg-blue-950/35 border-blue-800/60 text-blue-200' : 'bg-[#EFF6FF] border-[#BFDBFE] text-[#1E3A8A]'
+          }`}>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`w-8 h-8 rounded-[7px] flex items-center justify-center shrink-0 ${
+                isDark ? 'bg-blue-900/50 text-blue-400' : 'bg-white border border-[#BFDBFE] text-[#2563EB]'
+              }`}>
+                <Info className="w-4 h-4" />
+              </div>
+              <div className="text-xs min-w-0">
+                <div className="font-bold text-sm leading-tight">Payment Verification in Progress</div>
+                <div className={`mt-0.5 ${isDark ? 'text-blue-300' : 'text-[#1D4ED8]'}`}>
+                  Your payment of <strong>৳{settlementLifecycle.pendingVerificationTotal.toFixed(2)}</strong> has been submitted for verification. Please do not pay again.
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setIsSettlementModalOpen(true)}
-                className="px-2.5 py-1 rounded-[5px] bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] cursor-pointer"
-              >
-                Settle Due
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  acknowledgeRestaurantReminder(panelRestoId);
-                  setActiveReminder(null);
-                }}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 cursor-pointer"
-                title="Dismiss reminder"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+            <button
+              type="button"
+              onClick={() => setIsSettlementModalOpen(true)}
+              className={`px-3 py-1.5 rounded-[7px] border text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
+                isDark ? 'border-blue-700 bg-slate-900 text-blue-200 hover:bg-slate-800' : 'border-[#CBD5E1] bg-white text-[#0F172A] hover:bg-slate-50'
+              }`}
+            >
+              View Status
+            </button>
+          </div>
+        )}
+
+        {settlementLifecycle.reminderMode === 'overdue' && (
+          <div className={`mx-4 sm:mx-6 mt-3 px-4 py-3 rounded-[8px] border flex items-center justify-between gap-3 ${
+            isDark ? 'bg-red-950/35 border-red-800/60 text-red-200' : 'bg-[#FEF2F2] border-[#FECACA] text-[#991B1B]'
+          }`}>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`w-8 h-8 rounded-[7px] flex items-center justify-center shrink-0 ${
+                isDark ? 'bg-red-900/50 text-red-400' : 'bg-white border border-[#FECACA] text-[#DC2626]'
+              }`}>
+                <AlertTriangle className="w-4 h-4" />
+              </div>
+              <div className="text-xs min-w-0">
+                <div className="font-bold text-sm leading-tight text-[#B91C1C] dark:text-red-300">
+                  Overdue Platform Fee Payment
+                </div>
+                <div className="mt-0.5">
+                  Your outstanding payment of <strong className="font-mono text-[#DC2626] dark:text-red-300">৳{settlementLifecycle.overdueTotal.toFixed(2)}</strong> is overdue.
+                  <span className={`ml-1.5 ${isDark ? 'text-red-300/80' : 'text-[#7F1D1D]'}`}>
+                    Due: {formatDhakaDate(settlementLifecycle.primaryCycle?.paymentDueDate)} · <strong>{settlementLifecycle.maxDaysOverdue} day{settlementLifecycle.maxDaysOverdue === 1 ? '' : 's'} overdue</strong>
+                  </span>
+                </div>
+                {settlementLifecycle.anyRejected && (
+                  <div className="mt-0.5 font-semibold text-[#DC2626] dark:text-red-300">
+                    Rejected ({settlementLifecycle.anyRejected.transactionRef}): {settlementLifecycle.anyRejected.rejectionReason} — Please resubmit proof.
+                  </div>
+                )}
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={() => setIsSettlementModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-[7px] bg-[#DC2626] hover:bg-[#B91C1C] text-white font-bold text-xs shrink-0 cursor-pointer transition-colors"
+            >
+              Settle Due
+            </button>
+          </div>
+        )}
+
+        {settlementLifecycle.reminderMode === 'pending' && (
+          <div className={`mx-4 sm:mx-6 mt-3 px-4 py-3 rounded-[8px] border flex items-center justify-between gap-3 ${
+            isDark ? 'bg-orange-950/30 border-orange-800/50 text-orange-200' : 'bg-[#FFF7ED] border-[#FED7AA] text-[#0F172A]'
+          }`}>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`w-8 h-8 rounded-[7px] flex items-center justify-center shrink-0 ${
+                isDark ? 'bg-orange-900/50 text-orange-400' : 'bg-white border border-[#FED7AA] text-[#F97316]'
+              }`}>
+                <Clock className="w-4 h-4" />
+              </div>
+              <div className="text-xs min-w-0">
+                <div className="font-bold text-sm leading-tight">Platform Fee Payment Reminder</div>
+                <div className="mt-0.5">
+                  Your platform fee of <strong className="font-mono text-[#EA580C]">৳{settlementLifecycle.pendingTotal.toFixed(2)}</strong> is due on {formatDhakaDate(settlementLifecycle.primaryCycle?.paymentDueDate)}.
+                  <span className="ml-2 text-slate-500 dark:text-slate-400">
+                    Settlement Period: {settlementLifecycle.primaryCycle?.periodLabel}
+                  </span>
+                </div>
+                {settlementLifecycle.anyRejected && (
+                  <div className="mt-0.5 font-semibold text-[#DC2626]">
+                    Rejected ({settlementLifecycle.anyRejected.transactionRef}): {settlementLifecycle.anyRejected.rejectionReason} — Please resubmit proof.
+                  </div>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsSettlementModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-[7px] bg-[#F97316] hover:bg-[#EA580C] text-white font-bold text-xs shrink-0 cursor-pointer transition-colors"
+            >
+              Settle Due
+            </button>
+          </div>
+        )}
+
+        {settlementSuccessMsg && (
+          <div className="mx-4 sm:mx-6 mt-3 px-4 py-2.5 rounded-[8px] border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-xs flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 font-semibold">
+              <Check className="w-4 h-4 shrink-0 text-[#16A34A]" />
+              <span>{settlementSuccessMsg}</span>
+            </div>
+            <button type="button" onClick={() => setSettlementSuccessMsg('')} className="p-1 cursor-pointer">
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
 
@@ -1879,8 +2089,16 @@ export default function RestaurantPanel({
                       title: 'Total Due Settlement',
                       value: `৳${dueSettlementAmount}`,
                       icon: Wallet,
-                      trend: dueSettlementAmount > 0 ? 'Due to pay' : 'All Settled',
-                      comparison: dueSettlementAmount > 0 ? 'Owed to Platform' : 'Paid in Full',
+                      trend: settlementLifecycle.pendingVerificationTotal > 0
+                        ? 'Verification Pending'
+                        : dueSettlementAmount > 0
+                        ? 'Due to pay'
+                        : 'All Settled',
+                      comparison: settlementLifecycle.pendingVerificationTotal > 0
+                        ? `৳${settlementLifecycle.pendingVerificationTotal} in review`
+                        : dueSettlementAmount > 0
+                        ? 'Owed to Platform'
+                        : 'Paid in Full',
                       trendType: dueSettlementAmount > 0 ? 'up' : 'neutral',
                       sparkColor: dueSettlementAmount > 0 ? 'orange' : 'gray',
                       action: () => setIsSettlementModalOpen(true),
@@ -4403,95 +4621,19 @@ export default function RestaurantPanel({
         </div>
       )}
 
-      {/* Due Settlement Modal */}
-      {isSettlementModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div
-            className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl relative transition-all ${
-              isDark ? 'bg-[#0F1420] border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
-            }`}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between border-b pb-4 mb-4 dark:border-slate-800 border-slate-200">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-500">
-                  <Wallet className="w-5 h-5 stroke-[2.2]" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black tracking-tight">Platform Fee Due Settlement</h3>
-                  <p className="text-xs text-slate-400 font-medium">Daily & weekly restaurant due clearing</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsSettlementModalOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="space-y-4">
-              <div className={`p-4 rounded-xl border ${
-                isDark ? 'bg-[#0B0F19] border-slate-800/80' : 'bg-slate-50 border-slate-200'
-              }`}>
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-xs font-semibold text-slate-400">Today's Fee Collection</span>
-                  <span className="text-sm font-bold text-orange-500 font-mono">৳{todayFeesAmount}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-t dark:border-slate-800 border-slate-200 mt-2 pt-2">
-                  <span className="text-xs font-bold text-slate-200">Total Due Settlement</span>
-                  <span className={`text-xl font-black font-mono ${
-                    dueSettlementAmount > 0 ? 'text-amber-400' : 'text-emerald-400'
-                  }`}>
-                    ৳{dueSettlementAmount}
-                  </span>
-                </div>
-                <div className="mt-2.5 pt-2 border-t dark:border-slate-800/80 border-slate-200 flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${dueSettlementAmount > 0 ? 'bg-amber-400 animate-ping' : 'bg-emerald-400'}`} />
-                  <span className="text-[11px] font-semibold text-slate-400">
-                    Status: {dueSettlementAmount > 0 ? 'Pending Payment from Restaurant to Platform' : 'All Dues Paid in Full (৳0 Balance)'}
-                  </span>
-                </div>
-              </div>
-
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Platform fees (৳5 per order) accumulate daily into the restaurant's due settlement balance. When settled, the due resets to ৳0 and continues accumulating fresh digital orders.
-              </p>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
-                {dueSettlementAmount > 0 ? (
-                  <button
-                    type="button"
-                    onClick={handleSettleDue}
-                    className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs tracking-wide shadow-lg shadow-emerald-900/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
-                  >
-                    <Check className="w-4 h-4 stroke-[2.5]" />
-                    <span>Confirm Payment & Settle (৳0 Due)</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleResetDue}
-                    className="flex-1 py-2.5 px-4 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs tracking-wide shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Simulate New Collections (+৳{todayFeesAmount})</span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setIsSettlementModalOpen(false)}
-                  className="py-2.5 px-4 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 font-bold text-xs transition-all cursor-pointer"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Redesigned Platform Fee Due Settlement Modal (Method 01 QR + Method 02 Proof Submission) */}
+      <RestaurantDueSettlementModal
+        isOpen={isSettlementModalOpen}
+        onClose={() => setIsSettlementModalOpen(false)}
+        isDark={isDark}
+        restaurantId={panelRestoId}
+        restaurantName={restaurantProfile?.name || 'Restaurant'}
+        unpaidCycles={settlementLifecycle.unpaidCycles}
+        allSubmittedTransactions={settlementLifecycle.txns}
+        initialCycleId={settlementLifecycle.primaryCycle?.id || ''}
+        merchantQRConfig={merchantQRConfig}
+        onSubmitted={handlePaymentProofSubmitted}
+      />
 
     </div>
   );

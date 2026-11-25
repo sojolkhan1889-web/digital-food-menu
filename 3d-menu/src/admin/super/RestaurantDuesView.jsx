@@ -29,7 +29,8 @@ import {
 import {
   RecordPaymentModal,
   ExportReportModal,
-  ViewDuesModal
+  ViewDuesModal,
+  ActionPortalMenu
 } from './RevenueModals';
 import './revenueSettlement.css';
 
@@ -380,67 +381,60 @@ export default function RestaurantDuesView({
                         >
                           View Dues
                         </button>
-                        <button
-                          type="button"
-                          className="rs-dots-btn"
-                          onClick={() => setOpenMenuId(openMenuId === row.restaurantId ? null : row.restaurantId)}
-                          aria-label="More actions"
+                        <ActionPortalMenu
+                          isOpen={openMenuId === row.restaurantId}
+                          onToggle={() => setOpenMenuId(openMenuId === row.restaurantId ? null : row.restaurantId)}
+                          onClose={() => setOpenMenuId(null)}
                         >
-                          <MoreVertical size={14} />
-                        </button>
-
-                        {openMenuId === row.restaurantId && (
-                          <div className="rs-menu-dropdown">
-                            <button
-                              type="button"
-                              className="rs-menu-item"
-                              onClick={() => { setViewDuesRow(row); setOpenMenuId(null); }}
-                            >
-                              <Eye size={14} /> View Dues
-                            </button>
-                            <button
-                              type="button"
-                              className="rs-menu-item success"
-                              onClick={() => {
-                                setOpenMenuId(null);
-                                setRecordModalTarget({
-                                  restaurantId: row.restaurantId,
-                                  cycleId: row.unpaidCycles[0]?.id || ''
-                                });
-                              }}
-                            >
-                              <CreditCard size={14} /> Record Payment
-                            </button>
-                            <button
-                              type="button"
-                              className="rs-menu-item"
-                              onClick={() => { handleSendReminder(row); setOpenMenuId(null); }}
-                            >
-                              <Send size={14} /> Send Payment Reminder
-                            </button>
-                            <button
-                              type="button"
-                              className="rs-menu-item"
-                              onClick={() => { handleDownloadDueStatement(row); setOpenMenuId(null); }}
-                            >
-                              <Download size={14} /> Download Due Statement
-                            </button>
-                            <button
-                              type="button"
-                              className="rs-menu-item"
-                              onClick={() => { setReminderHistoryRow(row); setOpenMenuId(null); }}
-                            >
-                              <History size={14} /> Reminder History
-                            </button>
-                            <button
-                              type="button"
-                              className="rs-menu-item"
-                              onClick={() => { setOpenMenuId(null); onNavigate && onNavigate('All Restaurants'); }}
-                            >
-                              <ExternalLink size={14} /> View Restaurant Profile
-                            </button>
-                          </div>
-                        )}
+                          <button
+                            type="button"
+                            className="rs-menu-item"
+                            onClick={() => { setViewDuesRow(row); setOpenMenuId(null); }}
+                          >
+                            <Eye size={14} /> View Dues
+                          </button>
+                          <button
+                            type="button"
+                            className="rs-menu-item success"
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              setRecordModalTarget({
+                                restaurantId: row.restaurantId,
+                                cycleId: row.unpaidCycles[0]?.id || ''
+                              });
+                            }}
+                          >
+                            <CreditCard size={14} /> Record Payment
+                          </button>
+                          <button
+                            type="button"
+                            className="rs-menu-item"
+                            onClick={() => { handleSendReminder(row); setOpenMenuId(null); }}
+                          >
+                            <Send size={14} /> Send Payment Reminder
+                          </button>
+                          <button
+                            type="button"
+                            className="rs-menu-item"
+                            onClick={() => { handleDownloadDueStatement(row); setOpenMenuId(null); }}
+                          >
+                            <Download size={14} /> Download Due Statement
+                          </button>
+                          <button
+                            type="button"
+                            className="rs-menu-item"
+                            onClick={() => { setReminderHistoryRow(row); setOpenMenuId(null); }}
+                          >
+                            <History size={14} /> Reminder History
+                          </button>
+                          <button
+                            type="button"
+                            className="rs-menu-item"
+                            onClick={() => { setOpenMenuId(null); onNavigate && onNavigate('All Restaurants'); }}
+                          >
+                            <ExternalLink size={14} /> View Restaurant Profile
+                          </button>
+                        </ActionPortalMenu>
                       </div>
                     </td>
                   </tr>

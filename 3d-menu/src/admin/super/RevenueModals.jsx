@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   CheckCircle2,
@@ -10,7 +11,11 @@ import {
   AlertCircle,
   Clock,
   History,
-  Send
+  Send,
+  MoreVertical,
+  Maximize2,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 import { computeSettlementStatus, recordCyclePayment } from './digitalBillsStore';
 import {
@@ -21,6 +26,78 @@ import {
   getPaymentAuditLogs,
   updatePaymentStatusInSupabase
 } from './revenueSettlementService';
+
+/**
+ * Portal-based Three Dots Action Menu
+ * Renders at document.body using fixed viewport coordinates so overflow-x tables
+ * never clip the menu even on single-row tables.
+ */
+export function ActionPortalMenu({ isOpen, onToggle, onClose, children }) {
+  const btnRef = useRef(null);
+  const [coords, setCoords] = useState({ top: 0, right: 16, flipUp: false });
+
+  useEffect(() => {
+    if (!isOpen || !btnRef.current) return;
+    const updatePosition = () => {
+      if (!btnRef.current) return;
+      const rect = btnRef.current.getBoundingClientRect();
+      const estimatedMenuHeight = 230;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const flipUp = spaceBelow < estimatedMenuHeight && rect.top > estimatedMenuHeight;
+      setCoords({
+        top: flipUp ? rect.top - 6 : rect.bottom + 6,
+        right: Math.max(12, window.innerWidth - rect.right),
+        flipUp
+      });
+    };
+    updatePosition();
+    const handleOutside = (e) => {
+      if (btnRef.current && btnRef.current.contains(e.target)) return;
+      if (e.target.closest('.rs-portal-menu-root')) return;
+      onClose();
+    };
+    const handleScroll = () => onClose();
+    window.addEventListener('mousedown', handleOutside);
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      window.removeEventListener('mousedown', handleOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [isOpen, onClose]);
+
+  return (
+    <div className="rs-action-cell">
+      <button
+        ref={btnRef}
+        type="button"
+        className="rs-dots-btn"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        aria-label="More actions"
+      >
+        <MoreVertical size={14} />
+      </button>
+      {isOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          className="rs-menu-dropdown rs-portal-menu-root"
+          style={{
+            top: coords.flipUp ? 'auto' : `${coords.top}px`,
+            bottom: coords.flipUp ? `${window.innerHeight - coords.top}px` : 'auto',
+            right: `${coords.right}px`
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
 
 /**
  * Shared Record Settlement Payment Modal
@@ -517,14 +594,28 @@ export function ExportReportModal({
  */
 export function PaymentDetailsModal({
   transaction,
+  hasOtherUnpaidCycles = false,
   onClose,
   onStatusUpdated
 }) {
   const [showReversalForm, setShowReversalForm] = useState(false);
   const [reversalReason, setReversalReason] = useState('');
+  const [adminNote, setAdminNote] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const [actionError, setActionError] = useState('');
   const [showLogs, setShowLogs] = useState(false);
+  const [showFullImage, setShowFullImage] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
+
+  useEffect(() => {
+    setShowReversalForm(false);
+    setReversalReason('');
+    setAdminNote('');
+    setActionError('');
+    setShowLogs(false);
+    setShowFullImage(false);
+    setZoomLevel(1);
+  }, [transaction?.id]);
 
   if (!transaction) return null;
 
@@ -532,15 +623,24 @@ export function PaymentDetailsModal({
 
   const handleStatusChange = async (newStatus) => {
     setActionError('');
-    if (newStatus === 'reversed' && !reversalReason.trim()) {
+    const effectiveReason =
+      newStatus === 'reversed' ? reversalReason.trim() : adminNote.trim();
+
+    if (newStatus === 'reversed' && !effectiveReason) {
       setActionError('Please enter an audit reason for reversing this payment.');
       return;
     }
+    if (newStatus === 'rejected' && !effectiveReason) {
+      setActionError('Please enter an Admin Verification Note explaining why this payment is rejected.');
+      return;
+    }
+
     setIsUpdating(true);
     const res = await updatePaymentStatusInSupabase({
       transaction,
       newStatus,
-      reason: reversalReason.trim()
+      reason: effectiveReason,
+      hasOtherUnpaidCycles
     });
     setIsUpdating(false);
     if (!res.success) {
@@ -552,6 +652,22 @@ export function PaymentDetailsModal({
     onClose();
   };
 
+  const handleDownloadProof = () => {
+    if (!transaction.screenshotUrl) return;
+    const a = document.createElement('a');
+    a.href = transaction.screenshotUrl;
+    a.download = `${transaction.paymentId}_Proof_${transaction.transactionRef || 'receipt'}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const isPdfProof = Boolean(
+    transaction.screenshotUrl &&
+    (transaction.screenshotUrl.startsWith('data:application/pdf') ||
+      transaction.screenshotUrl.toLowerCase().endsWith('.pdf'))
+  );
+
   const statusLabels = {
     verified: 'Verified Payment',
     pending_verification: 'Pending Verification',
@@ -561,46 +677,127 @@ export function PaymentDetailsModal({
     reversed: 'Reversed Payment'
   };
 
+  const isPending = transaction.status === 'pending_verification';
+  const isVerified = transaction.status === 'verified';
+
   return (
     <div className="rs-modal-overlay" onClick={onClose}>
-      <div className="rs-modal" onClick={e => e.stopPropagation()}>
+      <div className="rs-modal" style={{ maxWidth: 590 }} onClick={e => e.stopPropagation()}>
         <div className="rs-modal-head">
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Payment Details</h3>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Payment Details</h3>
+            <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{transaction.paymentId}</div>
+          </div>
           <button type="button" className="rs-modal-close" onClick={onClose} aria-label="Close">
             <X size={16} />
           </button>
         </div>
 
+        {/* Top Highlight Amount Banner */}
         <div
           style={{
-            background: transaction.status === 'verified' ? '#F0FDF4' : '#FEF2F2',
-            border: `1px solid ${transaction.status === 'verified' ? '#BBF7D0' : '#FECACA'}`,
+            background: isVerified ? '#F0FDF4' : isPending ? '#FFF7ED' : '#FEF2F2',
+            border: `1px solid ${isVerified ? '#BBF7D0' : isPending ? '#FED7AA' : '#FECACA'}`,
             borderRadius: 10,
-            padding: '18px 16px',
-            textAlign: 'center',
+            padding: '14px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
             marginBottom: 16
           }}
         >
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 600, color: transaction.status === 'verified' ? '#15803D' : '#B91C1C' }}>
-            <CheckCircle2 size={16} />
-            <span>{statusLabels[transaction.status] || 'Payment Record'}</span>
+          <div>
+            <div style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>
+              {isPending ? 'Submitted Amount' : 'Payment Amount'}
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: isVerified ? '#16A34A' : isPending ? '#0F172A' : '#DC2626', marginTop: 2 }}>
+              ৳{Number(transaction.amount).toFixed(2)}
+            </div>
           </div>
-          <div style={{ fontSize: 30, fontWeight: 800, color: transaction.status === 'verified' ? '#16A34A' : '#DC2626', marginTop: 4 }}>
-            ৳{Number(transaction.amount).toFixed(2)}
-          </div>
+          <span className={`rs-pill ${transaction.status}`}>
+            {statusLabels[transaction.status] || 'Payment Record'}
+          </span>
         </div>
 
         <div>
-          <div className="rs-detail-row"><span style={{ color: '#64748B' }}>Payment ID</span><strong>{transaction.paymentId}</strong></div>
           <div className="rs-detail-row"><span style={{ color: '#64748B' }}>Restaurant</span><strong>{transaction.restaurantName}</strong></div>
+          <div className="rs-detail-row"><span style={{ color: '#64748B' }}>Settlement Period</span><strong>{transaction.settlementPeriod}</strong></div>
           <div className="rs-detail-row"><span style={{ color: '#64748B' }}>Payment Method</span><strong>{transaction.method}</strong></div>
-          <div className="rs-detail-row"><span style={{ color: '#64748B' }}>Reference ID</span><strong>{transaction.transactionRef}</strong></div>
-          <div className="rs-detail-row"><span style={{ color: '#64748B' }}>Payment Date</span><strong>{transaction.paymentDateFormatted}</strong></div>
-          <div className="rs-detail-row"><span style={{ color: '#64748B' }}>Payment Time</span><strong>{transaction.paymentTimeFormatted}</strong></div>
+          <div className="rs-detail-row"><span style={{ color: '#64748B' }}>Transaction ID</span><strong style={{ fontFamily: 'monospace' }}>{transaction.transactionRef}</strong></div>
+          {transaction.paymentMobile && (
+            <div className="rs-detail-row"><span style={{ color: '#64748B' }}>Payment Mobile</span><strong>{transaction.paymentMobile}</strong></div>
+          )}
+          <div className="rs-detail-row"><span style={{ color: '#64748B' }}>Payment Date</span><strong>{transaction.paymentDateTimeFormatted}</strong></div>
           <div className="rs-detail-row"><span style={{ color: '#64748B' }}>Payment Source</span><strong>{transaction.paymentSource}</strong></div>
-          <div className="rs-detail-row" style={{ borderBottom: 'none' }}><span style={{ color: '#64748B' }}>Verified By</span><strong>{transaction.verifiedBy}</strong></div>
+          {transaction.paymentNote && (
+            <div className="rs-detail-row"><span style={{ color: '#64748B' }}>Restaurant Note</span><span>{transaction.paymentNote}</span></div>
+          )}
+          {transaction.verifiedBy !== '—' && (
+            <div className="rs-detail-row" style={{ borderBottom: 'none' }}><span style={{ color: '#64748B' }}>Verified By</span><strong>{transaction.verifiedBy}</strong></div>
+          )}
         </div>
 
+        {/* Submitted Payment Screenshot Viewer (with Zoom & Download) */}
+        {transaction.screenshotUrl && (
+          <div style={{ borderTop: '1px solid #E2E8F0', marginTop: 12, paddingTop: 14 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 10 }}>Submitted Payment Screenshot</div>
+            <div
+              style={{
+                border: '1px solid #DCE4EF',
+                borderRadius: 10,
+                padding: 14,
+                background: '#F8FAFC',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 10
+              }}
+            >
+              {isPdfProof ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '18px 12px', color: '#334155', fontSize: 13, fontWeight: 600 }}>
+                  <FileText size={24} color="#EF4444" />
+                  <span>PDF Payment Receipt Attached</span>
+                </div>
+              ) : (
+                <img
+                  src={transaction.screenshotUrl}
+                  alt="Submitted Payment Screenshot"
+                  onClick={() => setShowFullImage(true)}
+                  style={{
+                    maxHeight: 210,
+                    maxWidth: '100%',
+                    borderRadius: 8,
+                    border: '1px solid #E2E8F0',
+                    objectFit: 'contain',
+                    cursor: 'zoom-in',
+                    background: '#fff'
+                  }}
+                />
+              )}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 12.5, fontWeight: 600 }}>
+                {!isPdfProof && (
+                  <button
+                    type="button"
+                    onClick={() => setShowFullImage(true)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'transparent', border: 0, color: '#334155' }}
+                  >
+                    <Maximize2 size={14} /> View Full Image
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleDownloadProof}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'transparent', border: 0, color: '#334155' }}
+                >
+                  <Download size={14} /> Download
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Settlement Allocation */}
         <div style={{ borderTop: '1px solid #E2E8F0', marginTop: 12, paddingTop: 12 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>Settlement Allocation</div>
           {transaction.allocations && transaction.allocations.length > 0 ? (
@@ -616,6 +813,26 @@ export function PaymentDetailsModal({
             </div>
           )}
         </div>
+
+        {/* Admin Verification Note (When Pending Verification) */}
+        {isPending && (
+          <div style={{ marginTop: 14 }}>
+            <label className="rs-label">Admin Verification Note (Required if Rejecting)</label>
+            <input
+              type="text"
+              className="rs-input"
+              value={adminNote}
+              onChange={e => setAdminNote(e.target.value)}
+              placeholder="Enter verification note or rejection reason..."
+            />
+          </div>
+        )}
+
+        {transaction.rejectionReason && (
+          <div className="rs-error-banner" style={{ marginTop: 12 }}>
+            <span><strong>Rejection Reason:</strong> {transaction.rejectionReason}</span>
+          </div>
+        )}
 
         {actionError && (
           <div className="rs-error-banner" style={{ marginTop: 12 }}>
@@ -657,7 +874,7 @@ export function PaymentDetailsModal({
             <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>Activity & Audit Log</div>
             {auditLogs.length === 0 ? (
               <div style={{ fontSize: 12, color: '#64748B' }}>
-                Verified & recorded at {transaction.paymentDateTimeFormatted} by {transaction.verifiedBy}.
+                Recorded at {transaction.paymentDateTimeFormatted} ({transaction.verifiedBy}).
               </div>
             ) : (
               auditLogs.map(log => (
@@ -670,13 +887,14 @@ export function PaymentDetailsModal({
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 18 }}>
+        {/* Footer Action Bar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 18, paddingTop: 14, borderTop: '1px solid #E2E8F0' }}>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" className="rs-btn rs-btn-outline rs-btn-sm" onClick={() => setShowLogs(v => !v)}>
               <History size={14} />
               <span>Activity Log</span>
             </button>
-            {transaction.status === 'verified' && !showReversalForm && (
+            {isVerified && !showReversalForm && (
               <button
                 type="button"
                 className="rs-btn rs-btn-outline rs-btn-sm"
@@ -686,28 +904,80 @@ export function PaymentDetailsModal({
                 Reverse Payment
               </button>
             )}
-            {transaction.status === 'pending_verification' && (
-              <button
-                type="button"
-                className="rs-btn rs-btn-green rs-btn-sm"
-                disabled={isUpdating}
-                onClick={() => handleStatusChange('verified')}
-              >
-                Verify Payment
-              </button>
-            )}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className="rs-btn rs-btn-outline" onClick={onClose}>
-              Close
-            </button>
-            <button type="button" className="rs-btn rs-btn-orange" onClick={() => downloadPaymentReceipt(transaction)}>
-              <Download size={15} />
-              <span>Download Receipt</span>
-            </button>
+            {isPending ? (
+              <>
+                <button
+                  type="button"
+                  className="rs-btn rs-btn-outline"
+                  style={{ color: '#DC2626', borderColor: '#FECACA' }}
+                  disabled={isUpdating}
+                  onClick={() => handleStatusChange('rejected')}
+                >
+                  Reject Payment
+                </button>
+                <button
+                  type="button"
+                  className="rs-btn rs-btn-green"
+                  disabled={isUpdating}
+                  onClick={() => handleStatusChange('verified')}
+                >
+                  <CheckCircle2 size={15} />
+                  <span>{isUpdating ? 'Verifying...' : 'Verify & Confirm'}</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="rs-btn rs-btn-outline" onClick={onClose}>
+                  Close
+                </button>
+                <button type="button" className="rs-btn rs-btn-orange" onClick={() => downloadPaymentReceipt(transaction)}>
+                  <Download size={15} />
+                  <span>Download Receipt</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Full Image Zoom Lightbox */}
+      {showFullImage && transaction.screenshotUrl && (
+        <div
+          className="rs-modal-overlay"
+          style={{ zIndex: 1100, background: 'rgba(15, 23, 42, 0.88)' }}
+          onClick={(e) => { e.stopPropagation(); setShowFullImage(false); }}
+        >
+          <div
+            style={{ position: 'relative', maxWidth: '92vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1E293B', padding: '8px 14px', borderRadius: 10, color: '#fff' }}>
+              <button type="button" className="rs-btn rs-btn-outline rs-btn-sm" onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.25))}>
+                <ZoomOut size={14} />
+              </button>
+              <span style={{ fontSize: 12, fontWeight: 700, minWidth: 46, textAlign: 'center' }}>{Math.round(zoomLevel * 100)}%</span>
+              <button type="button" className="rs-btn rs-btn-outline rs-btn-sm" onClick={() => setZoomLevel(z => Math.min(3, z + 0.25))}>
+                <ZoomIn size={14} />
+              </button>
+              <button type="button" className="rs-btn rs-btn-outline rs-btn-sm" onClick={handleDownloadProof}>
+                <Download size={14} /> Download
+              </button>
+              <button type="button" className="rs-btn rs-btn-orange rs-btn-sm" onClick={() => setShowFullImage(false)}>
+                <X size={14} /> Close
+              </button>
+            </div>
+            <div style={{ overflow: 'auto', maxWidth: '90vw', maxHeight: '78vh', borderRadius: 10, background: '#0F172A', padding: 8 }}>
+              <img
+                src={transaction.screenshotUrl}
+                alt="Zoomed Payment Receipt"
+                style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center', transition: 'transform 0.15s ease', maxHeight: '74vh', borderRadius: 8 }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

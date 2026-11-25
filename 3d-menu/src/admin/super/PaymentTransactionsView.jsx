@@ -18,7 +18,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
-import { generateLiveSettlementCycles } from './digitalBillsStore';
+import { generateLiveSettlementCycles, computeSettlementStatus } from './digitalBillsStore';
 import { fetchDGMBillingLedger } from '../../data/dgmSessionStore';
 import { supabase } from '../../lib/supabaseClient';
 import {
@@ -31,7 +31,8 @@ import {
 import {
   RecordPaymentModal,
   ExportReportModal,
-  PaymentDetailsModal
+  PaymentDetailsModal,
+  ActionPortalMenu
 } from './RevenueModals';
 import './revenueSettlement.css';
 
@@ -391,85 +392,68 @@ export default function PaymentTransactionsView({
                         >
                           View Details
                         </button>
-                        <button
-                          type="button"
-                          className="rs-dots-btn"
-                          onClick={() => setOpenMenuId(openMenuId === txn.id ? null : txn.id)}
-                          aria-label="More actions"
+                        <ActionPortalMenu
+                          isOpen={openMenuId === txn.id}
+                          onToggle={() => setOpenMenuId(openMenuId === txn.id ? null : txn.id)}
+                          onClose={() => setOpenMenuId(null)}
                         >
-                          <MoreVertical size={14} />
-                        </button>
+                          <button
+                            type="button"
+                            className="rs-menu-item"
+                            onClick={() => { setSelectedTransaction(txn); setOpenMenuId(null); }}
+                          >
+                            <Eye size={14} /> View Details
+                          </button>
 
-                        {openMenuId === txn.id && (
-                          <div className="rs-menu-dropdown">
-                            <button
-                              type="button"
-                              className="rs-menu-item"
-                              onClick={() => { setSelectedTransaction(txn); setOpenMenuId(null); }}
-                            >
-                              <Eye size={14} /> View Details
-                            </button>
+                          {txn.status === 'pending_verification' ? (
+                            <>
+                              <button
+                                type="button"
+                                className="rs-menu-item success"
+                                onClick={() => { setSelectedTransaction(txn); setOpenMenuId(null); }}
+                              >
+                                <CheckCircle2 size={14} /> Verify &amp; Confirm
+                              </button>
+                              <button
+                                type="button"
+                                className="rs-menu-item danger"
+                                onClick={() => { setSelectedTransaction(txn); setOpenMenuId(null); }}
+                              >
+                                <AlertCircle size={14} /> Reject Payment
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                className="rs-menu-item"
+                                onClick={() => { downloadPaymentReceipt(txn); setOpenMenuId(null); }}
+                              >
+                                <FileText size={14} /> Download Receipt
+                              </button>
+                              <button
+                                type="button"
+                                className="rs-menu-item"
+                                onClick={() => { setSelectedTransaction(txn); setOpenMenuId(null); }}
+                              >
+                                <History size={14} /> View Activity Log
+                              </button>
+                            </>
+                          )}
 
-                            {txn.status === 'pending_verification' ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className="rs-menu-item success"
-                                  onClick={async () => {
-                                    setOpenMenuId(null);
-                                    const res = await updatePaymentStatusInSupabase({ transaction: txn, newStatus: 'verified' });
-                                    if (res.success && onSyncLive) await onSyncLive();
-                                    if (onShowToast) onShowToast(res.success ? `${txn.paymentId} verified!` : res.error);
-                                  }}
-                                >
-                                  <CheckCircle2 size={14} /> Verify Payment
-                                </button>
-                                <button
-                                  type="button"
-                                  className="rs-menu-item danger"
-                                  onClick={async () => {
-                                    setOpenMenuId(null);
-                                    const res = await updatePaymentStatusInSupabase({ transaction: txn, newStatus: 'rejected' });
-                                    if (res.success && onSyncLive) await onSyncLive();
-                                    if (onShowToast) onShowToast(res.success ? `${txn.paymentId} rejected.` : res.error);
-                                  }}
-                                >
-                                  <AlertCircle size={14} /> Reject Payment
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <button
-                                  type="button"
-                                  className="rs-menu-item"
-                                  onClick={() => { downloadPaymentReceipt(txn); setOpenMenuId(null); }}
-                                >
-                                  <FileText size={14} /> Download Receipt
-                                </button>
-                                <button
-                                  type="button"
-                                  className="rs-menu-item"
-                                  onClick={() => { setSelectedTransaction(txn); setOpenMenuId(null); }}
-                                >
-                                  <History size={14} /> View Activity Log
-                                </button>
-                              </>
-                            )}
-
-                            <button
-                              type="button"
-                              className="rs-menu-item"
-                              onClick={() => {
-                                setOpenMenuId(null);
-                                if (onOpenDigitalBills) {
-                                  onOpenDigitalBills('all', txn.primaryCycleId || null);
-                                }
-                              }}
-                            >
-                              <ExternalLink size={14} /> View Settlement
-                            </button>
-                          </div>
-                        )}
+                          <button
+                            type="button"
+                            className="rs-menu-item"
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              if (onOpenDigitalBills) {
+                                onOpenDigitalBills('all', txn.primaryCycleId || null);
+                              }
+                            }}
+                          >
+                            <ExternalLink size={14} /> View Settlement
+                          </button>
+                        </ActionPortalMenu>
                       </div>
                     </td>
                   </tr>
@@ -555,6 +539,12 @@ export default function PaymentTransactionsView({
 
       <PaymentDetailsModal
         transaction={selectedTransaction}
+        hasOtherUnpaidCycles={Boolean(selectedTransaction && cycles.some(c =>
+          c.restaurantId === selectedTransaction.restaurantId &&
+          c.id !== selectedTransaction.primaryCycleId &&
+          Math.max(0, Number(c.accruedFee || 0) - Number(c.paidAmount || 0)) > 0 &&
+          ['pending', 'overdue'].includes(computeSettlementStatus(c, effectiveRefDate))
+        ))}
         onClose={() => setSelectedTransaction(null)}
         onStatusUpdated={async (st) => {
           if (onSyncLive) await onSyncLive();

@@ -249,3 +249,7 @@ Before writing or editing code for any new task, verify:
   * `Restaurant Dues` strictly excludes `in_progress` cycles and retains unpaid dues for suspended restaurants; supports duplicate-cooldown reminders synced to `RestaurantPanel.jsx`.
   * `Payment Transactions` provides full `PAY-YYYY-XXX` audit history, receipt download, pending verification/rejection, and authorized reversal (no hard-delete of verified payments).
   * Centralized `recordCyclePayment` enforces positive amounts, overpayment prevention, duplicate `transaction_ref` checks, and partial-payment balance tracking across all views.
+- **Restaurant QR Payment Proof & Verification Rules (Nov 2026)**:
+  * Both Restaurant Panel QR payments (`01854386847` default / Super Admin `merchant_qr_config`) and Physical QR Stand payments submit via `RestaurantDueSettlementModal` into `settlements` with `status: 'pending_verification'`.
+  * `pending_verification` and `rejected` records MUST NOT reduce Restaurant `dueSettlementAmount` or Super Admin `Total Revenue Collected` / `Total Outstanding` until Super Admin clicks `Verify & Confirm`.
+  * All table 3-dots dropdowns in Revenue & Settlement views render via React Portal (`ActionPortalMenu`) to prevent clipping in horizontal-scroll tables.
