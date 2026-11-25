@@ -70,7 +70,8 @@ import {
   Copy,
   Smartphone,
   AlertTriangle,
-  Info
+  Info,
+  FileCheck2
 } from 'lucide-react';
 
 import { QRCodeSVG } from 'qrcode.react';
@@ -1002,6 +1003,7 @@ export default function RestaurantPanel({
 
       const dueTime = new Date(c.overdueStartDate || c.due_at || c.paymentDueDate).getTime();
       const daysOverdue = status === 'overdue' ? Math.max(1, Math.ceil((now.getTime() - dueTime) / MS_PER_DAY)) : 0;
+      const graceDaysRemaining = status === 'pending' ? Math.max(1, Math.ceil((dueTime - now.getTime()) / MS_PER_DAY)) : 0;
 
       unpaidCycles.push({
         ...c,
@@ -1011,7 +1013,8 @@ export default function RestaurantPanel({
         submittableRemaining,
         latestPendingTxn,
         latestRejectedTxn,
-        daysOverdue
+        daysOverdue,
+        graceDaysRemaining
       });
     });
 
@@ -1044,6 +1047,7 @@ export default function RestaurantPanel({
       overdueTotal: overdueCycles.reduce((s, c) => s + c.submittableRemaining, 0),
       pendingTotal: pendingCycles.reduce((s, c) => s + c.submittableRemaining, 0),
       maxDaysOverdue: overdueCycles.reduce((m, c) => Math.max(m, c.daysOverdue), 0),
+      graceDaysRemaining: pendingCycles[0]?.graceDaysRemaining || 3,
       primaryCycle: overdueCycles[0] || pendingCycles[0] || unpaidCycles[0] || null
     };
   }, [panelRestoId, restaurantProfile?.name, orders, billingLedger, settlements, dueSettlementAmount]);
@@ -1052,23 +1056,11 @@ export default function RestaurantPanel({
   const [settlementSuccessMsg, setSettlementSuccessMsg] = useState('');
   const [sliderSuccessNotice, setSliderSuccessNotice] = useState('');
 
-  // Auto-notify restaurant owner when a pending payment is verified & dues drop to 0
-  const prevClearedRef = React.useRef(null);
-  useEffect(() => {
-    if (prevClearedRef.current !== null && totalClearedAmount > prevClearedRef.current && dueSettlementAmount === 0) {
-      setSettlementSuccessMsg('Payment verified & confirmed by Super Admin! All platform fee dues are settled (৳0 balance).');
-      setTimeout(() => setSettlementSuccessMsg(''), 6000);
-    }
-    prevClearedRef.current = totalClearedAmount;
-  }, [totalClearedAmount, dueSettlementAmount]);
-
-  const handlePaymentProofSubmitted = async (submittedAmount, cycle) => {
+  // When payment proof is submitted, immediately refresh live settlements so the blue
+  // "Thank you for submitting your payment!" banner appears cleanly without duplicate green alerts.
+  const handlePaymentProofSubmitted = async () => {
     const live = await fetchRestaurantSettlementsFromSupabase(panelRestoId);
     if (live) setSettlements(live);
-    setSettlementSuccessMsg(
-      `Payment proof of ৳${Number(submittedAmount).toFixed(2)} for ${cycle.periodLabel} submitted for verification.`
-    );
-    setTimeout(() => setSettlementSuccessMsg(''), 6000);
   };
 
   // Filtered Foods
@@ -1723,117 +1715,135 @@ export default function RestaurantPanel({
           </div>
         )}
 
-        {/* 5-State Compact Payment Reminder Banner (Under Top Bar) */}
+        {/* 3-State Platform Fee Settlement Banners (Pending / Overdue / After Submit Payment) */}
+        {/* Automatically vanishes once Super Admin verifies payment & balance clears */}
         {settlementLifecycle.reminderMode === 'verification_pending' && (
-          <div className={`mx-4 sm:mx-6 mt-3 px-4 py-3 rounded-[8px] border flex items-center justify-between gap-3 ${
-            isDark ? 'bg-blue-950/35 border-blue-800/60 text-blue-200' : 'bg-[#EFF6FF] border-[#BFDBFE] text-[#1E3A8A]'
-          }`}>
-            <div className="flex items-center gap-3 min-w-0">
-              <div className={`w-8 h-8 rounded-[7px] flex items-center justify-center shrink-0 ${
-                isDark ? 'bg-blue-900/50 text-blue-400' : 'bg-white border border-[#BFDBFE] text-[#2563EB]'
-              }`}>
-                <Info className="w-4 h-4" />
+          <div className="mx-4 sm:mx-6 mt-3 px-4 sm:px-6 py-3.5 rounded-[12px] bg-gradient-to-r from-[#1D63D0] via-[#1352B8] to-[#0B3C91] text-white shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-[10px] bg-white/15 border border-white/25 flex items-center justify-center shrink-0">
+                <FileCheck2 className="w-6 h-6 text-white" />
               </div>
-              <div className="text-xs min-w-0">
-                <div className="font-bold text-sm leading-tight">Payment Verification in Progress</div>
-                <div className={`mt-0.5 ${isDark ? 'text-blue-300' : 'text-[#1D4ED8]'}`}>
-                  Your payment of <strong>৳{settlementLifecycle.pendingVerificationTotal.toFixed(2)}</strong> has been submitted for verification. Please do not pay again.
+              <div className="min-w-0">
+                <div className="text-base sm:text-[18px] font-extrabold tracking-tight leading-snug">
+                  Thank you for submitting your payment!
+                </div>
+                <div className="text-xs sm:text-[13px] text-blue-100 mt-0.5">
+                  We&apos;ll notify you once our team verifies your payment.
                 </div>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsSettlementModalOpen(true)}
-              className={`px-3 py-1.5 rounded-[7px] border text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
-                isDark ? 'border-blue-700 bg-slate-900 text-blue-200 hover:bg-slate-800' : 'border-[#CBD5E1] bg-white text-[#0F172A] hover:bg-slate-50'
-              }`}
-            >
-              View Status
-            </button>
+
+            <div className="flex items-center justify-between lg:justify-end gap-5 sm:gap-6 shrink-0">
+              <div className="hidden lg:block h-10 w-px bg-white/25" />
+              <div>
+                <div className="text-[11px] font-semibold text-blue-100">Submitted amount</div>
+                <div className="text-xl sm:text-2xl font-extrabold font-mono leading-tight">
+                  ৳{settlementLifecycle.pendingVerificationTotal.toFixed(2)}
+                </div>
+              </div>
+              <div className="flex flex-col items-end gap-1.5">
+                <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-white/15 border border-white/25 text-[11px] font-semibold text-white">
+                  <Clock className="w-3 h-3" />
+                  <span>Awaiting verification</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsSettlementModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-[9px] border border-white/80 hover:bg-white/15 text-white text-xs font-bold cursor-pointer transition-colors"
+                >
+                  <span>View submission</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
         {settlementLifecycle.reminderMode === 'overdue' && (
-          <div className={`mx-4 sm:mx-6 mt-3 px-4 py-3 rounded-[8px] border flex items-center justify-between gap-3 ${
-            isDark ? 'bg-red-950/35 border-red-800/60 text-red-200' : 'bg-[#FEF2F2] border-[#FECACA] text-[#991B1B]'
-          }`}>
-            <div className="flex items-center gap-3 min-w-0">
-              <div className={`w-8 h-8 rounded-[7px] flex items-center justify-center shrink-0 ${
-                isDark ? 'bg-red-900/50 text-red-400' : 'bg-white border border-[#FECACA] text-[#DC2626]'
-              }`}>
-                <AlertTriangle className="w-4 h-4" />
+          <div className="mx-4 sm:mx-6 mt-3 px-4 sm:px-6 py-3.5 rounded-[12px] bg-gradient-to-r from-[#C81E1E] via-[#B91C1C] to-[#991B1B] text-white shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-[10px] bg-white/15 border border-white/20 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6 text-white" />
               </div>
-              <div className="text-xs min-w-0">
-                <div className="font-bold text-sm leading-tight text-[#B91C1C] dark:text-red-300">
-                  Overdue Platform Fee Payment
+              <div className="min-w-0">
+                <div className="text-base sm:text-[18px] font-extrabold tracking-tight leading-snug">
+                  Platform fee payment overdue
                 </div>
-                <div className="mt-0.5">
-                  Your outstanding payment of <strong className="font-mono text-[#DC2626] dark:text-red-300">৳{settlementLifecycle.overdueTotal.toFixed(2)}</strong> is overdue.
-                  <span className={`ml-1.5 ${isDark ? 'text-red-300/80' : 'text-[#7F1D1D]'}`}>
-                    Due: {formatDhakaDate(settlementLifecycle.primaryCycle?.paymentDueDate)} · <strong>{settlementLifecycle.maxDaysOverdue} day{settlementLifecycle.maxDaysOverdue === 1 ? '' : 's'} overdue</strong>
+                <div className="text-xs sm:text-[13px] text-red-100 mt-0.5 flex items-center flex-wrap gap-2">
+                  <span>Due {formatDhakaDate(settlementLifecycle.primaryCycle?.paymentDueDate)} ·</span>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[11px] font-bold">
+                    {settlementLifecycle.maxDaysOverdue} day{settlementLifecycle.maxDaysOverdue === 1 ? '' : 's'} overdue
                   </span>
                 </div>
                 {settlementLifecycle.anyRejected && (
-                  <div className="mt-0.5 font-semibold text-[#DC2626] dark:text-red-300">
-                    Rejected ({settlementLifecycle.anyRejected.transactionRef}): {settlementLifecycle.anyRejected.rejectionReason} — Please resubmit proof.
+                  <div className="mt-1 text-[11.5px] font-semibold text-amber-200">
+                    Previous submission rejected ({settlementLifecycle.anyRejected.transactionRef}): {settlementLifecycle.anyRejected.rejectionReason}
                   </div>
                 )}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsSettlementModalOpen(true)}
-              className="px-3.5 py-1.5 rounded-[7px] bg-[#DC2626] hover:bg-[#B91C1C] text-white font-bold text-xs shrink-0 cursor-pointer transition-colors"
-            >
-              Settle Due
-            </button>
+
+            <div className="flex items-center justify-between lg:justify-end gap-5 sm:gap-6 shrink-0">
+              <div className="hidden lg:block h-10 w-px bg-white/25" />
+              <div>
+                <div className="text-[11px] font-semibold text-red-100">Outstanding amount</div>
+                <div className="text-xl sm:text-2xl font-extrabold font-mono leading-tight">
+                  ৳{settlementLifecycle.overdueTotal.toFixed(2)}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSettlementModalOpen(true)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[10px] bg-white hover:bg-slate-100 text-[#0F172A] text-xs sm:text-sm font-bold shadow-sm cursor-pointer transition-colors shrink-0"
+              >
+                <span>Settle Due</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
 
         {settlementLifecycle.reminderMode === 'pending' && (
-          <div className={`mx-4 sm:mx-6 mt-3 px-4 py-3 rounded-[8px] border flex items-center justify-between gap-3 ${
-            isDark ? 'bg-orange-950/30 border-orange-800/50 text-orange-200' : 'bg-[#FFF7ED] border-[#FED7AA] text-[#0F172A]'
-          }`}>
-            <div className="flex items-center gap-3 min-w-0">
-              <div className={`w-8 h-8 rounded-[7px] flex items-center justify-center shrink-0 ${
-                isDark ? 'bg-orange-900/50 text-orange-400' : 'bg-white border border-[#FED7AA] text-[#F97316]'
-              }`}>
-                <Clock className="w-4 h-4" />
+          <div className="mx-4 sm:mx-6 mt-3 px-4 sm:px-6 py-3.5 rounded-[12px] bg-gradient-to-r from-[#FACC15] via-[#FBBF24] to-[#F59E0B] text-[#0F172A] shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-[10px] bg-black/10 flex items-center justify-center shrink-0">
+                <Clock className="w-6 h-6 text-[#0F172A]" />
               </div>
-              <div className="text-xs min-w-0">
-                <div className="font-bold text-sm leading-tight">Platform Fee Payment Reminder</div>
-                <div className="mt-0.5">
-                  Your platform fee of <strong className="font-mono text-[#EA580C]">৳{settlementLifecycle.pendingTotal.toFixed(2)}</strong> is due on {formatDhakaDate(settlementLifecycle.primaryCycle?.paymentDueDate)}.
-                  <span className="ml-2 text-slate-500 dark:text-slate-400">
-                    Settlement Period: {settlementLifecycle.primaryCycle?.periodLabel}
+              <div className="min-w-0">
+                <div className="text-base sm:text-[18px] font-extrabold tracking-tight leading-snug text-[#0F172A]">
+                  Platform fee payment pending
+                </div>
+                <div className="text-xs sm:text-[13px] text-[#0F172A]/85 mt-0.5 flex items-center flex-wrap gap-2">
+                  <span>Please settle your platform fee within 3 days.</span>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full border border-[#0F172A]/45 bg-black/5 text-[#0F172A] text-[11px] font-bold">
+                    {settlementLifecycle.graceDaysRemaining} day{settlementLifecycle.graceDaysRemaining === 1 ? '' : 's'} remaining
                   </span>
                 </div>
                 {settlementLifecycle.anyRejected && (
-                  <div className="mt-0.5 font-semibold text-[#DC2626]">
-                    Rejected ({settlementLifecycle.anyRejected.transactionRef}): {settlementLifecycle.anyRejected.rejectionReason} — Please resubmit proof.
+                  <div className="mt-1 text-[11.5px] font-bold text-[#991B1B]">
+                    Previous submission rejected ({settlementLifecycle.anyRejected.transactionRef}): {settlementLifecycle.anyRejected.rejectionReason}
                   </div>
                 )}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsSettlementModalOpen(true)}
-              className="px-3.5 py-1.5 rounded-[7px] bg-[#F97316] hover:bg-[#EA580C] text-white font-bold text-xs shrink-0 cursor-pointer transition-colors"
-            >
-              Settle Due
-            </button>
-          </div>
-        )}
 
-        {settlementSuccessMsg && (
-          <div className="mx-4 sm:mx-6 mt-3 px-4 py-2.5 rounded-[8px] border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-xs flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 font-semibold">
-              <Check className="w-4 h-4 shrink-0 text-[#16A34A]" />
-              <span>{settlementSuccessMsg}</span>
+            <div className="flex items-center justify-between lg:justify-end gap-5 sm:gap-6 shrink-0">
+              <div className="hidden lg:block h-10 w-px bg-black/15" />
+              <div>
+                <div className="text-[11px] font-semibold text-[#0F172A]/80">Outstanding amount</div>
+                <div className="text-xl sm:text-2xl font-extrabold font-mono leading-tight text-[#0F172A]">
+                  ৳{settlementLifecycle.pendingTotal.toFixed(2)}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSettlementModalOpen(true)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[10px] bg-[#0B1324] hover:bg-[#17233D] text-white text-xs sm:text-sm font-bold shadow-sm cursor-pointer transition-colors shrink-0"
+              >
+                <span>Settle Due</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
-            <button type="button" onClick={() => setSettlementSuccessMsg('')} className="p-1 cursor-pointer">
-              <X className="w-3.5 h-3.5" />
-            </button>
           </div>
         )}
 
