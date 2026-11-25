@@ -242,3 +242,10 @@ Before writing or editing code for any new task, verify:
   * Pending / Due Settlements: ৳15 (Spice Lounge 3 orders × ৳5).
   * Unified across Super Admin Dashboard, DGM Session Tracking, Digital Bills, Fee Ledger, and Restaurant Panels.
   * Fee Ledger KPI card renamed to `Total Fees Collections`.
+- **Revenue & Settlement Suite (Nov 2026)**:
+  * Sidebar submenu routes under `Revenue & Settlement` are: `Revenue Overview`, `Restaurant Dues`, `Payment Transactions`.
+  * `Revenue Overview` splits date-filtered Revenue metrics (`Total Accrued Fee`, `Total Revenue Collected`, Trend Chart, Recent Transactions) from always-live As-of-Today balances (`Total Outstanding Fee`, `Current Cycle Fee`, `Pending Settlement`, `Overdue Settlement`, `Active Restaurants`, Revenue Breakdown Donut).
+  * Trend Chart plots Accrued Fee on bill creation date and Collected Revenue strictly on payment date (`Asia/Dhaka`).
+  * `Restaurant Dues` strictly excludes `in_progress` cycles and retains unpaid dues for suspended restaurants; supports duplicate-cooldown reminders synced to `RestaurantPanel.jsx`.
+  * `Payment Transactions` provides full `PAY-YYYY-XXX` audit history, receipt download, pending verification/rejection, and authorized reversal (no hard-delete of verified payments).
+  * Centralized `recordCyclePayment` enforces positive amounts, overpayment prevention, duplicate `transaction_ref` checks, and partial-payment balance tracking across all views.

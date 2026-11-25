@@ -202,16 +202,33 @@ export const generateLiveSettlementCycles = ({
       .replace(/\D/g, '')
       .padStart(3, '0');
 
-    // Real-time cleared settlements for this restaurant from live Supabase
+    // Real-time verified cleared settlements for this restaurant from live Supabase
     const restoSettlements = (settlements || []).filter(s => {
       const rId = s.restaurant_id || s.restaurantId;
-      return rId === resto.id && (s.status === 'cleared' || s.status === 'settled');
+      const st = String(s.status || '').toLowerCase();
+      return rId === resto.id && (st === 'cleared' || st === 'settled' || st === 'verified');
     });
     const totalClearedAmount = restoSettlements.reduce((sum, s) => sum + Number(s.amount || 0), 0);
-    const isRestoSettled = resto.settlement_status === 'settled' || resto.settlementStatus === 'settled';
 
-    // Chronological pool of cleared payments to apply across historical cycles
-    let clearedPoolRemaining = totalClearedAmount;
+    // Track which Supabase settlements explicitly match a cycle so unallocated pool isn't double-applied
+    const explicitlyMatchedIds = new Set();
+    windows.forEach(w => {
+      const cycleIndexStr = String(w.index).padStart(3, '0');
+      const cycleId = `ST-${w.start_at.getFullYear()}-${restoNum}-${cycleIndexStr}`;
+      restoSettlements.forEach(s => {
+        if (
+          (s.period_start && new Date(s.period_start).getTime() === w.start_at.getTime()) ||
+          (s.notes && s.notes.includes(cycleId))
+        ) {
+          explicitlyMatchedIds.add(s.id);
+        }
+      });
+    });
+
+    // Unallocated pool of verified payments (e.g. paid from Restaurant Portal without a cycle ID)
+    let unallocatedPoolRemaining = restoSettlements
+      .filter(s => !explicitlyMatchedIds.has(s.id))
+      .reduce((sum, s) => sum + Number(s.amount || 0), 0);
 
     windows.forEach(w => {
       const cycleIndexStr = String(w.index).padStart(3, '0');
@@ -246,9 +263,9 @@ export const generateLiveSettlementCycles = ({
         formattedOrders = matchingLedger.map(l => {
           const universalId = getUniversalDgmOrderId(l);
           const tableDisplay = formatTableDisplay(l.table_id);
-          
+
           // Match with an order in matchingOrders if available (by order_number, table & closest timestamp)
-          const matched = matchingOrders.find(o => 
+          const matched = matchingOrders.find(o =>
             (o.order_number && (o.order_number === universalId || o.order_number.includes(l.session_code?.replace(/\D/g, '')))) ||
             (formatTableDisplay(o.table_number || o.tableNumber) === tableDisplay && Math.abs(new Date(o.created_at || o.createdAt) - new Date(l.created_at)) < 3600000)
           );
@@ -293,39 +310,41 @@ export const generateLiveSettlementCycles = ({
       const grossVolume = formattedOrders.reduce((sum, o) => sum + Number(o.amount || 0), 0);
       const accruedFee = orderCount * feePerBill;
 
-      // Check Supabase settlements for direct match
-      const matchingSettlement = restoSettlements.find(s => {
+      // Check Supabase settlements for all direct matches (supports multiple partial payments!)
+      const matchingSettlements = restoSettlements.filter(s => {
         if (s.period_start && new Date(s.period_start).getTime() === w.start_at.getTime()) return true;
         if (s.notes && s.notes.includes(cycleId)) return true;
-        if (resto.id === 'resto_002' && s.orders_count === orderCount && orderCount > 0) return true;
+        if (resto.id === 'resto_002' && !explicitlyMatchedIds.has(s.id) && s.orders_count === orderCount && orderCount > 0) return true;
         return false;
       });
 
-      // Real-time Settlement Clearance Check:
-      // If restaurant has 0 due / marked settled in DB, or if cleared payments pool covers this cycle,
-      // it is marked Settled (paid) and will NEVER show Overdue!
-      let isPaid = false;
-      let paidAmount = 0;
+      const directMatchedAmount = matchingSettlements.reduce((sum, s) => sum + Number(s.amount || 0), 0);
 
-      if (cycleOverride.isPaid != null) {
-        isPaid = Boolean(cycleOverride.isPaid);
-        paidAmount = cycleOverride.paidAmount != null ? Number(cycleOverride.paidAmount) : (isPaid ? accruedFee : 0);
-      } else if (matchingSettlement) {
-        isPaid = true;
-        paidAmount = Number(matchingSettlement.amount || accruedFee);
-      } else if (isRestoSettled || (clearedPoolRemaining >= accruedFee && accruedFee > 0)) {
-        isPaid = true;
-        paidAmount = accruedFee;
-        if (clearedPoolRemaining >= accruedFee) {
-          clearedPoolRemaining -= accruedFee;
-        }
-      } else if (clearedPoolRemaining > 0) {
-        paidAmount = clearedPoolRemaining;
-        clearedPoolRemaining = 0;
-        isPaid = paidAmount >= accruedFee;
+      // Compute paidAmount from Supabase live records + any unsynced optimistic local overrides
+      let paidAmount = directMatchedAmount;
+
+      if (matchingSettlements.length === 0 && unallocatedPoolRemaining > 0 && accruedFee > 0) {
+        const applied = Math.min(accruedFee, unallocatedPoolRemaining);
+        paidAmount += applied;
+        unallocatedPoolRemaining -= applied;
       }
 
-      const settledAt = cycleOverride.settledAt || matchingSettlement?.cleared_at || (isPaid ? (matchingSettlement?.cleared_at || w.endInclusive.toISOString()) : null);
+      // Include any optimistic local override payments not yet reflected in Supabase
+      if (Array.isArray(cycleOverride.payments) && cycleOverride.payments.length > 0) {
+        const syncedRefs = new Set(restoSettlements.map(s => s.transaction_ref).filter(Boolean));
+        const unsyncedLocalSum = cycleOverride.payments
+          .filter(p => !p.transactionRef || !syncedRefs.has(p.transactionRef))
+          .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        paidAmount += unsyncedLocalSum;
+      }
+
+      paidAmount = Math.min(accruedFee, Math.max(0, paidAmount));
+      const isPaid = accruedFee > 0 && paidAmount >= accruedFee;
+
+      const latestMatch = matchingSettlements[0];
+      const settledAt = isPaid
+        ? (cycleOverride.settledAt || latestMatch?.cleared_at || latestMatch?.created_at || w.endInclusive.toISOString())
+        : null;
 
       // Compute status using the exact user-specified logic
       const status = getSettlementStatus({
@@ -389,30 +408,38 @@ export const generateLiveSettlementCycles = ({
             description: `Payment of ৳${paidAmount.toFixed(2)} recorded. Settlement successfully marked as Settled.`,
             type: 'success'
           });
+        } else if (paidAmount > 0) {
+          activities.push({
+            id: `act_${cycleId}_partial`,
+            timestamp: latestMatch?.cleared_at || new Date().toISOString(),
+            title: 'Partial Payment Received',
+            description: `Partial payment of ৳${paidAmount.toFixed(2)} recorded. Remaining balance: ৳${(accruedFee - paidAmount).toFixed(2)}.`,
+            type: 'info'
+          });
         }
       }
 
-      const cyclePayments = cycleOverride.payments || (matchingSettlement ? [
-        {
-          id: matchingSettlement.id,
-          date: matchingSettlement.cleared_at || matchingSettlement.created_at,
-          amount: Number(matchingSettlement.amount || paidAmount),
-          method: matchingSettlement.payment_method || 'bKash Merchant Pay',
-          transactionRef: matchingSettlement.transaction_ref || 'TRX-LIVE-001',
-          notes: matchingSettlement.notes || 'Full settlement payment',
-          recordedBy: 'Super Admin'
-        }
-      ] : (isPaid && paidAmount > 0 ? [
-        {
-          id: `stl_${cycleId}_auto`,
-          date: settledAt || w.endInclusive.toISOString(),
-          amount: paidAmount,
-          method: restoSettlements[0]?.payment_method || 'bKash Merchant Pay',
-          transactionRef: restoSettlements[0]?.transaction_ref || `TRX-${cycleId}`,
-          notes: `Settlement cleared (${resto.name})`,
-          recordedBy: 'Super Admin'
-        }
-      ] : []));
+      const cyclePayments = matchingSettlements.length > 0
+        ? matchingSettlements.map(ms => ({
+            id: ms.id,
+            date: ms.cleared_at || ms.clearedAt || ms.created_at,
+            amount: Number(ms.amount || 0),
+            method: ms.payment_method || ms.paymentMethod || 'bKash Merchant Pay',
+            transactionRef: ms.transaction_ref || ms.transactionRef || 'TRX-LIVE-001',
+            notes: ms.notes || 'Settlement payment',
+            recordedBy: 'Super Admin'
+          }))
+        : (Array.isArray(cycleOverride.payments) && cycleOverride.payments.length > 0
+            ? cycleOverride.payments
+            : (isPaid && paidAmount > 0 ? [{
+                id: `stl_${cycleId}_auto`,
+                date: settledAt || w.endInclusive.toISOString(),
+                amount: paidAmount,
+                method: restoSettlements[0]?.payment_method || restoSettlements[0]?.paymentMethod || 'bKash Merchant Pay',
+                transactionRef: restoSettlements[0]?.transaction_ref || restoSettlements[0]?.transactionRef || `TRX-${cycleId}`,
+                notes: `Settlement cleared (${resto.name})`,
+                recordedBy: 'Super Admin'
+              }] : []));
 
       generatedCycles.push({
         id: cycleId,
@@ -508,7 +535,8 @@ export const computeSettlementSummary = (cycles, refDate = new Date()) => {
 };
 
 /**
- * Record a payment for a settlement cycle and sync to Supabase
+ * Record a verified payment for a settlement cycle and sync atomically to Supabase.
+ * Supports partial & full payments, duplicate reference protection, and overpayment validation.
  */
 export const recordCyclePayment = async ({
   cycleId,
@@ -517,66 +545,135 @@ export const recordCyclePayment = async ({
   paymentMethod = 'bKash Merchant Pay',
   transactionRef = '',
   paymentDate = new Date().toISOString(),
-  notes = ''
+  notes = '',
+  remainingBalance = null,
+  expectedAccruedFee = null,
+  periodStart = null,
+  periodEnd = null,
+  ordersCount = 0,
+  hasOtherUnpaidCycles = false
 }) => {
+  const numAmount = Number(amount);
+  if (!restaurantId || !cycleId) {
+    return { success: false, error: 'Restaurant and Settlement Cycle are required.' };
+  }
+  if (!Number.isFinite(numAmount) || numAmount <= 0) {
+    return { success: false, error: 'Payment amount must be greater than ৳0.' };
+  }
+  if (remainingBalance !== null && numAmount > Number(remainingBalance) + 0.01) {
+    return {
+      success: false,
+      error: `Payment amount (৳${numAmount.toFixed(2)}) exceeds outstanding payable balance (৳${Number(remainingBalance).toFixed(2)}).`
+    };
+  }
+
+  const cleanRef = String(transactionRef || '').trim() || `TRX-${Date.now().toString().slice(-6)}`;
+
+  // Duplicate transaction reference protection (idempotency check)
+  try {
+    const { data: existingDup } = await supabase
+      .from('settlements')
+      .select('id, status')
+      .eq('transaction_ref', cleanRef)
+      .limit(5);
+    const activeDup = (existingDup || []).find(
+      row => !['rejected', 'failed', 'reversed'].includes(String(row.status || '').toLowerCase())
+    );
+    if (activeDup) {
+      return {
+        success: false,
+        error: `Duplicate Transaction Reference "${cleanRef}" already exists in verified records.`
+      };
+    }
+  } catch (dupErr) {
+    console.warn('Duplicate reference pre-check skipped:', dupErr);
+  }
+
+  const nowIso = new Date().toISOString();
+  const stlId = `stl_${Date.now()}`;
+  const isFullPayment = remainingBalance !== null
+    ? numAmount >= Number(remainingBalance) - 0.01
+    : (expectedAccruedFee !== null ? numAmount >= Number(expectedAccruedFee) - 0.01 : true);
+
+  // 1. Insert into Supabase settlements table FIRST (atomic persistence)
+  try {
+    const { error: insertError } = await supabase.from('settlements').insert([
+      {
+        id: stlId,
+        restaurant_id: restaurantId,
+        amount: numAmount,
+        fee_per_bill: 5,
+        orders_count: Number(ordersCount || 0),
+        period_start: periodStart || null,
+        period_end: periodEnd || null,
+        payment_method: paymentMethod,
+        transaction_ref: cleanRef,
+        status: 'cleared',
+        notes: `${cycleId} - ${notes || (isFullPayment ? 'Weekly settlement paid' : 'Partial settlement payment')}`,
+        cleared_at: paymentDate,
+        created_at: nowIso
+      }
+    ]);
+    if (insertError) {
+      return { success: false, error: `Database error: ${insertError.message}` };
+    }
+  } catch (err) {
+    return { success: false, error: err?.message || 'Failed to record payment in database.' };
+  }
+
+  // 2. Update local activity & optimistic mirror without forcing isPaid on partial payments
   const overrides = getStoredPaymentOverrides();
   const overrideKey = `${restaurantId}_${cycleId}`;
   const existing = overrides[overrideKey] || {};
-
-  const numAmount = Number(amount || 0);
-  const newPaidAmount = (Number(existing.paidAmount || 0) + numAmount);
+  const prevPaid = Number(existing.paidAmount || 0);
+  const newPaidAmount = prevPaid + numAmount;
+  const computedFull = expectedAccruedFee !== null
+    ? newPaidAmount >= Number(expectedAccruedFee) - 0.01
+    : isFullPayment;
 
   const paymentRecord = {
-    id: `pmt_${Date.now()}`,
+    id: stlId,
     date: paymentDate,
     amount: numAmount,
     method: paymentMethod,
-    transactionRef: transactionRef || `TRX-${Date.now().toString().slice(-6)}`,
+    transactionRef: cleanRef,
     notes: notes || `Settlement payment of ৳${numAmount.toFixed(2)} recorded by Super Admin`,
     recordedBy: 'Super Admin'
   };
 
   const activityRecord = {
     id: `act_${Date.now()}`,
-    timestamp: new Date().toISOString(),
-    title: 'Settlement Payment Recorded',
-    description: `৳${numAmount.toFixed(2)} received via ${paymentMethod} (${paymentRecord.transactionRef}). Status marked as Settled.`,
+    timestamp: nowIso,
+    title: computedFull ? 'Settlement Payment Recorded' : 'Partial Payment Recorded',
+    description: `৳${numAmount.toFixed(2)} received via ${paymentMethod} (${cleanRef}). ${computedFull ? 'Status marked as Settled.' : 'Remaining balance updated.'}`,
     type: 'success'
   };
 
   overrides[overrideKey] = {
     ...existing,
     paidAmount: newPaidAmount,
-    isPaid: true,
-    settledAt: paymentDate,
-    lastUpdatedAt: new Date().toISOString(),
+    isPaid: computedFull,
+    settledAt: computedFull ? paymentDate : existing.settledAt || null,
+    lastUpdatedAt: nowIso,
     payments: [paymentRecord, ...(existing.payments || [])],
     activities: [activityRecord, ...(existing.activities || [])]
   };
 
   saveStoredPaymentOverrides(overrides);
 
-  // Sync to Supabase settlements table for audit & multi-tenant persistence
-  try {
-    await supabase.from('settlements').insert([
-      {
-        id: `stl_${Date.now()}`,
-        restaurant_id: restaurantId,
-        amount: numAmount,
-        fee_per_bill: 5,
-        payment_method: paymentMethod,
-        transaction_ref: paymentRecord.transactionRef,
-        status: 'cleared',
-        notes: `${cycleId} - ${notes || 'Weekly settlement paid'}`,
-        cleared_at: paymentDate,
-        created_at: new Date().toISOString()
-      }
-    ]);
-  } catch (err) {
-    console.warn('Supabase settlement sync warning (saved locally):', err);
+  // 3. Only mark restaurant settled in DB if this full payment leaves no other unpaid cycles
+  if (computedFull && !hasOtherUnpaidCycles) {
+    try {
+      await supabase
+        .from('restaurants')
+        .update({ settlement_status: 'settled' })
+        .eq('id', restaurantId);
+    } catch (syncErr) {
+      console.warn('Restaurant settlement status update warning:', syncErr);
+    }
   }
 
-  return { success: true };
+  return { success: true, paymentId: stlId, isFullPayment: computedFull, transactionRef: cleanRef };
 };
 
 /**

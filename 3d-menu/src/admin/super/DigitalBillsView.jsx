@@ -55,6 +55,8 @@ export default function DigitalBillsView({
   orders = [],
   settlements = [],
   subRoute = 'Digital Bills',
+  initialStatusFilter = 'all',
+  initialCycleId = null,
   onBack
 }) {
   // Main view tab: 'ledger' (Settlement Ledger) vs 'confirmations' (Customer Order Confirmations)
@@ -96,10 +98,16 @@ export default function DigitalBillsView({
   // Filter States
   const [selectedResto, setSelectedResto] = useState('all'); // 'all' | 'resto_001' | 'resto_002' | 'resto_003'
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'in_progress' | 'pending' | 'overdue' | 'settled'
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter || 'all'); // 'all' | 'in_progress' | 'pending' | 'overdue' | 'settled'
   const [periodFilter, setPeriodFilter] = useState('all'); // 'all' | 'current' | specific period | 'custom'
   const [customPeriodFrom, setCustomPeriodFrom] = useState('');
   const [customPeriodTo, setCustomPeriodTo] = useState('');
+
+  useEffect(() => {
+    if (initialStatusFilter) {
+      setStatusFilter(initialStatusFilter);
+    }
+  }, [initialStatusFilter]);
 
   // Effective Reference Date: Always live current system date
   const effectiveRefDate = useMemo(() => new Date(), [refreshTrigger]);
@@ -129,8 +137,14 @@ export default function DigitalBillsView({
   }, [cycles]);
 
   // Selected Settlement Cycle for "View Details" page
-  const [selectedCycleId, setSelectedCycleId] = useState(null);
+  const [selectedCycleId, setSelectedCycleId] = useState(initialCycleId || null);
   const [detailsTab, setDetailsTab] = useState('orders'); // 'orders' | 'payments' | 'activities'
+
+  useEffect(() => {
+    if (initialCycleId) {
+      setSelectedCycleId(initialCycleId);
+    }
+  }, [initialCycleId]);
 
   // Three-dots menu active popup
   const [openMenuId, setOpenMenuId] = useState(null);

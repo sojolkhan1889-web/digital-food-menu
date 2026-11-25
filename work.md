@@ -1358,3 +1358,27 @@ This file records all architectural specifications, resolved issues, feature imp
     * Total Due Settlements: **৳15** (`Pending collection from restaurants`).
   - **Restaurant Panels (`/monkeybhai/admin`, `/hungrybite/admin`, `/spicelounge/admin`):**
     * Trend subtext on `Total DGM Orders` card now dynamically displays `${metrics.totalOrders} Confirmed` (Monkey Bhai: `10 Confirmed`, Hungry Bite: `2 Confirmed`, Spice Lounge: `3 Confirmed`), eliminating old static or mismatched values.
+
+### Update: Revenue & Settlement Suite — Revenue Overview, Restaurant Dues & Payment Transactions (November 2026)
+- **1. Sidebar & Navigation Refactor:**
+  - Under `Revenue & Settlement`, replaced `Fee Ledger` -> **`Revenue Overview`** and `Settlements` -> **`Payment Transactions`**, keeping **`Restaurant Dues`** in between (`Revenue Overview`, `Restaurant Dues`, `Payment Transactions`).
+  - Lifted Top Bar Date Filter (`All Time (Live)`, `Today`, `Last 7 Days`, `Last 30 Days`, `This Month`, `Custom Range`) and concurrency-safe `Sync Live` (with error banner retaining prior valid numbers on failure) into `SuperAdminPanel.jsx`.
+- **2. Revenue Overview (`RevenueOverviewView.jsx`):**
+  - **7 Live KPI Cards (4 + 3 grid):**
+    * Row 1 (Date-filtered Accrued & Collected + As-of-Today Outstanding & Active Restaurants): `Total Accrued Fee`, `Total Revenue Collected`, `Total Outstanding Fee` (As of Today), `Active Restaurants` (As of Today).
+    * Row 2 (All As-of-Today mutually exclusive settlement balances): `Current Cycle Fee` (`in_progress`), `Pending Settlement` (`pending` grace period remaining balance), `Overdue Settlement` (`overdue` remaining balance).
+    * Info `ⓘ` tooltips and deep-link click actions to Digital Bills (all / `in_progress`), Payment Transactions, Restaurant Dues (`pending` / `overdue`), and All Restaurants.
+  - **Revenue & Collection Trend Chart:** `Daily`, `Weekly`, `Monthly` calendar granularity + `Bar / Line` toggle. Maps `Accrued Fee` strictly to bill creation date and `Collected Revenue` strictly to verified payment date (`Asia/Dhaka`).
+  - **Revenue Breakdown Donut:** All-time collection breakdown (`80% Collected` = ৳60 vs `20% Outstanding` = ৳15 of ৳75 Total Accrued Fee).
+  - **Recent Payment Transactions:** Top 5 latest payments with `View Details`, `Three Dots` action menu, and `View All Transactions ->`.
+- **3. Restaurant Dues (`RestaurantDuesView.jsx`):**
+  - Strictly lists restaurants with `Pending` or `Overdue` settlements where `remaining_balance > 0` (`in_progress` cycles excluded; suspended restaurants' unpaid balances retained).
+  - **4 KPI Cards:** `Total Payable Due`, `Pending Amount`, `Overdue Amount`, `Restaurants with Dues`.
+  - **Table & Actions:** Search, Status filter (`All Dues`, `Pending Only`, `Overdue Only`), Sort (`Highest Due`, `Oldest Overdue`), `View Dues` modal, `Record Payment`, `Send Payment Reminder` (with 30-minute duplicate cooldown & live notification banner in `RestaurantPanel.jsx`), `Download Due Statement`, `Reminder History`, and `View Restaurant Profile`.
+- **4. Payment Transactions (`PaymentTransactionsView.jsx`):**
+  - Complete paginated audit log of verified, pending verification, failed, rejected, refunded, and reversed payments (`PAY-YYYY-XXX` IDs).
+  - **4 KPI Cards:** `Total Collected Revenue`, `Verified Payments`, `Pending Verification`, `Refunded / Reversed`.
+  - **Shared Modals & Store Safety (`RevenueModals.jsx`, `revenueSettlementService.js`, `digitalBillsStore.js`):**
+    * `RecordPaymentModal` reuses centralized `recordCyclePayment()` with partial payment support (`isPaid` only when full balance paid), overpayment rejection, duplicate `transaction_ref` idempotency protection, double-submit locking, and automatic restaurant status sync.
+    * `PaymentDetailsModal` supports Receipt printing/download, Activity Log, Verification/Rejection (for pending payments), and Authorized Payment Reversal with audit trail (never hard-deleting verified payments).
+    * `ExportReportModal` exports PDF (print view), Excel (`.xls`), and CSV reports clearly distinguishing Date-Filtered Revenue Summary vs Current Settlement Balances (As of Today).

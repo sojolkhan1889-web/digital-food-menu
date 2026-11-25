@@ -36,6 +36,9 @@ import {
 import AllRestaurantsView from './AllRestaurantsView';
 import DGMSessionTrackingView from './DGMSessionTrackingView';
 import DigitalBillsView from './DigitalBillsView';
+import RevenueOverviewView from './RevenueOverviewView';
+import RestaurantDuesView from './RestaurantDuesView';
+import PaymentTransactionsView from './PaymentTransactionsView';
 import { fetchSuperAdminDGMMetrics } from '../../data/dgmSessionStore';
 import { isSameCalendarDay } from '../../data/menuStore';
 import { supabase } from '../../lib/supabaseClient';
@@ -45,7 +48,7 @@ const NAV = [
   { name: 'Restaurants', icon: Store, routes: ['All Restaurants', 'New Registrations', 'Restaurant Profiles'] },
   { name: 'Digital Menus', icon: BookOpen, routes: ['All Menus', 'Food Catalog', 'Categories & Templates'] },
   { name: 'Orders & Bills', icon: ClipboardList, routes: ['DGM Session Tracking', 'Digital Bills', 'Customer Confirmations', 'Disputes'] },
-  { name: 'Revenue & Settlement', icon: Coins, routes: ['Fee Ledger', 'Restaurant Dues', 'Settlements'] },
+  { name: 'Revenue & Settlement', icon: Coins, routes: ['Revenue Overview', 'Restaurant Dues', 'Payment Transactions'] },
   { name: 'Design & Themes', icon: Paintbrush, routes: ['Theme Library', 'Festival Campaigns'] },
   { name: 'Media & 3D Library', icon: ImageIcon, routes: ['Food Photos', '3D Models', 'Media Library'] },
   { name: 'Reports & Analytics', icon: ChartNoAxesCombined, routes: ['Menu Engagement', 'Business Reports'] },
@@ -108,6 +111,15 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
   const [isRecordSettlementModalOpen, setIsRecordSettlementModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [liveFetchError, setLiveFetchError] = useState(null);
+  const syncInFlightRef = React.useRef(false);
+
+  // Shared Top Bar Date Filter & Sub-page Filter Presets
+  const [headerDateFilter, setHeaderDateFilter] = useState('All Time (Live)');
+  const [headerCustomFrom, setHeaderCustomFrom] = useState('');
+  const [headerCustomTo, setHeaderCustomTo] = useState('');
+  const [digitalBillsPreset, setDigitalBillsPreset] = useState({ statusFilter: 'all', cycleId: null });
+  const [duesPresetFilter, setDuesPresetFilter] = useState('all');
 
   // Live Supabase State (Zero Mock Data)
   const [restaurants, setRestaurants] = useState(getSuperAdminRestaurants);
@@ -155,8 +167,12 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Sync latest live data from Supabase on mount and poll every 6s for realtime parity
-  const loadAllLiveData = async () => {
+  // Sync latest live data from Supabase (prevents duplicate concurrent requests & preserves cached figures on error)
+  const loadAllLiveData = async (force = false) => {
+    if (syncInFlightRef.current && !force) return;
+    syncInFlightRef.current = true;
+    setIsRefreshing(true);
+    setLiveFetchError(null);
     try {
       const [liveRestos, liveOrders, liveTickets, liveCatalog, liveSettings, liveSettlements, liveScansRes, liveDgm] = await Promise.all([
         fetchLiveRestaurantsFromSupabase(),
@@ -169,16 +185,20 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
         fetchSuperAdminDGMMetrics()
       ]);
       if (liveRestos && liveRestos.length > 0) setRestaurants(liveRestos);
-      if (liveOrders) setOrders(liveOrders);
-      if (liveTickets) setTickets(liveTickets);
+      if (Array.isArray(liveOrders)) setOrders(liveOrders);
+      if (Array.isArray(liveTickets)) setTickets(liveTickets);
       if (liveCatalog) setCatalog(liveCatalog);
       if (liveSettings) setPlatformSettings(liveSettings);
-      if (liveSettlements) setSettlements(liveSettlements);
+      if (Array.isArray(liveSettlements)) setSettlements(liveSettlements);
       if (liveScansRes) setLiveScans(liveScansRes);
       if (liveDgm) setDgmMetrics(liveDgm);
     } catch (err) {
       console.warn('Super Admin load live data caught:', err);
+      const errText = err?.message || 'Failed to sync latest financial data from Supabase.';
+      setLiveFetchError(errText);
+      showToast(errText);
     } finally {
+      syncInFlightRef.current = false;
       setIsRefreshing(false);
     }
   };
@@ -426,7 +446,7 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
         change: activePeriodData.subtitle,
         icon: CheckCircle2,
         tone: 'emerald',
-        route: 'Settlements',
+        route: 'Payment Transactions',
         isClearedCard: true,
         currentPeriod: clearedPeriod
       },
@@ -698,10 +718,18 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
             onMenu={() => setMobileOpen(true)}
             onNavigate={setCurrent}
             onLogout={onLogout}
-            onRefresh={loadAllLiveData}
+            onRefresh={() => loadAllLiveData(false)}
             isRefreshing={isRefreshing}
             pendingCount={totalPendingCount}
             openTicketsCount={openTicketsCount}
+            dateFilter={headerDateFilter}
+            onChangeDateFilter={setHeaderDateFilter}
+            customDateFrom={headerCustomFrom}
+            customDateTo={headerCustomTo}
+            onChangeCustomDate={(from, to) => {
+              setHeaderCustomFrom(from);
+              setHeaderCustomTo(to);
+            }}
           />
 
           <main className="content">
@@ -765,31 +793,57 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
                 orders={orders}
                 settlements={settlements}
                 subRoute={current}
+                initialStatusFilter={digitalBillsPreset.statusFilter}
+                initialCycleId={digitalBillsPreset.cycleId}
                 onBack={() => setCurrent('Dashboard')}
               />
-            ) : current === 'Fee Ledger' || current === 'Revenue & Settlement' || current === 'Restaurant Dues' || current === 'Settlements' ? (
-              <RevenueSettlementView
+            ) : current === 'Revenue Overview' || current === 'Revenue & Settlement' || current === 'Fee Ledger' ? (
+              <RevenueOverviewView
                 restaurants={restaurants}
                 orders={orders}
                 settlements={settlements}
                 feePerBill={platformSettings?.feeRules?.platformFeePerBill ?? 5}
-                onOpenRecordModal={(resto) => {
-                  const restoId = resto ? resto.id : (restaurants[0]?.id || '');
-                  const restoOrders = orders.filter(o => o.restaurantId === restoId || o.restaurant_id === restoId);
-                  const accrued = restoOrders.length * (platformSettings?.feeRules?.platformFeePerBill ?? 5);
-                  const cleared = settlements.filter(s => (s.restaurantId === restoId || s.restaurant_id === restoId) && (s.status === 'cleared' || s.status === 'settled')).reduce((sum, s) => sum + Number(s.amount || 0), 0);
-                  const due = Math.max(0, accrued - cleared);
-
-                  setSettlementFormData({
-                    restaurantId: restoId,
-                    amount: due,
-                    paymentMethod: 'bKash',
-                    transactionRef: `TRX-${Date.now().toString().slice(-6)}`,
-                    notes: `Settlement payment for ${resto ? resto.name : 'Restaurant'}`
-                  });
-                  setIsRecordSettlementModalOpen(true);
+                dateFilter={headerDateFilter}
+                customDateFrom={headerCustomFrom}
+                customDateTo={headerCustomTo}
+                isSyncing={isRefreshing}
+                fetchError={liveFetchError}
+                onSyncLive={() => loadAllLiveData(true)}
+                onNavigate={setCurrent}
+                onOpenDigitalBills={(status = 'all', cycleId = null) => {
+                  setDigitalBillsPreset({ statusFilter: status, cycleId });
+                  setCurrent('Digital Bills');
                 }}
-                onBack={() => setCurrent('Dashboard')}
+                onOpenRestaurantDues={(duesStatus = 'all') => {
+                  setDuesPresetFilter(duesStatus);
+                  setCurrent('Restaurant Dues');
+                }}
+                onShowToast={showToast}
+              />
+            ) : current === 'Restaurant Dues' ? (
+              <RestaurantDuesView
+                restaurants={restaurants}
+                orders={orders}
+                settlements={settlements}
+                initialStatusFilter={duesPresetFilter}
+                onSyncLive={() => loadAllLiveData(true)}
+                onNavigate={setCurrent}
+                onShowToast={showToast}
+              />
+            ) : current === 'Payment Transactions' || current === 'Settlements' ? (
+              <PaymentTransactionsView
+                restaurants={restaurants}
+                orders={orders}
+                settlements={settlements}
+                dateFilter={headerDateFilter}
+                customDateFrom={headerCustomFrom}
+                customDateTo={headerCustomTo}
+                onSyncLive={() => loadAllLiveData(true)}
+                onOpenDigitalBills={(status = 'all', cycleId = null) => {
+                  setDigitalBillsPreset({ statusFilter: status, cycleId });
+                  setCurrent('Digital Bills');
+                }}
+                onShowToast={showToast}
               />
             ) : current === 'Support Center' ? (
               <SupportCenterView
@@ -961,11 +1015,46 @@ function Sidebar({ current, onNavigate, mobileOpen, onClose, supportBadge }) {
   );
 }
 
-function Header({ current, onMenu, onNavigate, onLogout, onRefresh, isRefreshing, pendingCount, openTicketsCount }) {
+function Header({
+  current,
+  onMenu,
+  onNavigate,
+  onLogout,
+  onRefresh,
+  isRefreshing,
+  pendingCount,
+  openTicketsCount,
+  dateFilter = 'All Time (Live)',
+  onChangeDateFilter,
+  customDateFrom = '',
+  customDateTo = '',
+  onChangeCustomDate
+}) {
   const [dateOpen, setDateOpen] = useState(false);
-  const [date, setDate] = useState('All Time (Live)');
   const [notice, setNotice] = useState(false);
   const [profile, setProfile] = useState(false);
+
+  const displayTitle =
+    current === 'Dashboard'
+      ? 'Dashboard'
+      : current === 'Fee Ledger' || current === 'Revenue & Settlement'
+      ? 'Revenue Overview'
+      : current === 'Settlements'
+      ? 'Payment Transactions'
+      : current;
+
+  const displaySubtitle =
+    current === 'Dashboard'
+      ? 'Real-time multi-tenant dashboard connected to Supabase PostgreSQL database'
+      : current === 'DGM Session Tracking'
+      ? 'Track table sessions, DGM orders, confirmations, and charges for Fine Dine restaurants.'
+      : displayTitle === 'Revenue Overview'
+      ? 'Monitor platform revenue, collections, and settlement performance.'
+      : displayTitle === 'Restaurant Dues'
+      ? 'View restaurant-wise dues, settlement status, and outstanding balances.'
+      : displayTitle === 'Payment Transactions'
+      ? 'All verified payments received from restaurants.'
+      : 'Digital Food Menu platform operations';
 
   return (
     <header className="topbar">
@@ -974,14 +1063,8 @@ function Header({ current, onMenu, onNavigate, onLogout, onRefresh, isRefreshing
           <Menu size={24} />
         </button>
         <div>
-          <h1>{current === 'Dashboard' ? 'Dashboard' : current}</h1>
-          <p>
-            {current === 'Dashboard'
-              ? 'Real-time multi-tenant dashboard connected to Supabase PostgreSQL database'
-              : current === 'DGM Session Tracking'
-              ? 'Track table sessions, DGM orders, confirmations, and charges for Fine Dine restaurants.'
-              : 'Digital Food Menu platform operations'}
-          </p>
+          <h1>{displayTitle}</h1>
+          <p>{displaySubtitle}</p>
         </div>
       </div>
 
@@ -990,6 +1073,7 @@ function Header({ current, onMenu, onNavigate, onLogout, onRefresh, isRefreshing
         <button
           className="date-button"
           onClick={onRefresh}
+          disabled={isRefreshing}
           title="Refresh Supabase Data"
           style={{ padding: '8px 12px' }}
         >
@@ -1001,22 +1085,46 @@ function Header({ current, onMenu, onNavigate, onLogout, onRefresh, isRefreshing
         <div className="dropdown-wrap">
           <button className="date-button" onClick={() => setDateOpen(v => !v)}>
             <CalendarDays size={18} />
-            <span>{date}</span>
+            <span>{dateFilter}</span>
             <ChevronDown size={15} />
           </button>
           {dateOpen && (
-            <div className="dropdown date-dropdown">
-              {['All Time (Live)', 'Today', 'Last 7 Days', 'Last 30 Days'].map(d => (
+            <div className="dropdown date-dropdown" style={{ minWidth: 220 }}>
+              {['All Time (Live)', 'Today', 'Last 7 Days', 'Last 30 Days', 'This Month', 'Custom Range'].map(d => (
                 <button
                   key={d}
+                  style={{ fontWeight: dateFilter === d ? 700 : 500, color: dateFilter === d ? '#F97316' : undefined }}
                   onClick={() => {
-                    setDate(d);
-                    setDateOpen(false);
+                    if (onChangeDateFilter) onChangeDateFilter(d);
+                    if (d !== 'Custom Range') setDateOpen(false);
                   }}
                 >
                   {d}
                 </button>
               ))}
+              {dateFilter === 'Custom Range' && (
+                <div style={{ padding: '8px 10px', borderTop: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <input
+                    type="date"
+                    value={customDateFrom}
+                    onChange={e => onChangeCustomDate && onChangeCustomDate(e.target.value, customDateTo)}
+                    style={{ fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #cbd5e1' }}
+                  />
+                  <input
+                    type="date"
+                    value={customDateTo}
+                    onChange={e => onChangeCustomDate && onChangeCustomDate(customDateFrom, e.target.value)}
+                    style={{ fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #cbd5e1' }}
+                  />
+                  <button
+                    type="button"
+                    style={{ background: '#F97316', color: '#fff', borderRadius: 6, padding: '5px 8px', fontSize: 12, fontWeight: 600, textAlign: 'center' }}
+                    onClick={() => setDateOpen(false)}
+                  >
+                    Apply Range
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

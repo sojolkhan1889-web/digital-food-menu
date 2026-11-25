@@ -82,6 +82,10 @@ import { getSuperAdminRestaurants } from './super/superAdminStore';
 import { supabaseTableRepository } from '../data/supabaseTableRepository';
 import { supabase } from '../lib/supabaseClient';
 import {
+  getRestaurantReminders,
+  acknowledgeRestaurantReminder
+} from './super/revenueSettlementService';
+import {
   getAdminTheme,
   setAdminTheme,
   getStoredSettlementDue,
@@ -834,6 +838,24 @@ export default function RestaurantPanel({
 
   // Live settlements state from Supabase (Instant Realtime WebSocket)
   const [settlements, setSettlements] = useState([]);
+  const [activeReminder, setActiveReminder] = useState(() => {
+    const list = getRestaurantReminders(panelRestoId);
+    return list.find(r => !r.acknowledged) || null;
+  });
+
+  useEffect(() => {
+    const refreshRem = () => {
+      const list = getRestaurantReminders(panelRestoId);
+      setActiveReminder(list.find(r => !r.acknowledged) || null);
+    };
+    refreshRem();
+    window.addEventListener('phonemenu_payment_reminder_sent', refreshRem);
+    window.addEventListener('storage', refreshRem);
+    return () => {
+      window.removeEventListener('phonemenu_payment_reminder_sent', refreshRem);
+      window.removeEventListener('storage', refreshRem);
+    };
+  }, [panelRestoId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1569,6 +1591,39 @@ export default function RestaurantPanel({
             >
               <X className="w-3.5 h-3.5" />
             </button>
+          </div>
+        )}
+
+        {/* Super Admin Payment Reminder Notification */}
+        {activeReminder && dueSettlementAmount > 0 && (
+          <div className="mx-4 sm:mx-6 mt-3 p-3.5 rounded-[5px] bg-amber-500/10 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-xs flex items-center justify-between gap-3 animate-[fadeIn_0.2s_ease-out]">
+            <div className="flex items-center gap-2.5">
+              <Bell className="w-4 h-4 shrink-0 text-amber-500" />
+              <div>
+                <strong>Platform Fee Payment Reminder:</strong> Outstanding Balance{' '}
+                <strong className="font-mono">৳{dueSettlementAmount}</strong> ({activeReminder.periodsText})
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsSettlementModalOpen(true)}
+                className="px-2.5 py-1 rounded-[5px] bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] cursor-pointer"
+              >
+                Settle Due
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  acknowledgeRestaurantReminder(panelRestoId);
+                  setActiveReminder(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 cursor-pointer"
+                title="Dismiss reminder"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         )}
 
