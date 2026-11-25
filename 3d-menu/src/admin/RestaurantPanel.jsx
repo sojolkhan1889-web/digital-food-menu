@@ -1864,6 +1864,7 @@ export default function RestaurantPanel({
               }}
               repository={supabaseTableRepository}
               isDark={isDark}
+              isSuperAdmin={false}
             />
           )}
 

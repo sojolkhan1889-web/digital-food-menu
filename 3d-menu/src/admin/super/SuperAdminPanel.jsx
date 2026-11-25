@@ -605,10 +605,25 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
   };
 
   const handleUpdateRestaurant = async (id, data) => {
-    const updated = restaurants.map(r => r.id === id ? { ...r, ...data } : r);
+    const nextTableCount = data.tableCount ?? data.table_count;
+    const updated = restaurants.map(r => r.id === id ? {
+      ...r,
+      ...data,
+      ...(nextTableCount !== undefined ? {
+        tableCount: Number(nextTableCount),
+        table_count: Number(nextTableCount),
+        activeTableCount: Number(nextTableCount),
+        active_table_count: Number(nextTableCount),
+        activeQrCount: Number(nextTableCount)
+      } : {})
+    } : r);
     setRestaurants(updated);
     saveSuperAdminRestaurants(updated);
     await updateRestaurantInSupabase(id, data);
+    const liveRestos = await fetchLiveRestaurantsFromSupabase();
+    if (Array.isArray(liveRestos) && liveRestos.length > 0) {
+      setRestaurants(liveRestos);
+    }
     showToast(`Updated "${data.name || 'Restaurant'}" in PostgreSQL!`);
   };
 

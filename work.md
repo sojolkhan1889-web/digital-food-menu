@@ -1417,3 +1417,12 @@ This file records all architectural specifications, resolved issues, feature imp
 - **3. Super Admin `DGM Session Tracking` Type Switcher (`DGMSessionTrackingView.jsx`):**
   - Converted the static `Restaurant Type` badge into an interactive selector switching between **`Fine Dine (DGM Logic)`** and **`Non-Fine Dine (12h QR Logic)`**.
   - Filters KPI metrics (`fetchSuperAdminDGMMetrics({ restaurantType })`), sessions (`fetchSuperAdminDGMSessions({ ..., restaurantType })`), Restaurant dropdown, Table/QR filter (`Customer QR`), and Billing Ledger rows cleanly by type.
+
+### Update: Super Admin Table Count Sync Fix & Restaurant Panel Table QR Permission Guard (November 2026)
+- **1. Fixed `Edit Restaurant` Table Count Persistence (`superAdminStore.js` & `SuperAdminPanel.jsx`):**
+  - Previously, `updateRestaurantInSupabase` only updated `restaurants.table_count` without syncing `restaurant_tables` rows, causing `fetchLiveRestaurantsFromSupabase` to overwrite `table_count` back to the old `restaurant_tables` row count (e.g. `19` for Hungry Bite Café).
+  - Added `syncRestaurantTablesToCount(restaurantId, targetCount)` inside `updateRestaurantInSupabase` to insert missing tables or soft-delete excess tables (`deleted_at`) in `restaurant_tables` and keep `restaurant_settings.table_count` synced.
+  - Updated `handleUpdateRestaurant` in `SuperAdminPanel.jsx` to refresh live restaurants from Supabase immediately after saving.
+- **2. Restaurant Panel `Table QR Management` Permission Guard (`TableQRManagement.jsx` & `RestaurantPanel.jsx`):**
+  - Enforced `isSuperAdmin = false` for Restaurant Panel owners so they cannot create, edit, activate/deactivate, or delete tables.
+  - Attempting any of those 4 actions displays **`Permission Not Granted — Only Super Admin can create, edit, deactivate, or delete tables.`** while keeping `Download QR`, `Preview QR`, and `Copy Link` functional.

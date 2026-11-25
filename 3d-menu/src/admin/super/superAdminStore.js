@@ -469,6 +469,71 @@ export const syncNewRestaurantToSupabase = async (resto) => {
 };
 
 // 7.1 Update restaurant details in Supabase
+const generateTablePublicId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'pub_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+};
+
+const syncRestaurantTablesToCount = async (restaurantId, targetCount) => {
+  const safeTarget = Math.max(1, Number(targetCount) || 1);
+  const { data: existing, error } = await supabase
+    .from('restaurant_tables')
+    .select('id, table_no, is_active, status')
+    .eq('restaurant_id', String(restaurantId))
+    .is('deleted_at', null)
+    .order('table_no', { ascending: true });
+
+  if (error) {
+    console.warn('syncRestaurantTablesToCount list warning:', error.message);
+    return;
+  }
+
+  const current = existing || [];
+  if (current.length < safeTarget) {
+    const maxNo = current.reduce((max, t) => Math.max(max, Number(t.table_no) || 0), 0);
+    const toInsert = [];
+    const nowIso = new Date().toISOString();
+    for (let i = 1; i <= safeTarget - current.length; i += 1) {
+      const tableNo = maxNo + i;
+      const pad3 = String(tableNo).padStart(3, '0');
+      const pad2 = String(tableNo).padStart(2, '0');
+      toInsert.push({
+        id: `tbl_${restaurantId}_${pad3}_${Date.now().toString(36)}_${i}`,
+        restaurant_id: String(restaurantId),
+        table_id: `TBL-${pad3}`,
+        table_number: `Table ${pad2}`,
+        table_no: tableNo,
+        public_id: generateTablePublicId(),
+        is_active: true,
+        status: 'active',
+        created_at: nowIso,
+        updated_at: nowIso
+      });
+    }
+    if (toInsert.length > 0) {
+      const { error: insErr } = await supabase.from('restaurant_tables').insert(toInsert);
+      if (insErr) console.warn('syncRestaurantTablesToCount insert warning:', insErr.message);
+    }
+  } else if (current.length > safeTarget) {
+    const excessIds = current.slice(safeTarget).map(t => t.id);
+    if (excessIds.length > 0) {
+      const nowIso = new Date().toISOString();
+      const { error: delErr } = await supabase
+        .from('restaurant_tables')
+        .update({
+          deleted_at: nowIso,
+          is_active: false,
+          status: 'deleted',
+          updated_at: nowIso
+        })
+        .in('id', excessIds);
+      if (delErr) console.warn('syncRestaurantTablesToCount soft-delete warning:', delErr.message);
+    }
+  }
+};
+
 export const updateRestaurantInSupabase = async (id, updates = {}) => {
   try {
     const payload = {};
@@ -491,8 +556,10 @@ export const updateRestaurantInSupabase = async (id, updates = {}) => {
       payload.address = updates.location || updates.address;
     }
     if (updates.plan !== undefined) payload.plan = updates.plan;
-    if (updates.tableCount !== undefined || updates.table_count !== undefined) {
-      payload.table_count = Number(updates.tableCount || updates.table_count);
+    const hasTableCountUpdate = updates.tableCount !== undefined || updates.table_count !== undefined;
+    const nextTableCount = hasTableCountUpdate ? Math.max(1, Number(updates.tableCount ?? updates.table_count) || 1) : null;
+    if (hasTableCountUpdate) {
+      payload.table_count = nextTableCount;
     }
     if (updates.status !== undefined) payload.status = updates.status;
     if (updates.avatar !== undefined) payload.avatar = updates.avatar;
@@ -502,11 +569,16 @@ export const updateRestaurantInSupabase = async (id, updates = {}) => {
     const { error } = await supabase.from('restaurants').update(payload).eq('id', String(id));
     if (error) console.warn('Supabase update restaurant error:', error);
 
-    // If name or phone was updated, keep restaurant_settings in sync
-    if (updates.name || updates.ownerPhone || updates.phone) {
+    if (hasTableCountUpdate && nextTableCount !== null) {
+      await syncRestaurantTablesToCount(id, nextTableCount);
+    }
+
+    // If name, phone, or table_count was updated, keep restaurant_settings in sync
+    if (updates.name || updates.ownerPhone || updates.phone || hasTableCountUpdate) {
       const setPayload = {};
       if (updates.name) setPayload.name = updates.name;
       if (updates.ownerPhone || updates.phone) setPayload.phone = updates.ownerPhone || updates.phone;
+      if (hasTableCountUpdate && nextTableCount !== null) setPayload.table_count = nextTableCount;
       await supabase.from('restaurant_settings').update(setPayload).eq('restaurant_id', String(id));
     }
   } catch (err) {

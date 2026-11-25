@@ -203,7 +203,8 @@ function StatCard({ label, value, detail, variant, icon: Icon }) {
 export default function TableQRManagement({
   restaurant = { id: 'resto_001', name: 'Monkey Bhai', slug: '3d-dine' },
   repository = supabaseTableRepository,
-  isDark = false
+  isDark = false,
+  isSuperAdmin = false
 }) {
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -333,8 +334,16 @@ export default function TableQRManagement({
 
   const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-  const createTable = () =>
-    doAction(
+  const denyRestaurantAction = () => {
+    toast('Permission Not Granted — Only Super Admin can create, edit, deactivate, or delete tables.', 'error');
+  };
+
+  const createTable = () => {
+    if (!isSuperAdmin) {
+      denyRestaurantAction();
+      return;
+    }
+    return doAction(
       'create',
       async () => {
         const created = await repository.create({ restaurantId: restaurant.id });
@@ -345,9 +354,14 @@ export default function TableQRManagement({
       },
       'New table and unique QR code created.'
     );
+  };
 
-  const toggle = (row) =>
-    doAction(
+  const toggle = (row) => {
+    if (!isSuperAdmin) {
+      denyRestaurantAction();
+      return;
+    }
+    return doAction(
       row.id,
       () =>
         repository.setActive({
@@ -357,8 +371,13 @@ export default function TableQRManagement({
         }),
       `${formatTable(row.tableNo)} ${row.active ? 'deactivated' : 'activated'}.`
     );
+  };
 
   const remove = (row) => {
+    if (!isSuperAdmin) {
+      denyRestaurantAction();
+      return;
+    }
     if (
       !window.confirm(
         `Delete ${formatTable(row.tableNo)}? Its existing QR must stop working after the backend revokes it. This cannot be undone.`
@@ -375,6 +394,11 @@ export default function TableQRManagement({
 
   const saveEdit = (e) => {
     e.preventDefault();
+    if (!isSuperAdmin) {
+      denyRestaurantAction();
+      setEditing(null);
+      return;
+    }
     if (!editing) return;
     doAction(
       editing.id,
@@ -595,6 +619,10 @@ export default function TableQRManagement({
                           className="action-button edit-action"
                           disabled={!!busy}
                           onClick={() => {
+                            if (!isSuperAdmin) {
+                              denyRestaurantAction();
+                              return;
+                            }
                             setEditing(row);
                             setEditValue(String(row.tableNo));
                           }}
@@ -707,6 +735,10 @@ export default function TableQRManagement({
                     className="action-button edit-action"
                     disabled={!!busy}
                     onClick={() => {
+                      if (!isSuperAdmin) {
+                        denyRestaurantAction();
+                        return;
+                      }
                       setEditing(row);
                       setEditValue(String(row.tableNo));
                     }}

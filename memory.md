@@ -257,3 +257,6 @@ Before writing or editing code for any new task, verify:
   * Non-Fine Dine restaurants have 1 single Customer QR Code for multiple customers and track sessions per device (`getOrCreateVisitorToken()`) with a **12-hour lock** (`tracking_version: 'v1_non_fine_12h'`, `table_id: 'non_fine_qr'`, `table_number: 'Customer QR'`).
   * Only 1 scan, 1 DGM order (`DGM-XXXX`), and 1 `৳5` billing ledger entry are recorded per device per 12h window; repeat scans from the same device within 12h reuse the active session.
   * Fine Dine (`v1_fine_dine_90m` / `handleFineDineTableVisit`) and Non-Fine Dine (`v1_non_fine_12h` / `handleNonFineDineDeviceVisit`) are strictly isolated in both `App.jsx` and `DGMSessionTrackingView.jsx` (`Fine Dine (DGM Logic)` vs `Non-Fine Dine (12h QR Logic)`).
+- **Table QR Management Permission & Table Count Sync Rules (Nov 2026)**:
+  * Only Super Admin can create, edit, activate/deactivate, or delete tables (`TableQRManagement` with `isSuperAdmin={false}` in `RestaurantPanel.jsx` shows `Permission Not Granted` on those actions; `Download QR`, `Preview QR`, and `Copy Link` remain allowed).
+  * Super Admin `Edit Restaurant` table count updates sync `restaurant_tables` rows via `syncRestaurantTablesToCount` so `fetchLiveRestaurantsFromSupabase` never reverts `table_count`.
