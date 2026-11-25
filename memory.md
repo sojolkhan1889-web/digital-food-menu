@@ -253,3 +253,7 @@ Before writing or editing code for any new task, verify:
   * Both Restaurant Panel QR payments (`01854386847` default / Super Admin `merchant_qr_config`) and Physical QR Stand payments submit via `RestaurantDueSettlementModal` into `settlements` with `status: 'pending_verification'`.
   * `pending_verification` and `rejected` records MUST NOT reduce Restaurant `dueSettlementAmount` or Super Admin `Total Revenue Collected` / `Total Outstanding` until Super Admin clicks `Verify & Confirm`.
   * All table 3-dots dropdowns in Revenue & Settlement views render via React Portal (`ActionPortalMenu`) to prevent clipping in horizontal-scroll tables.
+- **Non-Fine Dine 12h QR Session Rules (Nov 2026)**:
+  * Non-Fine Dine restaurants have 1 single Customer QR Code for multiple customers and track sessions per device (`getOrCreateVisitorToken()`) with a **12-hour lock** (`tracking_version: 'v1_non_fine_12h'`, `table_id: 'non_fine_qr'`, `table_number: 'Customer QR'`).
+  * Only 1 scan, 1 DGM order (`DGM-XXXX`), and 1 `৳5` billing ledger entry are recorded per device per 12h window; repeat scans from the same device within 12h reuse the active session.
+  * Fine Dine (`v1_fine_dine_90m` / `handleFineDineTableVisit`) and Non-Fine Dine (`v1_non_fine_12h` / `handleNonFineDineDeviceVisit`) are strictly isolated in both `App.jsx` and `DGMSessionTrackingView.jsx` (`Fine Dine (DGM Logic)` vs `Non-Fine Dine (12h QR Logic)`).

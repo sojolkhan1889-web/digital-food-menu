@@ -1,4 +1,9 @@
 import { supabase } from '../lib/supabaseClient.js';
+import { recordMenuScan } from './menuStore.js';
+
+export const NON_FINE_TRACKING_VERSION = 'v1_non_fine_12h';
+const NON_FINE_LOCK_MS = 12 * 60 * 60 * 1000; // 12 hours per device
+const NON_FINE_LOCK_STORAGE_PREFIX = 'dgm_nonfine_12h_lock_';
 
 export const isSameCalendarDay = (dateInput) => {
   if (!dateInput) return false;
@@ -105,6 +110,213 @@ export const confirmFineDineTableSession = async (sessionId) => {
 };
 
 /**
+ * Handle a single Customer QR visit for Non-Fine Dine restaurants.
+ * Strictly isolated from Fine Dine table logic:
+ * - Uses persistent customer device token (first_visitor_id) + tracking_version = 'v1_non_fine_12h'.
+ * - Locks for 12 hours per device per restaurant.
+ * - First visit (or after 12h expiry): creates 1 session (12h), 1 scan, 1 DGM order, 1 ৳5 billing ledger row.
+ * - Subsequent visits within 12h on same device: reuses active session, 0 new scans/orders, suppresses popup if confirmed.
+ */
+export const handleNonFineDineDeviceVisit = async ({ restaurantId }) => {
+  if (!restaurantId) return { success: false, error: 'Missing restaurantId' };
+
+  const deviceId = getOrCreateVisitorToken();
+  const lockKey = `${NON_FINE_LOCK_STORAGE_PREFIX}${restaurantId}_${deviceId}`;
+  const now = new Date();
+  const nowMs = now.getTime();
+  const nowIso = now.toISOString();
+
+  // 1. Check Supabase for an active 12h Non-Fine Dine session for THIS device & THIS restaurant
+  try {
+    const { data: activeRows, error: findErr } = await supabase
+      .from('dgm_table_sessions')
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .eq('tracking_version', NON_FINE_TRACKING_VERSION)
+      .eq('first_visitor_id', deviceId)
+      .gt('expires_at', nowIso)
+      .order('started_at', { ascending: false })
+      .limit(1);
+
+    if (!findErr && Array.isArray(activeRows) && activeRows.length > 0) {
+      const existing = activeRows[0];
+      try {
+        localStorage.setItem(lockKey, JSON.stringify({
+          session_id: existing.id,
+          session_code: existing.session_code,
+          expires_at: existing.expires_at,
+          is_confirmed: Boolean(existing.confirmed_at)
+        }));
+      } catch {}
+
+      return {
+        success: true,
+        applied: true,
+        is_new_session: false,
+        session_id: existing.id,
+        session_code: existing.session_code,
+        started_at: existing.started_at,
+        expires_at: existing.expires_at,
+        is_confirmed: Boolean(existing.confirmed_at),
+        visitorToken: deviceId
+      };
+    }
+  } catch (err) {
+    console.warn('Non-Fine Dine active session check warning:', err);
+  }
+
+  // 2. Local fast-lock guard against React StrictMode / simultaneous double-mount
+  try {
+    const cachedRaw = localStorage.getItem(lockKey);
+    if (cachedRaw) {
+      const cached = JSON.parse(cachedRaw);
+      if (cached?.expires_at && new Date(cached.expires_at).getTime() > nowMs) {
+        return {
+          success: true,
+          applied: true,
+          is_new_session: false,
+          session_id: cached.session_id,
+          session_code: cached.session_code,
+          expires_at: cached.expires_at,
+          is_confirmed: Boolean(cached.is_confirmed),
+          visitorToken: deviceId
+        };
+      }
+    }
+  } catch {}
+
+  // 3. Start a new 12-hour device session + 1 scan + 1 billing ledger + 1 DGM order
+  const expiresAtIso = new Date(nowMs + NON_FINE_LOCK_MS).toISOString();
+  const codeNum = 1000 + Math.floor(Math.random() * 9000);
+  const sessionCode = `#S-${codeNum}`;
+  const dgmOrderNum = `DGM-${codeNum}`;
+  const sessionId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `${Date.now().toString(16).padStart(8, '0')}-0000-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, '0')}`;
+
+  // Reserve local lock immediately to prevent concurrent mount duplicate creation
+  try {
+    localStorage.setItem(lockKey, JSON.stringify({
+      session_id: sessionId,
+      session_code: sessionCode,
+      expires_at: expiresAtIso,
+      is_confirmed: false
+    }));
+  } catch {}
+
+  try {
+    const { error: sessErr } = await supabase.from('dgm_table_sessions').insert([{
+      id: sessionId,
+      restaurant_id: restaurantId,
+      table_id: 'non_fine_qr',
+      table_no: 1,
+      table_number: 'Customer QR',
+      session_code: sessionCode,
+      started_at: nowIso,
+      expires_at: expiresAtIso,
+      first_visitor_id: deviceId,
+      status: 'active',
+      tracking_version: NON_FINE_TRACKING_VERSION,
+      created_at: nowIso
+    }]);
+
+    if (sessErr) {
+      console.warn('Non-Fine Dine session insert error:', sessErr.message);
+      try { localStorage.removeItem(lockKey); } catch {}
+      return { success: false, error: sessErr.message };
+    }
+
+    // Record 1 Scan, 1 Billing Ledger row (৳5), and 1 DGM Order in parallel
+    await Promise.all([
+      recordMenuScan(restaurantId, 'Customer QR'),
+      supabase.from('dgm_billing_ledger').insert([{
+        restaurant_id: restaurantId,
+        table_id: 'non_fine_qr',
+        session_id: sessionId,
+        session_code: sessionCode,
+        amount: 5,
+        currency: '৳',
+        billing_status: 'pending',
+        created_at: nowIso
+      }]),
+      supabase.from('orders').insert([{
+        id: `ord_nf_${Date.now()}_${codeNum}`,
+        restaurant_id: restaurantId,
+        order_number: dgmOrderNum,
+        table_number: 'Customer QR',
+        customer_name: 'Walk-in QR Customer',
+        dining_mode: 'dine-in',
+        items: [],
+        subtotal: 0,
+        vat: 0,
+        service_fee: 0,
+        total_amount: 0,
+        payment_method: 'Cash',
+        payment_status: 'paid',
+        order_status: 'confirmed',
+        created_at: nowIso
+      }])
+    ]);
+
+    return {
+      success: true,
+      applied: true,
+      is_new_session: true,
+      session_id: sessionId,
+      session_code: sessionCode,
+      started_at: nowIso,
+      expires_at: expiresAtIso,
+      is_confirmed: false,
+      visitorToken: deviceId
+    };
+  } catch (err) {
+    console.warn('Exception in handleNonFineDineDeviceVisit:', err);
+    return { success: false, error: err?.message || 'Non-fine dine visit error' };
+  }
+};
+
+/**
+ * Confirm order inside a Non-Fine Dine 12-hour device session.
+ * Suppresses Order Confirmation popup for the remainder of the 12h lock on this device.
+ */
+export const confirmNonFineDineSession = async (sessionId, restaurantId) => {
+  if (!sessionId) return { success: false, reason: 'no_session_id' };
+  const deviceId = getOrCreateVisitorToken();
+  const nowIso = new Date().toISOString();
+
+  try {
+    const { error } = await supabase
+      .from('dgm_table_sessions')
+      .update({
+        confirmed_at: nowIso,
+        confirmed_by_visitor_id: deviceId
+      })
+      .eq('id', sessionId)
+      .eq('tracking_version', NON_FINE_TRACKING_VERSION);
+
+    if (restaurantId) {
+      const lockKey = `${NON_FINE_LOCK_STORAGE_PREFIX}${restaurantId}_${deviceId}`;
+      try {
+        const raw = localStorage.getItem(lockKey);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          localStorage.setItem(lockKey, JSON.stringify({ ...parsed, is_confirmed: true }));
+        }
+      } catch {}
+    }
+
+    if (error) {
+      console.warn('confirmNonFineDineSession error:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true, confirmed_at: nowIso };
+  } catch (err) {
+    console.warn('Exception in confirmNonFineDineSession:', err);
+    return { success: false, error: err?.message };
+  }
+};
+
+/**
  * Fetch table order counts for a restaurant's Table QR Management page.
  * Returns map of table statistics: { [table_id or table_no]: { todayOrders, totalOrders, hasActiveSession, activeSession } }
  */
@@ -169,6 +381,7 @@ export const fetchFineDineTableStats = async (restaurantId) => {
  */
 export const fetchSuperAdminDGMSessions = async ({
   restaurantId = 'all',
+  restaurantType = 'all', // 'fine' | 'non_fine' | 'all'
   tableNo = 'all',
   status = 'all', // 'all' | 'active' | 'ending_soon' | 'expired'
   tab = 'live',   // 'live' | 'today' | 'all' | 'ledger'
@@ -182,6 +395,12 @@ export const fetchSuperAdminDGMSessions = async ({
 
     if (restaurantId && restaurantId !== 'all') {
       query = query.eq('restaurant_id', restaurantId);
+    }
+
+    if (restaurantType === 'fine') {
+      query = query.neq('tracking_version', NON_FINE_TRACKING_VERSION);
+    } else if (restaurantType === 'non_fine') {
+      query = query.eq('tracking_version', NON_FINE_TRACKING_VERSION);
     }
 
     if (tableNo && tableNo !== 'all') {
@@ -206,6 +425,7 @@ export const fetchSuperAdminDGMSessions = async ({
 
     const nowMs = Date.now();
     let enriched = (data || []).map((s) => {
+      const isNonFine = s.tracking_version === NON_FINE_TRACKING_VERSION;
       const expiresMs = new Date(s.expires_at).getTime();
       const diffMs = expiresMs - nowMs;
       const isExpired = diffMs <= 0;
@@ -220,8 +440,7 @@ export const fetchSuperAdminDGMSessions = async ({
         computedStatus = 'Ending Soon';
       }
 
-      const totalDurationMs = 90 * 60 * 1000;
-      const elapsedMs = Math.max(0, totalDurationMs - diffMs);
+      const totalDurationMs = isNonFine ? NON_FINE_LOCK_MS : (90 * 60 * 1000);
       const progressPercent = isExpired ? 0 : Math.min(100, Math.max(4, Math.round((diffMs / totalDurationMs) * 100)));
 
       let expiresDisplay = 'Expired';
@@ -235,6 +454,7 @@ export const fetchSuperAdminDGMSessions = async ({
 
       return {
         ...s,
+        isNonFine,
         diffMs,
         minutesLeft,
         isExpired,
@@ -312,22 +532,43 @@ export const fetchDGMBillingLedger = async ({ restaurantId = 'all', limit = 100 
 /**
  * Fetch Super Admin overall metrics for DGM Fine Dine sessions.
  */
-export const fetchSuperAdminDGMMetrics = async () => {
+export const fetchSuperAdminDGMMetrics = async ({ restaurantType = 'all' } = {}) => {
   try {
     const [sessionsRes, nonFineOrdersRes] = await Promise.all([
       supabase
         .from('dgm_table_sessions')
-        .select('id, started_at, expires_at, confirmed_at'),
+        .select('id, session_code, started_at, expires_at, confirmed_at, tracking_version, restaurant_id'),
       supabase
         .from('orders')
-        .select('id, created_at, restaurant_id')
+        .select('id, order_number, created_at, restaurant_id')
         .eq('restaurant_id', 'resto_002')
     ]);
 
     const allSessions = sessionsRes.data || [];
-    const nonFineOrders = nonFineOrdersRes.data || [];
+    const nonFineOrdersRaw = nonFineOrdersRes.data || [];
 
-    if (!allSessions.length && !nonFineOrders.length) {
+    const fineSessions = allSessions.filter(s => s.tracking_version !== NON_FINE_TRACKING_VERSION);
+    const nonFineSessions = allSessions.filter(s => s.tracking_version === NON_FINE_TRACKING_VERSION);
+
+    // Avoid double-counting: only count historical non-fine orders that don't have a matching v1_non_fine_12h session
+    const nonFineSessionCodes = new Set(
+      nonFineSessions.map(s => String(s.session_code || '').replace(/\D/g, '')).filter(Boolean)
+    );
+    const legacyNonFineOrders = nonFineOrdersRaw.filter(o => {
+      const num = String(o.order_number || '').replace(/\D/g, '');
+      return !num || !nonFineSessionCodes.has(num);
+    });
+
+    const targetSessions =
+      restaurantType === 'fine'
+        ? fineSessions
+        : restaurantType === 'non_fine'
+        ? nonFineSessions
+        : allSessions;
+
+    const targetLegacyOrders = restaurantType === 'fine' ? [] : legacyNonFineOrders;
+
+    if (!targetSessions.length && !targetLegacyOrders.length) {
       return {
         totalDgmOrders: 0,
         todayOrders: 0,
@@ -340,8 +581,6 @@ export const fetchSuperAdminDGMMetrics = async () => {
     }
 
     const now = new Date();
-    const nowIso = now.toISOString();
-
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
 
@@ -353,20 +592,20 @@ export const fetchSuperAdminDGMMetrics = async () => {
              d.getDate() === yesterday.getDate();
     };
 
-    let totalDgmOrders = allSessions.length + nonFineOrders.length;
+    let totalDgmOrders = targetSessions.length + targetLegacyOrders.length;
     let todayOrders = 0;
     let yesterdayOrders = 0;
     let activeSessions = 0;
     let confirmedSessions = 0;
 
-    allSessions.forEach((s) => {
+    targetSessions.forEach((s) => {
       if (isSameCalendarDay(s.started_at)) todayOrders += 1;
       if (isYesterday(s.started_at)) yesterdayOrders += 1;
       if (new Date(s.expires_at) > now) activeSessions += 1;
       if (s.confirmed_at) confirmedSessions += 1;
     });
 
-    nonFineOrders.forEach((o) => {
+    targetLegacyOrders.forEach((o) => {
       if (isSameCalendarDay(o.created_at)) todayOrders += 1;
       if (isYesterday(o.created_at)) yesterdayOrders += 1;
     });

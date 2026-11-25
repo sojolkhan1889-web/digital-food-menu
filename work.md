@@ -1406,3 +1406,14 @@ This file records all architectural specifications, resolved issues, feature imp
 - **5. Updated Restaurant Panel Payment Banners & Refresh Fix:**
   - Replaced compact reminders with the 3 branded high-contrast SaaS banners (`Pending` amber `#FBBF24` -> `#F59E0B` with remaining grace days pill + dark navy `Settle Due ->`; `Overdue` crimson `#C81E1E` -> `#991B1B` with overdue days pill + white `Settle Due ->`; `After Submit Payment` royal blue `#1D63D0` -> `#0B3C91` `"Thank you for submitting your payment!"` with `Awaiting verification` + `View submission ->`).
   - Removed the initial-load `prevClearedRef` false-positive alert and duplicate top `settlementSuccessMsg` so settled restaurants (`Monkey Bhai`, `Hungry Bite Café`) never get repeated verified banners on page refresh, and the blue `"Thank you for submitting your payment!"` banner vanishes automatically upon Super Admin verification.
+
+### Update: Non-Fine Dine 12-Hour Device-Locked DGM Session & Super Admin Type Switcher (November 2026)
+- **1. Isolated Non-Fine Dine 12-Hour Device Lock (`dgmSessionStore.js` & `App.jsx`):**
+  - Added `handleNonFineDineDeviceVisit({ restaurantId })` and `confirmNonFineDineSession(sessionId, restaurantId)` strictly for Non-Fine Dine restaurants (`!isCurrentFineDine`), using `tracking_version = 'v1_non_fine_12h'`, `table_id = 'non_fine_qr'`, `table_number = 'Customer QR'`, and a **12-hour (`12 * 60 * 60 * 1000` ms) device-scoped lock** via `getOrCreateVisitorToken()`.
+  - First QR scan on a customer device creates 1 session (`v1_non_fine_12h`), 1 `menu_scans` entry, 1 `dgm_billing_ledger` entry (`৳5`), and 1 `orders` entry (`DGM-XXXX`). Repeat scans from the same device within 12 hours reuse the active session with 0 extra scans/orders/ledger rows; different devices scanning the same single QR code each get their own independent 12h session.
+  - Fine Dine logic (`handleFineDineTableVisit`, `confirmFineDineTableSession`, `v1_fine_dine_90m`) remains completely untouched and isolated.
+- **2. Order Confirmation Popup & Suppression (`App.jsx`):**
+  - Enabled `isDgmOrderPopupActive` for Non-Fine Dine active 12h sessions; once confirmed via `confirmNonFineDineSession`, the popup is suppressed for the remainder of that device's 12-hour session.
+- **3. Super Admin `DGM Session Tracking` Type Switcher (`DGMSessionTrackingView.jsx`):**
+  - Converted the static `Restaurant Type` badge into an interactive selector switching between **`Fine Dine (DGM Logic)`** and **`Non-Fine Dine (12h QR Logic)`**.
+  - Filters KPI metrics (`fetchSuperAdminDGMMetrics({ restaurantType })`), sessions (`fetchSuperAdminDGMSessions({ ..., restaurantType })`), Restaurant dropdown, Table/QR filter (`Customer QR`), and Billing Ledger rows cleanly by type.

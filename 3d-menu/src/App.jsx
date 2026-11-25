@@ -111,7 +111,12 @@ import {
 } from './data/menuStore';
 import { supabase } from './lib/supabaseClient';
 import { supabaseTableRepository } from './data/supabaseTableRepository';
-import { handleFineDineTableVisit, confirmFineDineTableSession } from './data/dgmSessionStore';
+import {
+  handleFineDineTableVisit,
+  confirmFineDineTableSession,
+  handleNonFineDineDeviceVisit,
+  confirmNonFineDineSession
+} from './data/dgmSessionStore';
 import RestaurantHeader from './components/RestaurantHeader';
 import LanguageSelectionModal from './components/LanguageSelectionModal';
 import {
@@ -1017,6 +1022,8 @@ export default function App() {
     return currentRestoId === 'resto_001' || currentRestoId === 'resto_003';
   }, [activeRestaurant, currentRestoId]);
 
+  const isDgmOrderPopupActive = isTableMode || (!isCurrentFineDine && Boolean(currentDgmSession?.session_id));
+
   // Record real menu scan in Supabase menu_scans or start Fine-Dine 90m session
   const hasRecordedScanRef = useRef(false);
 
@@ -1064,8 +1071,23 @@ export default function App() {
         }).catch((err) => {
           console.warn('Error in handleFineDineTableVisit:', err);
         });
+      } else if (!isCurrentFineDine) {
+        // Non-Fine Dine restaurant: 12-hour device-locked session via single Customer QR
+        handleNonFineDineDeviceVisit({
+          restaurantId: currentRestoId
+        }).then((res) => {
+          if (res && res.applied) {
+            setCurrentDgmSession(res);
+            if (res.is_confirmed) {
+              setIsFineDineConfirmed(true);
+              setIsAutoConfirmPopupOpen(false);
+            }
+          }
+        }).catch((err) => {
+          console.warn('Error in handleNonFineDineDeviceVisit:', err);
+        });
       } else {
-        // Non-fine-dine restaurant or generic primary QR scan
+        // Generic primary QR browse on Fine-Dine restaurant (no table)
         recordMenuScan(currentRestoId, tableNumber || 'Primary Menu QR');
       }
     }
@@ -2662,7 +2684,11 @@ export default function App() {
 
     const sId = currentDgmSession?.session_id || currentDgmSession?.id;
     if (sId) {
-      confirmFineDineTableSession(sId);
+      if (isCurrentFineDine) {
+        confirmFineDineTableSession(sId);
+      } else {
+        confirmNonFineDineSession(sId, currentRestoId);
+      }
       setIsFineDineConfirmed(true);
     }
 
@@ -2805,7 +2831,7 @@ export default function App() {
 
     // Immediately show mandatory order confirmation popup right upon exiting customization (200ms)
     // Customer won't have time to navigate anywhere else before answering
-    if (!isFineDineConfirmed) {
+    if (isDgmOrderPopupActive && !isFineDineConfirmed) {
       autoConfirmTimerRef.current = setTimeout(() => {
         setIsAutoConfirmPopupOpen(true);
       }, 200);
@@ -2816,8 +2842,8 @@ export default function App() {
   const handleCloseSelectedListWithoutConfirm = () => {
     setIsSelectedListOpen(false);
 
-    // If not in verified Table QR mode, do NOT trigger order confirmation popup
-    if (!isTableMode || isFineDineConfirmed) {
+    // If not in verified Table QR mode or active Non-Fine Dine session, do NOT trigger order confirmation popup
+    if (!isDgmOrderPopupActive || isFineDineConfirmed) {
       if (autoConfirmTimerRef.current) {
         clearTimeout(autoConfirmTimerRef.current);
         autoConfirmTimerRef.current = null;
@@ -2914,7 +2940,11 @@ export default function App() {
 
     const sId = currentDgmSession?.session_id || currentDgmSession?.id;
     if (sId) {
-      confirmFineDineTableSession(sId);
+      if (isCurrentFineDine) {
+        confirmFineDineTableSession(sId);
+      } else {
+        confirmNonFineDineSession(sId, currentRestoId);
+      }
       setIsFineDineConfirmed(true);
     }
 
@@ -4182,7 +4212,7 @@ export default function App() {
       {/* Matches reference screenshot media_1794458766645_e708b220.jpg */}
       {/* Table QR mode only: hidden for Primary QR generic browse mode */}
       {/* ======================================================== */}
-      {isAutoConfirmPopupOpen && isTableMode && !isFineDineConfirmed && (
+      {isAutoConfirmPopupOpen && isDgmOrderPopupActive && !isFineDineConfirmed && (
         <div
           className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-[fadeIn_0.2s_ease-out] select-none"
         >
@@ -4551,7 +4581,7 @@ export default function App() {
                   </div>
 
                   {/* 3. Order Confirmation with Waiter Card (Only rendered in Table QR mode; hidden in Primary QR mode) */}
-                  {isTableMode && !isFineDineConfirmed ? (
+                  {isDgmOrderPopupActive && !isFineDineConfirmed ? (
                     <div className="p-4 sm:p-5 rounded-2xl bg-[#121826]/95 border border-white/10 space-y-3.5 shadow-md">
                       <div className="flex items-start gap-3.5">
                         <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
@@ -4594,7 +4624,7 @@ export default function App() {
                         </button>
                       </div>
                     </div>
-                  ) : isTableMode && isFineDineConfirmed ? (
+                  ) : isDgmOrderPopupActive && isFineDineConfirmed ? (
                     <div className="p-4 sm:p-5 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 space-y-3 shadow-md">
                       <div className="flex items-center gap-2.5 text-emerald-400 font-bold text-sm sm:text-base">
                         <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />

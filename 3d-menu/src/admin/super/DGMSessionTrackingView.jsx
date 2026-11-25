@@ -70,10 +70,14 @@ const formatFullDate = (iso) => {
  */
 export const formatTableDisplay = (tableIdOrNo, matchedSession = null) => {
   if (matchedSession?.table_number) return matchedSession.table_number;
+  if (matchedSession?.tracking_version === 'v1_non_fine_12h' || matchedSession?.isNonFine) return 'Customer QR';
   if (matchedSession?.table_no) return `Table ${String(matchedSession.table_no).padStart(2, '0')}`;
   if (!tableIdOrNo) return 'Table 01';
 
   const str = String(tableIdOrNo).trim();
+  if (str === 'non_fine_qr' || /^Customer\s+QR/i.test(str)) {
+    return 'Customer QR';
+  }
   if (/^Table\s+\d+/i.test(str)) {
     const num = parseInt(str.replace(/\D/g, ''), 10);
     return isNaN(num) ? str : `Table ${String(num).padStart(2, '0')}`;
@@ -133,6 +137,7 @@ export default function DGMSessionTrackingView({
   showPageHeader = false
 }) {
   const [activeTab, setActiveTab] = useState('live'); // 'live' | 'today' | 'all' | 'ledger'
+  const [restaurantType, setRestaurantType] = useState('fine'); // 'fine' | 'non_fine'
   const [selectedResto, setSelectedResto] = useState('all');
   const [selectedTable, setSelectedTable] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
@@ -174,12 +179,13 @@ export default function DGMSessionTrackingView({
     setIsRefreshing(true);
     try {
       const [metricsRes, sessionsRes, ledgerRes] = await Promise.all([
-        fetchSuperAdminDGMMetrics(),
+        fetchSuperAdminDGMMetrics({ restaurantType }),
         fetchSuperAdminDGMSessions({
           restaurantId: selectedResto,
           tableNo: 'all',
           status: 'all',
-          tab: 'all'
+          tab: 'all',
+          restaurantType
         }),
         fetchDGMBillingLedger({
           restaurantId: selectedResto,
@@ -196,7 +202,7 @@ export default function DGMSessionTrackingView({
       setIsRefreshing(false);
       setLoading(false);
     }
-  }, [selectedResto, timerTick]);
+  }, [selectedResto, restaurantType, timerTick]);
 
   useEffect(() => {
     loadData();
@@ -227,6 +233,17 @@ export default function DGMSessionTrackingView({
     });
     return m;
   }, [restaurants]);
+
+  const isFineDineResto = useCallback((r) => {
+    const t = String(r?.type || r?.restaurant_type || '').toLowerCase();
+    return t === 'fine' || t === 'fine-dine' || t === 'finedine';
+  }, []);
+
+  const visibleRestaurants = useMemo(() => {
+    return (restaurants || []).filter(r =>
+      restaurantType === 'fine' ? isFineDineResto(r) : !isFineDineResto(r)
+    );
+  }, [restaurants, restaurantType, isFineDineResto]);
 
   // Fast session lookup map by id or session_code
   const sessionMap = useMemo(() => {
@@ -354,17 +371,24 @@ export default function DGMSessionTrackingView({
     });
   }, [sessions, selectedResto, selectedTable, selectedStatus, activeTab, customFrom, customTo]);
 
-  // Filtered Ledger (Restaurant, Table, Date Range)
+  // Filtered Ledger (Restaurant Type, Restaurant, Table, Date Range)
   const filteredLedger = useMemo(() => {
     return (ledger || []).filter(item => {
+      const matched = sessionMap[item.session_id] || sessionMap[item.session_code];
+      const isItemNonFine = matched
+        ? Boolean(matched.isNonFine)
+        : (item.table_id === 'non_fine_qr' || (restoMap[item.restaurant_id] ? !isFineDineResto(restoMap[item.restaurant_id]) : false));
+
+      if (restaurantType === 'fine' && isItemNonFine) return false;
+      if (restaurantType === 'non_fine' && !isItemNonFine) return false;
+
       // Restaurant filter
       if (selectedResto !== 'all' && item.restaurant_id !== selectedResto) {
         return false;
       }
 
-      // Table filter (matches Table 01, Table 02, etc.)
+      // Table filter (matches Table 01, Table 02, Customer QR, etc.)
       if (selectedTable !== 'all') {
-        const matched = sessionMap[item.session_id] || sessionMap[item.session_code];
         const t = formatTableDisplay(item.table_id, matched);
         if (t !== selectedTable) return false;
       }
@@ -376,7 +400,7 @@ export default function DGMSessionTrackingView({
 
       return true;
     });
-  }, [ledger, sessionMap, selectedResto, selectedTable, customFrom, customTo]);
+  }, [ledger, sessionMap, restoMap, restaurantType, isFineDineResto, selectedResto, selectedTable, customFrom, customTo]);
 
   // Total counts & pagination
   const totalCount = activeTab === 'ledger' ? filteredLedger.length : filteredSessions.length;
@@ -413,7 +437,7 @@ export default function DGMSessionTrackingView({
         <div className="dgm-header">
           <div className="dgm-title-area">
             <h1>DGM Session Tracking</h1>
-            <p>Track table sessions, DGM orders, confirmations, and charges for Fine Dine restaurants.</p>
+            <p>Track table & QR sessions, DGM orders, confirmations, and charges for Fine Dine & Non-Fine Dine restaurants.</p>
           </div>
 
           <div className="dgm-header-actions">
@@ -536,8 +560,10 @@ export default function DGMSessionTrackingView({
               }}
             >
               <option value="all">All Restaurants</option>
-              {restaurants.map(r => (
-                <option key={r.id} value={r.id}>{r.name} {r.type === 'fine' ? '(Fine Dine)' : ''}</option>
+              {visibleRestaurants.map(r => (
+                <option key={r.id} value={r.id}>
+                  {r.name} {isFineDineResto(r) ? '(Fine Dine)' : '(Non-Fine Dine)'}
+                </option>
               ))}
             </select>
           </div>
@@ -585,14 +611,24 @@ export default function DGMSessionTrackingView({
           </div>
         </div>
 
-        {/* Restaurant Type Logic Badge */}
-        <div className="dgm-filter-badge-box">
-          <Utensils size={18} className="text-purple-600" />
+        {/* Restaurant Type Switcher */}
+        <div className="dgm-filter-item">
+          <Utensils size={18} className="dgm-filter-icon" style={{ color: restaurantType === 'fine' ? '#7c3aed' : '#0284c7' }} />
           <div className="dgm-filter-inner">
             <span className="dgm-filter-label">Restaurant Type</span>
-            <span className="dgm-badge-fine-logic">
-              Fine Dine (DGM Logic)
-            </span>
+            <select
+              className="dgm-filter-select"
+              value={restaurantType}
+              onChange={(e) => {
+                setRestaurantType(e.target.value);
+                setSelectedResto('all');
+                setSelectedTable('all');
+                setPage(1);
+              }}
+            >
+              <option value="fine">Fine Dine (DGM Logic)</option>
+              <option value="non_fine">Non-Fine Dine (12h QR Logic)</option>
+            </select>
           </div>
         </div>
       </div>
@@ -757,8 +793,8 @@ export default function DGMSessionTrackingView({
               ) : (
                 paginatedSessions.map((row) => {
                   const resto = restoMap[row.restaurant_id] || {
-                    name: row.restaurant_id === 'resto_001' ? 'Monkey Bhai' : (row.restaurant_id === 'resto_003' ? 'Spice Lounge' : row.restaurant_id),
-                    type: 'fine'
+                    name: row.restaurant_id === 'resto_001' ? 'Monkey Bhai' : (row.restaurant_id === 'resto_002' ? 'Hungry Bite Café' : (row.restaurant_id === 'resto_003' ? 'Spice Lounge' : row.restaurant_id)),
+                    type: row.isNonFine ? 'non_fine' : 'fine'
                   };
                   const colorPreset = RESTAURANT_COLORS[row.restaurant_id] || { bg: '#312e81', text: '#818cf8', label: (resto.name || 'RS').substring(0, 2).toUpperCase() };
 
@@ -793,7 +829,12 @@ export default function DGMSessionTrackingView({
                           </div>
                           <div className="dgm-resto-info">
                             <span className="dgm-resto-name">{resto.name}</span>
-                            <span className="dgm-resto-type-pill">Fine Dine</span>
+                            <span
+                              className="dgm-resto-type-pill"
+                              style={row.isNonFine ? { background: '#e0f2fe', color: '#0369a1' } : undefined}
+                            >
+                              {row.isNonFine ? 'Non-Fine Dine · 12h QR' : 'Fine Dine'}
+                            </span>
                           </div>
                         </div>
                       </td>
@@ -801,7 +842,7 @@ export default function DGMSessionTrackingView({
                       {/* Table */}
                       <td>
                         <span className="dgm-table-badge">
-                          {row.table_number || `Table ${String(row.table_no).padStart(2, '0')}`}
+                          {row.table_number || (row.isNonFine ? 'Customer QR' : `Table ${String(row.table_no).padStart(2, '0')}`)}
                         </span>
                       </td>
 
@@ -913,7 +954,7 @@ export default function DGMSessionTrackingView({
               ) : (
                 paginatedLedger.map((item) => {
                   const resto = restoMap[item.restaurant_id] || {
-                    name: item.restaurant_id === 'resto_001' ? 'Monkey Bhai' : (item.restaurant_id === 'resto_003' ? 'Spice Lounge' : item.restaurant_id)
+                    name: item.restaurant_id === 'resto_001' ? 'Monkey Bhai' : (item.restaurant_id === 'resto_002' ? 'Hungry Bite Café' : (item.restaurant_id === 'resto_003' ? 'Spice Lounge' : item.restaurant_id))
                   };
                   const matchedSession = sessionMap[item.session_id] || sessionMap[item.session_code];
                   const tableDisplay = formatTableDisplay(item.table_id, matchedSession);
