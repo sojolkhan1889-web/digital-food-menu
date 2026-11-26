@@ -190,16 +190,24 @@ export default function RevenueOverviewView({
     };
   }, [restaurants, liveCycleSummary, orders.length, feePerBill, allTransactions]);
 
-  // 6. Trend Series (Daily, Weekly, Monthly)
+  // 6. Trend Series (Daily, Weekly, Monthly) — derived from Single-Source Cycles
   const trendData = useMemo(() => {
+    const cycleBills = (cycles || []).flatMap(c =>
+      (c.orders || []).map(o => ({
+        ...o,
+        createdAt: o.date || o.createdAt,
+        created_at: o.date || o.createdAt,
+        platformFee: o.fee || feePerBill
+      }))
+    );
     return buildRevenueTrendSeries({
-      orders,
+      orders: cycleBills,
       transactions: allTransactions,
       feePerBill,
       granularity,
       bounds
     });
-  }, [orders, allTransactions, feePerBill, granularity, bounds]);
+  }, [cycles, allTransactions, feePerBill, granularity, bounds]);
 
   // 7. Donut Breakdown (All-Time Collection Breakdown As of Today)
   const donutMetrics = useMemo(() => {
