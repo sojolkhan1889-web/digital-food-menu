@@ -555,6 +555,50 @@ export const fetchSuperAdminDGMSessions = async ({
       };
     });
 
+    // Include historical pre-session Non-Fine Dine orders (e.g. resto_002) that don't have a v1_non_fine_12h session yet
+    if (restaurantType === 'non_fine' || restaurantType === 'all') {
+      let ordQuery = supabase
+        .from('orders')
+        .select('id, restaurant_id, order_number, table_number, created_at')
+        .eq('restaurant_id', 'resto_002');
+      if (restaurantId && restaurantId !== 'all') {
+        ordQuery = ordQuery.eq('restaurant_id', restaurantId);
+      }
+      const { data: legacyOrds } = await ordQuery;
+      const existingCodes = new Set(
+        enriched.map(s => String(s.session_code || '').replace(/\D/g, '')).filter(Boolean)
+      );
+      (legacyOrds || []).forEach(o => {
+        const digits = String(o.order_number || '').replace(/\D/g, '');
+        if (!digits || !existingCodes.has(digits)) {
+          const code = digits ? `#S-${digits}` : `#S-${String(o.id).slice(-4)}`;
+          enriched.push({
+            id: `legacy_ord_${o.id}`,
+            restaurant_id: o.restaurant_id,
+            table_id: 'non_fine_qr',
+            table_no: 1,
+            table_number: 'Customer QR',
+            session_code: code,
+            order_number: o.order_number,
+            started_at: o.created_at,
+            expires_at: o.created_at,
+            confirmed_at: o.created_at,
+            tracking_version: NON_FINE_TRACKING_VERSION,
+            isNonFine: true,
+            diffMs: 0,
+            minutesLeft: 0,
+            isExpired: true,
+            computedStatus: 'Expired',
+            progressPercent: 0,
+            expiresDisplay: 'Expired',
+            isConfirmed: true,
+            isToday: isSameCalendarDay(o.created_at)
+          });
+        }
+      });
+      enriched.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
+    }
+
     // Tab-level filtering
     if (tab === 'today') {
       enriched = enriched.filter(s => s.isToday);
@@ -594,7 +638,7 @@ export const fetchSuperAdminDGMSessions = async ({
 /**
  * Fetch DGM Billing Ledger entries.
  */
-export const fetchDGMBillingLedger = async ({ restaurantId = 'all', limit = 100 } = {}) => {
+export const fetchDGMBillingLedger = async ({ restaurantId = 'all', limit = 100, restaurantType = 'all' } = {}) => {
   try {
     let query = supabase
       .from('dgm_billing_ledger')
@@ -611,7 +655,43 @@ export const fetchDGMBillingLedger = async ({ restaurantId = 'all', limit = 100 
       console.error('Error fetching DGM billing ledger:', error);
       return [];
     }
-    return data || [];
+
+    const rows = [...(data || [])];
+
+    // Include historical pre-session Non-Fine Dine orders so Billing Ledger matches Total DGM Orders (e.g. 6 = 4 + 2)
+    if (restaurantType === 'non_fine') {
+      let ordQuery = supabase
+        .from('orders')
+        .select('id, restaurant_id, order_number, created_at')
+        .eq('restaurant_id', 'resto_002');
+      if (restaurantId && restaurantId !== 'all') {
+        ordQuery = ordQuery.eq('restaurant_id', restaurantId);
+      }
+      const { data: legacyOrds } = await ordQuery;
+      const existingCodes = new Set(
+        rows.map(l => String(l.session_code || '').replace(/\D/g, '')).filter(Boolean)
+      );
+      (legacyOrds || []).forEach(o => {
+        const digits = String(o.order_number || '').replace(/\D/g, '');
+        if (!digits || !existingCodes.has(digits)) {
+          rows.push({
+            id: `legacy_${o.id}`,
+            restaurant_id: o.restaurant_id,
+            table_id: 'non_fine_qr',
+            session_id: `legacy_ord_${o.id}`,
+            session_code: digits ? `#S-${digits}` : `#S-${String(o.id).slice(-4)}`,
+            order_number: o.order_number,
+            amount: 5,
+            currency: '৳',
+            billing_status: 'settled',
+            created_at: o.created_at
+          });
+        }
+      });
+      rows.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+
+    return rows;
   } catch (err) {
     console.error('Exception in fetchDGMBillingLedger:', err);
     return [];

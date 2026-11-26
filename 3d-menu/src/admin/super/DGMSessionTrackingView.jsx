@@ -189,7 +189,8 @@ export default function DGMSessionTrackingView({
         }),
         fetchDGMBillingLedger({
           restaurantId: selectedResto,
-          limit: 500
+          limit: 500,
+          restaurantType
         })
       ]);
 
@@ -479,7 +480,7 @@ export default function DGMSessionTrackingView({
             {metrics.totalDgmOrders.toLocaleString()}
           </div>
           <div className="dgm-card-sub">
-            All time (15 verified bills)
+            All time ({metrics.totalDgmOrders.toLocaleString()} verified bills)
           </div>
         </div>
 
