@@ -317,6 +317,95 @@ export const confirmNonFineDineSession = async (sessionId, restaurantId) => {
 };
 
 /**
+ * Sync the real Order List Grand Total to the session's DGM order in Supabase `orders`.
+ * Called when customer taps "Yes, I Ordered" or "Confirm Your Order" with items in their list.
+ * Ensures Gross Order Volume & Order Amount reflect actual Grand Total (instead of 0 or hardcoded 150).
+ */
+export const updateDgmSessionOrderAmount = async ({
+  sessionId,
+  sessionCode,
+  restaurantId,
+  tableNumber = 'Table 01',
+  subtotal = 0,
+  vat = 0,
+  serviceFee = 0,
+  grandTotal = 0,
+  items = [],
+  paymentMethod = 'Cash / Waiter'
+}) => {
+  if (!restaurantId) return { success: false, reason: 'missing_restaurant_id' };
+  const digits = String(sessionCode || '').replace(/\D/g, '');
+  const orderNumber = digits
+    ? `DGM-${digits}`
+    : `DGM-${String(sessionId || Math.floor(1000 + Math.random() * 9000)).slice(-4)}`;
+
+  const safeGrandTotal = Number(grandTotal) || 0;
+  const safeSubtotal = Number(subtotal) || 0;
+  const safeVat = Number(vat) || 0;
+  const safeServiceFee = Number(serviceFee) || 0;
+
+  try {
+    const { data: existing, error: findErr } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('restaurant_id', restaurantId)
+      .eq('order_number', orderNumber)
+      .limit(1);
+
+    if (!findErr && existing && existing.length > 0) {
+      const { error: updErr } = await supabase
+        .from('orders')
+        .update({
+          items: Array.isArray(items) ? items : [],
+          subtotal: safeSubtotal,
+          vat: safeVat,
+          service_fee: safeServiceFee,
+          total_amount: safeGrandTotal,
+          payment_method: paymentMethod,
+          order_status: 'confirmed'
+        })
+        .eq('id', existing[0].id);
+
+      if (updErr) {
+        console.warn('updateDgmSessionOrderAmount update warning:', updErr.message);
+        return { success: false, error: updErr.message };
+      }
+      return { success: true, orderNumber, totalAmount: safeGrandTotal, updated: true };
+    }
+
+    // No pre-created orders row (e.g. Fine Dine RPC); insert 1 canonical DGM order row
+    const { error: insErr } = await supabase
+      .from('orders')
+      .insert([{
+        id: `ord_dgm_${Date.now()}_${digits || '0000'}`,
+        restaurant_id: restaurantId,
+        order_number: orderNumber,
+        table_number: tableNumber,
+        customer_name: tableNumber ? `Customer (${tableNumber})` : 'DGM Customer',
+        dining_mode: 'dine-in',
+        items: Array.isArray(items) ? items : [],
+        subtotal: safeSubtotal,
+        vat: safeVat,
+        service_fee: safeServiceFee,
+        total_amount: safeGrandTotal,
+        payment_method: paymentMethod,
+        payment_status: 'pending',
+        order_status: 'confirmed',
+        created_at: new Date().toISOString()
+      }]);
+
+    if (insErr) {
+      console.warn('updateDgmSessionOrderAmount insert warning:', insErr.message);
+      return { success: false, error: insErr.message };
+    }
+    return { success: true, orderNumber, totalAmount: safeGrandTotal, inserted: true };
+  } catch (err) {
+    console.warn('Exception in updateDgmSessionOrderAmount:', err);
+    return { success: false, error: err?.message };
+  }
+};
+
+/**
  * Fetch table order counts for a restaurant's Table QR Management page.
  * Returns map of table statistics: { [table_id or table_no]: { todayOrders, totalOrders, hasActiveSession, activeSession } }
  */

@@ -38,6 +38,7 @@ export const getUniversalDgmOrderId = (record) => {
 export const formatTableDisplay = (tableId, session) => {
   if (!tableId && !session) return 'Table 01';
   const raw = String(tableId || session?.table_id || session?.table_no || '');
+  if (raw === 'non_fine_qr' || /^Customer\s+QR/i.test(raw)) return 'Customer QR';
   const match = raw.match(/\d{1,5}$/);
   if (match) {
     return `Table ${match[0].padStart(2, '0')}`;
@@ -278,7 +279,7 @@ export const generateLiveSettlementCycles = ({
             createdAt: l.created_at,
             tableNo: tableDisplay,
             tableNumber: tableDisplay,
-            amount: matched ? Number(matched.total_amount || matched.totalAmount || 0) : 150.00,
+            amount: matched ? Number(matched.total_amount || matched.totalAmount || 0) : 0,
             fee: feePerBill,
             orderFrom: orderFromLabel,
             // Currently all restaurants operate via waiter/regular ordering. Only future direct digital ordering gets 'Online Order'.

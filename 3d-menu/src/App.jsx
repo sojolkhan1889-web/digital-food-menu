@@ -115,7 +115,8 @@ import {
   handleFineDineTableVisit,
   confirmFineDineTableSession,
   handleNonFineDineDeviceVisit,
-  confirmNonFineDineSession
+  confirmNonFineDineSession,
+  updateDgmSessionOrderAmount
 } from './data/dgmSessionStore';
 import RestaurantHeader from './components/RestaurantHeader';
 import LanguageSelectionModal from './components/LanguageSelectionModal';
@@ -1071,8 +1072,8 @@ export default function App() {
         }).catch((err) => {
           console.warn('Error in handleFineDineTableVisit:', err);
         });
-      } else if (!isCurrentFineDine) {
-        // Non-Fine Dine restaurant: 12-hour device-locked session via single Customer QR
+      } else if (!isCurrentFineDine && isTableTarget) {
+        // Non-Fine Dine restaurant via Table QR Management QR only: 12-hour device-locked session
         handleNonFineDineDeviceVisit({
           restaurantId: currentRestoId
         }).then((res) => {
@@ -1086,10 +1087,12 @@ export default function App() {
         }).catch((err) => {
           console.warn('Error in handleNonFineDineDeviceVisit:', err);
         });
-      } else {
+      } else if (isCurrentFineDine) {
         // Generic primary QR browse on Fine-Dine restaurant (no table)
         recordMenuScan(currentRestoId, tableNumber || 'Primary Menu QR');
       }
+      // Non-Fine Dine Primary QR (!isCurrentFineDine && !isTableTarget):
+      // Do NOT record scan, DGM order, or 12h session.
     }
   }, [currentView, tableNumber, isTableVisit, isTableMode, isCurrentFineDine, currentRestoId, tableStatusState, resolvedTableDisplay]);
 
@@ -2677,18 +2680,36 @@ export default function App() {
       date: 'Just now'
     };
 
+    const sId = currentDgmSession?.session_id || currentDgmSession?.id;
+    const sCode = currentDgmSession?.session_code;
+    const sessionDigits = String(sCode || '').replace(/\D/g, '');
+    if (sId && sessionDigits) {
+      newOrder.orderNumber = `DGM-${sessionDigits}`;
+      newOrder._skipSupabaseInsert = true;
+    }
+
     const updatedOrders = addStoredOrder(newOrder);
     if (updatedOrders) {
       setOrdersList(updatedOrders);
     }
 
-    const sId = currentDgmSession?.session_id || currentDgmSession?.id;
     if (sId) {
       if (isCurrentFineDine) {
         confirmFineDineTableSession(sId);
       } else {
         confirmNonFineDineSession(sId, currentRestoId);
       }
+      updateDgmSessionOrderAmount({
+        sessionId: sId,
+        sessionCode: sCode,
+        restaurantId: currentRestoId,
+        tableNumber: resolvedTableDisplay || tableNumber || (isCurrentFineDine ? 'Table 01' : 'Customer QR'),
+        subtotal: selectedListSubtotal,
+        vat: selectedListVat,
+        serviceFee: selectedListServiceFee,
+        grandTotal: selectedListGrandTotal,
+        items: newOrder.items
+      });
       setIsFineDineConfirmed(true);
     }
 
@@ -2933,18 +2954,36 @@ export default function App() {
       date: 'Just now'
     };
 
+    const sId = currentDgmSession?.session_id || currentDgmSession?.id;
+    const sCode = currentDgmSession?.session_code;
+    const sessionDigits = String(sCode || '').replace(/\D/g, '');
+    if (sId && sessionDigits) {
+      newOrder.orderNumber = `DGM-${sessionDigits}`;
+      newOrder._skipSupabaseInsert = true;
+    }
+
     const updatedOrders = addStoredOrder(newOrder);
     if (updatedOrders) {
       setOrdersList(updatedOrders);
     }
 
-    const sId = currentDgmSession?.session_id || currentDgmSession?.id;
     if (sId) {
       if (isCurrentFineDine) {
         confirmFineDineTableSession(sId);
       } else {
         confirmNonFineDineSession(sId, currentRestoId);
       }
+      updateDgmSessionOrderAmount({
+        sessionId: sId,
+        sessionCode: sCode,
+        restaurantId: currentRestoId,
+        tableNumber: resolvedTableDisplay || tableNumber || (isCurrentFineDine ? 'Table 01' : 'Customer QR'),
+        subtotal: selectedListSubtotal,
+        vat: selectedListVat,
+        serviceFee: selectedListServiceFee,
+        grandTotal: selectedListGrandTotal,
+        items: newOrder.items
+      });
       setIsFineDineConfirmed(true);
     }
 
@@ -3148,6 +3187,25 @@ export default function App() {
     };
 
     setTimeout(() => {
+      const sId = currentDgmSession?.session_id || currentDgmSession?.id;
+      const sCode = currentDgmSession?.session_code;
+      const sessionDigits = String(sCode || '').replace(/\D/g, '');
+      if (sId && sessionDigits) {
+        newOrderRecord.orderNumber = `DGM-${sessionDigits}`;
+        newOrderRecord._skipSupabaseInsert = true;
+        updateDgmSessionOrderAmount({
+          sessionId: sId,
+          sessionCode: sCode,
+          restaurantId: currentRestoId,
+          tableNumber: resolvedTableDisplay || tableNumber || (isCurrentFineDine ? 'Table 01' : 'Customer QR'),
+          subtotal,
+          vat: tax,
+          serviceFee,
+          grandTotal,
+          items: newOrderRecord.items,
+          paymentMethod: newOrderRecord.paymentMethod
+        });
+      }
       const updatedOrders = addStoredOrder(newOrderRecord);
       setOrdersList(updatedOrders);
       setPaymentsList(getStoredPayments());

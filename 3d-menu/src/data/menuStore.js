@@ -1513,25 +1513,27 @@ export const addStoredOrder = (newOrder) => {
       saveStoredPayments([newPayment, ...existingPayments]);
     }
 
-    // Async sync to Supabase with created_at explicitly passed
-    supabase.from('orders').insert([{
-      id: String(normalized.id || `ord_${Date.now()}`),
-      restaurant_id: normalized.restaurantId || 'resto_001',
-      order_number: normalized.orderNumber,
-      table_number: normalized.tableNumber,
-      customer_name: normalized.customerName || 'Customer',
-      customer_phone: normalized.customerPhone || '',
-      dining_mode: normalized.diningMode || 'dine-in',
-      items: normalized.items,
-      subtotal: normalized.subtotal,
-      vat: normalized.vat,
-      service_fee: normalized.serviceFee,
-      total_amount: normalized.totalAmount,
-      payment_method: normalized.paymentMethod,
-      payment_status: normalized.paymentStatus,
-      order_status: normalized.orderStatus,
-      created_at: normalized.created_at
-    }]).then(() => {}).catch(err => console.warn('Supabase order insert error:', err));
+    // Async sync to Supabase with created_at explicitly passed (unless caller already synced session order)
+    if (!newOrder._skipSupabaseInsert) {
+      supabase.from('orders').insert([{
+        id: String(normalized.id || `ord_${Date.now()}`),
+        restaurant_id: normalized.restaurantId || 'resto_001',
+        order_number: normalized.orderNumber,
+        table_number: normalized.tableNumber,
+        customer_name: normalized.customerName || 'Customer',
+        customer_phone: normalized.customerPhone || '',
+        dining_mode: normalized.diningMode || 'dine-in',
+        items: normalized.items,
+        subtotal: normalized.subtotal,
+        vat: normalized.vat,
+        service_fee: normalized.serviceFee,
+        total_amount: normalized.totalAmount,
+        payment_method: normalized.paymentMethod,
+        payment_status: normalized.paymentStatus,
+        order_status: normalized.orderStatus,
+        created_at: normalized.created_at
+      }]).then(() => {}).catch(err => console.warn('Supabase order insert error:', err));
+    }
 
     return updated;
   } catch (e) {

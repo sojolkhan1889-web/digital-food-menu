@@ -260,3 +260,6 @@ Before writing or editing code for any new task, verify:
 - **Table QR Management Permission & Table Count Sync Rules (Nov 2026)**:
   * Only Super Admin can create, edit, activate/deactivate, or delete tables (`TableQRManagement` with `isSuperAdmin={false}` in `RestaurantPanel.jsx` shows `Permission Not Granted` on those actions; `Download QR`, `Preview QR`, and `Copy Link` remain allowed).
   * Super Admin `Edit Restaurant` table count updates sync `restaurant_tables` rows via `syncRestaurantTablesToCount` so `fetchLiveRestaurantsFromSupabase` never reverts `table_count`.
+- **Non-Fine Dine Primary QR & Order Amount Rules (Nov 2026)**:
+  * Non-Fine Dine Primary QR scans (`!isTableTarget`) MUST NOT count scans, DGM orders, or 12h sessions; only Table QR scans (`isTableTarget`) start a 12h device-locked session.
+  * Unconfirmed DGM sessions default to `৳0.00` (never hardcoded `৳150.00`). Only when the customer taps `"YES, I ORDERED"` or `"CONFIRM YOUR ORDER"` does `updateDgmSessionOrderAmount` write the real Order List `Grand Total` into `orders.total_amount` for `Gross Order Volume` and `Order Amount`.

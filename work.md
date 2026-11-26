@@ -1426,3 +1426,11 @@ This file records all architectural specifications, resolved issues, feature imp
 - **2. Restaurant Panel `Table QR Management` Permission Guard (`TableQRManagement.jsx` & `RestaurantPanel.jsx`):**
   - Enforced `isSuperAdmin = false` for Restaurant Panel owners so they cannot create, edit, activate/deactivate, or delete tables.
   - Attempting any of those 4 actions displays **`Permission Not Granted — Only Super Admin can create, edit, deactivate, or delete tables.`** while keeping `Download QR`, `Preview QR`, and `Copy Link` functional.
+
+### Update: Non-Fine Dine Primary QR Exclusion & Real Grand Total Order Amount Sync (November 2026)
+- **1. Non-Fine Dine Primary QR vs Table QR (`App.jsx`):**
+  - Updated menu visit effect so Non-Fine Dine 12-hour device-locked sessions (`handleNonFineDineDeviceVisit`) only trigger when scanning a **Table QR Management QR** (`!isCurrentFineDine && isTableTarget`).
+  - Scanning a Non-Fine Dine restaurant's **Primary QR** (`!isCurrentFineDine && !isTableTarget`) no longer creates a scan, DGM order, or 12-hour session.
+- **2. Removed Hardcoded `৳150.00` Fallback & Synced Real Grand Total (`digitalBillsStore.js`, `dgmSessionStore.js`, `menuStore.js`, `App.jsx`):**
+  - Removed the `150.00` fallback in `digitalBillsStore.js` (`amount: matched ? Number(matched.total_amount || matched.totalAmount || 0) : 0`) so unconfirmed sessions show `৳0.00` instead of a random `৳150.00`.
+  - Added `updateDgmSessionOrderAmount` in `dgmSessionStore.js` and wired it into **"YES, I ORDERED"** (`handleConfirmOrderWithWaiter` / popup confirm) and **"CONFIRM YOUR ORDER"** (direct checkout) in `App.jsx` so the Order List's real **Grand Total** updates the session's `DGM-XXXX` order in Supabase `orders` and reflects accurately in `Gross Order Volume` & `Order Amount`.
