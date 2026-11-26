@@ -812,6 +812,7 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
                 restaurants={restaurants}
                 pending={pendingActions}
                 orders={orders}
+                unifiedDgmBills={unifiedDgmBills}
                 feePerBill={platformSettings?.feeRules?.platformFeePerBill ?? 5}
                 onSelectClearedPeriod={setClearedPeriod}
                 currentClearedPeriod={clearedPeriod}
@@ -1854,7 +1855,7 @@ function PendingActions({ onNavigate, pending }) {
   );
 }
 
-function Dashboard({ onNavigate, stats, restaurants, pending, orders, feePerBill, onSelectClearedPeriod, currentClearedPeriod }) {
+function Dashboard({ onNavigate, stats, restaurants, pending, orders, unifiedDgmBills, feePerBill, onSelectClearedPeriod, currentClearedPeriod }) {
   return (
     <>
       <section className="welcome-banner">
@@ -1876,8 +1877,8 @@ function Dashboard({ onNavigate, stats, restaurants, pending, orders, feePerBill
       />
 
       <div className="charts-row">
-        <TrendChart orders={unifiedDgmBills} feePerBill={feePerBill} />
-        <StatusChart onNavigate={onNavigate} orders={orders} />
+        <TrendChart orders={unifiedDgmBills || orders} feePerBill={feePerBill} />
+        <StatusChart onNavigate={onNavigate} orders={unifiedDgmBills || orders} />
       </div>
 
       <div className="bottom-row">
