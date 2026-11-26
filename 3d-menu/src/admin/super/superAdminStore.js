@@ -249,8 +249,11 @@ export const fetchLiveOrdersFromSupabase = async () => {
       return data.map(o => ({
         id: String(o.id),
         orderNumber: o.order_number || `#ORD-${String(o.id).slice(-4)}`,
+        order_number: o.order_number || `#ORD-${String(o.id).slice(-4)}`,
         restaurantId: o.restaurant_id || 'resto_001',
+        restaurant_id: o.restaurant_id || 'resto_001',
         tableNumber: o.table_number || 'Table 04',
+        table_number: o.table_number || 'Table 04',
         customerName: o.customer_name || 'Customer',
         customerPhone: o.customer_phone || '',
         diningMode: o.dining_mode || 'dine-in',
@@ -259,10 +262,12 @@ export const fetchLiveOrdersFromSupabase = async () => {
         vat: Number(o.vat || 0),
         serviceFee: Number(o.service_fee || 0),
         totalAmount: Number(o.total_amount || 0),
+        total_amount: Number(o.total_amount || 0),
         paymentMethod: o.payment_method || 'Cash',
         paymentStatus: o.payment_status || 'paid',
         orderStatus: o.order_status || 'confirmed',
-        createdAt: o.created_at || new Date().toISOString()
+        createdAt: o.created_at || new Date().toISOString(),
+        created_at: o.created_at || new Date().toISOString()
       }));
     }
   } catch (err) {

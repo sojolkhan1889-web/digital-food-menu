@@ -263,3 +263,4 @@ Before writing or editing code for any new task, verify:
 - **Non-Fine Dine Primary QR & Order Amount Rules (Nov 2026)**:
   * Non-Fine Dine Primary QR scans (`!isTableTarget`) MUST NOT count scans, DGM orders, or 12h sessions; only Table QR scans (`isTableTarget`) start a 12h device-locked session.
   * Unconfirmed DGM sessions default to `৳0.00` (never hardcoded `৳150.00`). Only when the customer taps `"YES, I ORDERED"` or `"CONFIRM YOUR ORDER"` does `updateDgmSessionOrderAmount` write the real Order List `Grand Total` into `orders.total_amount` for `Gross Order Volume` and `Order Amount`.
+  * `fetchLiveOrdersFromSupabase` preserves both camelCase (`orderNumber`, `totalAmount`) and snake_case (`order_number`, `total_amount`) fields, and `digitalBillsStore.js` matches `dgm_billing_ledger` rows against both so confirmed orders always reflect in `Gross Order Volume`.

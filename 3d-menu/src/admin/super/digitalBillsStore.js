@@ -265,11 +265,20 @@ export const generateLiveSettlementCycles = ({
           const universalId = getUniversalDgmOrderId(l);
           const tableDisplay = formatTableDisplay(l.table_id);
 
-          // Match with an order in matchingOrders if available (by order_number, table & closest timestamp)
-          const matched = matchingOrders.find(o =>
-            (o.order_number && (o.order_number === universalId || o.order_number.includes(l.session_code?.replace(/\D/g, '')))) ||
-            (formatTableDisplay(o.table_number || o.tableNumber) === tableDisplay && Math.abs(new Date(o.created_at || o.createdAt) - new Date(l.created_at)) < 3600000)
-          );
+          // Match with an order in matchingOrders if available (by order_number / orderNumber, or normalized table & session window)
+          const sessionDigits = String(l.session_code || '').replace(/\D/g, '');
+          const matched = matchingOrders.find(o => {
+            const ordNum = String(o.order_number || o.orderNumber || '');
+            if (ordNum && (ordNum === universalId || (sessionDigits && ordNum.includes(sessionDigits)))) {
+              return true;
+            }
+            const oTableNum = parseInt(String(o.table_number || o.tableNumber || '').replace(/\D/g, ''), 10);
+            const lTableNum = parseInt(String(tableDisplay || '').replace(/\D/g, ''), 10);
+            const sameTable = (!isNaN(oTableNum) && !isNaN(lTableNum) && oTableNum === lTableNum) ||
+              formatTableDisplay(o.table_number || o.tableNumber) === tableDisplay;
+            const timeDiff = Math.abs(new Date(o.created_at || o.createdAt).getTime() - new Date(l.created_at).getTime());
+            return sameTable && timeDiff < 12 * 3600000;
+          });
 
           return {
             id: universalId,
