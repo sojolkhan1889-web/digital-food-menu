@@ -226,8 +226,53 @@ export default function RestaurantPanel({
   onBackToMenu,
   onLogout
 }) {
-  // Super Admin Gated Premium Status: False by default!
-  const isPremiumActive = Boolean(superAdminConfig?.enableOrderManagement);
+  // Live per-restaurant feature access controlled exclusively by Super Admin (Supabase `restaurants.features`)
+  const [liveFeatures, setLiveFeatures] = useState(() => activeRestaurant?.features || superAdminConfig || {});
+
+  useEffect(() => {
+    if (activeRestaurant?.features) {
+      setLiveFeatures(activeRestaurant.features);
+    }
+  }, [activeRestaurant?.features]);
+
+  const panelRestoIdForFeatures = activeRestaurant?.id || restaurantProfile?.restaurant_id || restaurantProfile?.id || 'resto_001';
+  useEffect(() => {
+    let mounted = true;
+    supabase
+      .from('restaurants')
+      .select('features')
+      .eq('id', panelRestoIdForFeatures)
+      .single()
+      .then(({ data }) => {
+        if (mounted && data?.features) {
+          setLiveFeatures(data.features);
+        }
+      });
+
+    const channel = supabase
+      .channel(`realtime_resto_features_${panelRestoIdForFeatures}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'restaurants',
+        filter: `id=eq.${panelRestoIdForFeatures}`
+      }, (payload) => {
+        if (payload?.new?.features) {
+          setLiveFeatures(payload.new.features);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [panelRestoIdForFeatures]);
+
+  // Super Admin Gated Premium Status: False by default! Controlled exclusively from Super Admin Panel.
+  const isPremiumActive = Boolean(
+    liveFeatures?.enableOrderManagement ?? superAdminConfig?.enableOrderManagement
+  );
 
   // Dynamic primary native language for the registered restaurant country
   const nativeLang = useMemo(() => {
@@ -1593,31 +1638,47 @@ export default function RestaurantPanel({
             </div>
           )}
 
-          {/* Plan Status & Super Admin Simulator CTA */}
+          {/* Plan Status (Read-Only — Controlled Exclusively by Super Admin) */}
           {!isSidebarCollapsed && (
             <div className="p-2.5 shrink-0">
-              <div className={`p-2.5 rounded-[12px] border text-[11px] ${isDark ? 'bg-[#0B0F19] border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
+              <div className={`p-3 rounded-[12px] border text-[11px] ${isDark ? 'bg-[#0B0F19] border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
                 }`}>
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center justify-between mb-1.5">
                   <span className="font-bold uppercase tracking-wider text-[9px] text-slate-500">Plan Status</span>
                   <span className={`px-2 py-0.5 rounded-[6px] font-bold text-[9px] ${isPremiumActive ? 'bg-emerald-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                     }`}>
-                    {isPremiumActive ? 'PREMIUM' : 'BY-DEFAULT'}
+                    {isPremiumActive ? 'PREMIUM' : 'STANDARD'}
                   </span>
                 </div>
-                <p className="text-[10px] leading-snug mb-2">
-                  {isPremiumActive
-                    ? 'Orders, Payments, and Live Dashboard are currently unlocked.'
-                    : 'Orders, Payments & Dashboard hidden by default. Only enabled via Super Admin.'}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setIsSuperAdminModalOpen(true)}
-                  className="w-full py-1.5 px-2 rounded-[8px] bg-slate-200 dark:bg-slate-800 hover:bg-orange-600 hover:text-white text-[10px] font-bold text-slate-800 dark:text-slate-300 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Sliders className="w-3.5 h-3.5" />
-                  <span>Super Admin Config</span>
-                </button>
+                {isPremiumActive ? (
+                  <>
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mb-2 pb-1.5 border-b border-slate-200 dark:border-slate-800">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>Premium Access Active</span>
+                    </div>
+                    <ul className="space-y-1 text-[10.5px] mb-2">
+                      <li className="flex items-center gap-1.5">
+                        <Check className="w-3 h-3 text-emerald-500 shrink-0" />
+                        <span>Live Dashboard</span>
+                      </li>
+                      <li className="flex items-center gap-1.5">
+                        <Check className="w-3 h-3 text-emerald-500 shrink-0" />
+                        <span>Order Management</span>
+                      </li>
+                      <li className="flex items-center gap-1.5">
+                        <Check className="w-3 h-3 text-emerald-500 shrink-0" />
+                        <span>Customer Payments</span>
+                      </li>
+                    </ul>
+                  </>
+                ) : (
+                  <p className="text-[10px] leading-snug mb-2">
+                    Orders, Payments &amp; Live Dashboard are currently locked.
+                  </p>
+                )}
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                  Managed by platform administrator.
+                </div>
               </div>
             </div>
           )}
@@ -4636,68 +4697,6 @@ export default function RestaurantPanel({
         restaurant={restaurantProfile}
         theme={theme}
       />
-
-      {/* ======================================================== */}
-      {/* 5. SUPER ADMIN PLAN CONFIGURATION MODAL (SIMULATOR)      */}
-      {/* ======================================================== */}
-      {isSuperAdminModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm select-auto">
-          <div className={`w-full max-w-md rounded-[5px] border shadow-2xl p-6 ${isDark ? 'bg-[#111827] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
-            }`}>
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-200 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <Sliders className="w-5 h-5 text-orange-600" />
-                <h3 className="text-sm font-bold">Super Admin Feature Control</h3>
-              </div>
-              <button
-                onClick={() => setIsSuperAdminModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-900 dark:hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-              In production, this switch is controlled exclusively from the Master Super Admin Panel per restaurant account. By default, Order Management, DGM Payments, and Dashboard are disabled.
-            </p>
-
-            <div className="space-y-3 mb-6">
-              <div className={`p-3 rounded-[5px] border flex items-center justify-between ${isDark ? 'bg-[#0B0F19] border-slate-800' : 'bg-slate-50 border-slate-200'
-                }`}>
-                <div>
-                  <span className="text-xs font-bold block">Order Management & Dashboard</span>
-                  <span className="text-[10px] text-slate-500">Unlocks Dashboard, Live Orders & Payments tabs</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !isPremiumActive;
-                    onUpdateSuperAdminConfig && onUpdateSuperAdminConfig({
-                      ...superAdminConfig,
-                      enableOrderManagement: next,
-                      enablePayments: next,
-                      enableOrderButton: next,
-                      enableCartPage: next
-                    });
-                  }}
-                  className={`flex items-center gap-1 font-bold text-xs cursor-pointer ${isPremiumActive ? 'text-emerald-500' : 'text-slate-400'
-                    }`}
-                >
-                  {isPremiumActive ? <ToggleRight className="w-7 h-7 text-emerald-500" /> : <ToggleLeft className="w-7 h-7" />}
-                  <span>{isPremiumActive ? 'Enabled' : 'Disabled'}</span>
-                </button>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setIsSuperAdminModalOpen(false)}
-              className="w-full py-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold cursor-pointer"
-            >
-              Done & Close
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Redesigned Platform Fee Due Settlement Modal (Method 01 QR + Method 02 Proof Submission) */}
       <RestaurantDueSettlementModal

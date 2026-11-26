@@ -25,6 +25,7 @@ import {
   syncNewRestaurantToSupabase,
   updateRestaurantStatusInSupabase,
   updateRestaurantInSupabase,
+  updateRestaurantFeatureAccessInSupabase,
   deleteRestaurantFromSupabase,
   updateTicketInSupabase,
   fetchLiveSettlementsFromSupabase,
@@ -39,6 +40,7 @@ import {
 import { compressImage } from '../../lib/imageCompressor';
 import { uploadMediaFile } from '../../lib/mediaStorageService';
 import AllRestaurantsView from './AllRestaurantsView';
+import PremiumFeaturesAccessView from './PremiumFeaturesAccessView';
 import DGMSessionTrackingView from './DGMSessionTrackingView';
 import DigitalBillsView from './DigitalBillsView';
 import RevenueOverviewView from './RevenueOverviewView';
@@ -50,7 +52,7 @@ import { supabase } from '../../lib/supabaseClient';
 
 const NAV = [
   { name: 'Dashboard', icon: LayoutDashboard, routes: [] },
-  { name: 'Restaurants', icon: Store, routes: ['All Restaurants', 'New Registrations', 'Restaurant Profiles'] },
+  { name: 'Restaurants', icon: Store, routes: ['All Restaurants', 'New Registrations', 'Premium Features Access'] },
   { name: 'Digital Menus', icon: BookOpen, routes: ['All Menus', 'Food Catalog', 'Categories & Templates'] },
   { name: 'Orders & Bills', icon: ClipboardList, routes: ['DGM Session Tracking', 'Digital Bills', 'Customer Confirmations', 'Disputes'] },
   { name: 'Revenue & Settlement', icon: Coins, routes: ['Revenue Overview', 'Restaurant Dues', 'Payment Transactions'] },
@@ -627,6 +629,13 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
     showToast(`Updated "${data.name || 'Restaurant'}" in PostgreSQL!`);
   };
 
+  const handleSaveFeatureAccess = async (restaurantId, featureUpdates, historyEntry) => {
+    const mergedFeatures = await updateRestaurantFeatureAccessInSupabase(restaurantId, featureUpdates, historyEntry);
+    const updated = restaurants.map(r => r.id === restaurantId ? { ...r, features: mergedFeatures } : r);
+    setRestaurants(updated);
+    saveSuperAdminRestaurants(updated);
+  };
+
   const handleAddRestaurantFromPage = async (data) => {
     const created = {
       ...data,
@@ -796,6 +805,12 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
                 restaurants={restaurants.filter(r => r.status === 'pending')}
                 onApprove={(id) => handleToggleStatus(id, 'active')}
                 onBack={() => setCurrent('Dashboard')}
+              />
+            ) : current === 'Premium Features Access' || current === 'Restaurant Profiles' ? (
+              <PremiumFeaturesAccessView
+                restaurants={restaurants}
+                onSaveFeatureAccess={handleSaveFeatureAccess}
+                showToast={showToast}
               />
             ) : current === 'All Menus' || current === 'Digital Menus' ? (
               <DigitalMenusView

@@ -1448,3 +1448,13 @@ This file records all architectural specifications, resolved issues, feature imp
   - Includes Settlement Details & Payment Details modals, CSV statement export, and receipt download.
 - **3. Dashboard KPI Accuracy Fix (`RestaurantPanel.jsx`):**
   - Updated Restaurant Dashboard `Total Due Settlement` card to show `settlementLifecycle.totalPayableDue` (Pending + Overdue payable balance only, excluding active In Progress cycle fee—e.g. Spice Lounge `৳15` instead of `৳20`).
+
+### Update: Super Admin `Premium Features Access` & Removal of Restaurant `Super Admin Config` (November 2026)
+- **1. Replaced `Restaurant Profiles` with `Premium Features Access` (`SuperAdminPanel.jsx`, `PremiumFeaturesAccessView.jsx`, `superAdminStore.js`):**
+  - Renamed the `Restaurants` submenu item from `Restaurant Profiles` to **`Premium Features Access`**.
+  - Built two-column `PremiumFeaturesAccessView.jsx`: Left searchable registered restaurant list + Right per-restaurant **`Order Management & Dashboard`** toggle (`Live Dashboard`, `Order Management`, `Customer Payments`), `Cancel` / `Save Changes` controls, and bottom **`Access Change History`** audit log.
+  - Added `updateRestaurantFeatureAccessInSupabase` in `superAdminStore.js` persisting per-restaurant flags (`enableOrderManagement`, `enablePayments`) and `_accessHistory` in Supabase `restaurants.features` JSONB without affecting other restaurants or deleting historical orders/payments on disable.
+- **2. Removed `Super Admin Config` & Enforced Live Supabase Feature Sync (`RestaurantPanel.jsx`, `App.jsx`):**
+  - Removed the `Super Admin Config` button and `Super Admin Feature Control` simulator modal from `RestaurantPanel.jsx`.
+  - Replaced the sidebar `Plan Status` card with a read-only status card (`Premium Access Active` with unlocked feature checkmarks or `Standard` locked state + `"Managed by platform administrator."`).
+  - Subscribed `RestaurantPanel.jsx` to Supabase Realtime (`restaurants` `UPDATE` for `panelRestoId`) so enabling/disabling `Order Management & Dashboard` in Super Admin Panel updates Restaurant Panel & route guards immediately in real time.

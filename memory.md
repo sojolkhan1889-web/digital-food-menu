@@ -267,3 +267,7 @@ Before writing or editing code for any new task, verify:
 - **Restaurant Panel Settlement Page Rules (Nov 2026)**:
   * Restaurant Panel includes a dedicated `Settlement` sidebar tab (`RestaurantSettlementView.jsx`) scoped strictly to the logged-in restaurant's own cycles and `settlements` records, reusing `RestaurantDueSettlementModal`.
   * Restaurant Dashboard `Total Due Settlement` and Settlement Page `Total Payable Due` MUST exclude active `In Progress` cycle fees and only sum payable `Pending + Overdue` balances (e.g., Spice Lounge: `৳15` payable due, `৳5` current cycle fee, `৳20` total accrued fee).
+- **Premium Features Access Rules (Nov 2026)**:
+  * Controlled exclusively from Super Admin Panel → `Restaurants` → `Premium Features Access` (`PremiumFeaturesAccessView.jsx`), persisted per-restaurant in Supabase `restaurants.features` (`enableOrderManagement`, `enablePayments`, `_accessHistory`).
+  * Restaurant Panel MUST NOT expose `Super Admin Config` or any self-service feature toggle; `Plan Status` is strictly read-only (`Managed by platform administrator.`) and synced via Supabase Realtime.
+  * Disabling a premium feature locks/hides `Live Dashboard`, `Order Management`, and `Customer Payments` without deleting historical orders, payments, or settlement records.

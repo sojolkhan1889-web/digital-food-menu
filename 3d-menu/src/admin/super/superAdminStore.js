@@ -212,6 +212,7 @@ export const fetchLiveRestaurantsFromSupabase = async () => {
           joinedAt: remote.created_at || new Date().toISOString(),
           created_at: remote.created_at || new Date().toISOString(),
           status: remote.status || 'active',
+          features: remote.features || {},
           avatar: remote.avatar || remote.name?.slice(0, 2)?.toUpperCase() || '🍽️',
           email: remote.email || '',
           theme: remote.theme || 'Warm Amber Glass',
@@ -588,6 +589,45 @@ export const updateRestaurantInSupabase = async (id, updates = {}) => {
     }
   } catch (err) {
     console.warn('Supabase update restaurant caught:', err);
+  }
+};
+
+// 7.2 Update restaurant premium feature access & audit history in Supabase
+export const updateRestaurantFeatureAccessInSupabase = async (id, featureUpdates = {}, historyEntry = null) => {
+  try {
+    const { data: existingRow } = await supabase
+      .from('restaurants')
+      .select('features')
+      .eq('id', String(id))
+      .single();
+
+    const currentFeatures = (existingRow?.features && typeof existingRow.features === 'object')
+      ? existingRow.features
+      : {};
+
+    const prevHistory = Array.isArray(currentFeatures._accessHistory) ? currentFeatures._accessHistory : [];
+    const nextHistory = historyEntry ? [historyEntry, ...prevHistory].slice(0, 50) : prevHistory;
+
+    const mergedFeatures = {
+      ...currentFeatures,
+      ...featureUpdates,
+      _accessHistory: nextHistory
+    };
+
+    const { error } = await supabase
+      .from('restaurants')
+      .update({ features: mergedFeatures })
+      .eq('id', String(id));
+
+    if (error) {
+      console.warn('Supabase updateRestaurantFeatureAccess error:', error);
+      throw error;
+    }
+
+    return mergedFeatures;
+  } catch (err) {
+    console.warn('Supabase updateRestaurantFeatureAccess caught:', err);
+    throw err;
   }
 };
 

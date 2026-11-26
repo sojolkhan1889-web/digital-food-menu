@@ -3379,7 +3379,11 @@ export default function App() {
           restaurantProfile={restaurantProfile}
           tickets={ticketsList}
           chatMessages={chatMessagesList}
-          superAdminConfig={superAdminConfig}
+          superAdminConfig={{
+            ...superAdminConfig,
+            enableOrderManagement: Boolean(activeRestaurant?.features?.enableOrderManagement),
+            enablePayments: Boolean(activeRestaurant?.features?.enableOrderManagement)
+          }}
           onAddFood={handleAddFoodFromPanel}
           onDeleteFood={handleDeleteFoodFromPanel}
           onToggleFoodStatus={handleToggleFoodStatus}
