@@ -1435,3 +1435,16 @@ This file records all architectural specifications, resolved issues, feature imp
   - Removed the `150.00` fallback in `digitalBillsStore.js` (`amount: matched ? Number(matched.total_amount || matched.totalAmount || 0) : 0`) so unconfirmed sessions show `৳0.00` instead of a random `৳150.00`.
   - Added `updateDgmSessionOrderAmount` in `dgmSessionStore.js` and wired it into **"YES, I ORDERED"** (`handleConfirmOrderWithWaiter` / popup confirm) and **"CONFIRM YOUR ORDER"** (direct checkout) in `App.jsx` so the Order List's real **Grand Total** updates the session's `DGM-XXXX` order in Supabase `orders` and reflects accurately in `Gross Order Volume` & `Order Amount`.
   - Fixed `digitalBillsStore.js` & `superAdminStore.js` (`fetchLiveOrdersFromSupabase`) so camelCase `orderNumber` / `totalAmount` / `tableNumber` and snake_case `order_number` / `total_amount` / `table_number` both match `dgm_billing_ledger` rows (`DGM-XXXX`), ensuring confirmed orders like `DGM-9848` (`৳324`) show immediately in **Gross Order Volume** & **Order Amount**.
+
+### Update: Restaurant Panel `Settlement` Management Page (November 2026)
+- **1. New `Settlement` Sidebar Menu & Counter (`RestaurantPanel.jsx`):**
+  - Added `Settlement` tab in the left sidebar (`Wallet` icon) with a live unpaid Pending/Overdue counter badge (hidden automatically when `0` payable dues remain).
+- **2. Dedicated `RestaurantSettlementView.jsx` (`3d-menu/src/admin/components/RestaurantSettlementView.jsx`):**
+  - **6 KPI Cards**: `Total Accrued Fee`, `Current Cycle Fee`, `Total Payable Due` (Pending + Overdue only, excluding In Progress), `Pending Settlement`, `Overdue Settlement`, and `Total Settled`.
+  - **Contextual Reminder Banner**: Renders the existing Pending / Overdue / Verification Pending banner right below the KPI cards and opens `RestaurantDueSettlementModal` pre-selected to the target cycle.
+  - **2 History Tabs**:
+    - **Tab 01 — Settlement History**: Full 10-column table (`Settlement ID`, `Settlement Period`, `Total Bills`, `Accrued Fee`, `Paid Amount`, `Remaining Balance`, `Due Date`, `Settlement Status` including `Paid Late` tracking, `Settled On`, and status-based `Action` buttons: `View Details`, `Settle Due`, `View Payment Status`, `Resubmit Payment Details`, `Download Receipt`).
+    - **Tab 02 — Payment History**: Full 8-column table (`Payment ID`, `Settlement Period`, `Payment Date & Time`, `Payment Method`, `Transaction ID`, `Paid Amount`, `Payment Status` for Pending Verification / Verified / Rejected, and `View Details` / `Download Receipt`).
+  - Includes Settlement Details & Payment Details modals, CSV statement export, and receipt download.
+- **3. Dashboard KPI Accuracy Fix (`RestaurantPanel.jsx`):**
+  - Updated Restaurant Dashboard `Total Due Settlement` card to show `settlementLifecycle.totalPayableDue` (Pending + Overdue payable balance only, excluding active In Progress cycle fee—e.g. Spice Lounge `৳15` instead of `৳20`).

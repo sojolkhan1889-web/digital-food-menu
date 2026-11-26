@@ -80,6 +80,7 @@ import FeaturedSliderWizard from './FeaturedSliderWizard';
 import TableQRManagement from './TableQRManagement';
 import RestaurantTopBar from './components/RestaurantTopBar';
 import RestaurantDueSettlementModal from './components/RestaurantDueSettlementModal';
+import RestaurantSettlementView from './components/RestaurantSettlementView';
 import {
   getSuperAdminRestaurants,
   fetchMerchantQRConfigFromSupabase,
@@ -982,22 +983,21 @@ export default function RestaurantPanel({
 
     const MS_PER_DAY = 24 * 60 * 60 * 1000;
     const unpaidCycles = [];
+    const enrichedCycles = [];
 
     rawCycles.forEach(c => {
       const status = computeSettlementStatus(c, now);
-      if (status !== 'pending' && status !== 'overdue') return;
       const remainingDue = Math.max(0, Number(c.accruedFee || 0) - Number(c.paidAmount || 0));
-      if (remainingDue <= 0) return;
 
-      const matchingPendingTxns = txns.filter(
-        t => t.status === 'pending_verification' && (t.primaryCycleId === c.id || t.rawNotes?.includes(c.id))
+      const matchingTxns = txns.filter(
+        t => t.primaryCycleId === c.id || (t.rawNotes && t.rawNotes.includes(c.id))
       );
+      const matchingPendingTxns = matchingTxns.filter(t => t.status === 'pending_verification');
       const pendingVerificationAmount = matchingPendingTxns.reduce((s, t) => s + Number(t.amount || 0), 0);
       const submittableRemaining = Math.max(0, remainingDue - pendingVerificationAmount);
 
-      const matchingRejectedTxns = txns.filter(
-        t => t.status === 'rejected' && (t.primaryCycleId === c.id || t.rawNotes?.includes(c.id))
-      );
+      const matchingRejectedTxns = matchingTxns.filter(t => t.status === 'rejected');
+      const matchingVerifiedTxns = matchingTxns.filter(t => t.status === 'verified');
       const latestPendingTxn = matchingPendingTxns[0] || null;
       const latestRejectedTxn = (!latestPendingTxn && matchingRejectedTxns[0]) || null;
 
@@ -1005,21 +1005,52 @@ export default function RestaurantPanel({
       const daysOverdue = status === 'overdue' ? Math.max(1, Math.ceil((now.getTime() - dueTime) / MS_PER_DAY)) : 0;
       const graceDaysRemaining = status === 'pending' ? Math.max(1, Math.ceil((dueTime - now.getTime()) / MS_PER_DAY)) : 0;
 
-      unpaidCycles.push({
+      const settledAt = status === 'settled'
+        ? (c.clearedAt || matchingVerifiedTxns[0]?.paymentDate || null)
+        : null;
+      const settledTime = settledAt ? new Date(settledAt).getTime() : 0;
+      const paidLate = Boolean(status === 'settled' && settledTime > 0 && dueTime > 0 && settledTime > dueTime);
+
+      let displayStatus = status;
+      if ((status === 'pending' || status === 'overdue') && pendingVerificationAmount > 0 && submittableRemaining <= 0) {
+        displayStatus = 'payment_submitted';
+      } else if ((status === 'pending' || status === 'overdue') && latestRejectedTxn && submittableRemaining > 0) {
+        displayStatus = 'payment_rejected';
+      }
+
+      const enriched = {
         ...c,
         status,
+        displayStatus,
         remainingDue,
         pendingVerificationAmount,
         submittableRemaining,
         latestPendingTxn,
         latestRejectedTxn,
+        matchingTxns,
         daysOverdue,
-        graceDaysRemaining
-      });
+        graceDaysRemaining,
+        settledAt,
+        paidLate
+      };
+
+      if (Number(c.totalOrders || 0) > 0 || Number(c.paidAmount || 0) > 0 || status === 'in_progress') {
+        enrichedCycles.push(enriched);
+      }
+
+      if ((status === 'pending' || status === 'overdue') && remainingDue > 0) {
+        unpaidCycles.push(enriched);
+      }
     });
+
+    enrichedCycles.sort((a, b) => new Date(b.periodStart).getTime() - new Date(a.periodStart).getTime());
 
     const overdueCycles = unpaidCycles.filter(c => c.status === 'overdue');
     const pendingCycles = unpaidCycles.filter(c => c.status === 'pending');
+    const currentCycle = enrichedCycles.find(c => c.status === 'in_progress') || null;
+    const totalAccruedFee = enrichedCycles.reduce((s, c) => s + Number(c.accruedFee || 0), 0);
+    const currentCycleFee = Number(currentCycle?.accruedFee || 0);
+    const totalPayableDue = unpaidCycles.reduce((s, c) => s + Number(c.remainingDue || 0), 0);
     const pendingVerificationTotal = txns
       .filter(t => t.status === 'pending_verification')
       .reduce((s, t) => s + Number(t.amount || 0), 0);
@@ -1036,6 +1067,12 @@ export default function RestaurantPanel({
     }
 
     return {
+      allCycles: enrichedCycles,
+      currentCycle,
+      totalAccruedFee,
+      currentCycleFee,
+      totalPayableDue,
+      totalSettledAmount: totalClearedAmount,
       unpaidCycles,
       overdueCycles,
       pendingCycles,
@@ -1044,15 +1081,16 @@ export default function RestaurantPanel({
       totalSubmittableRemaining,
       anyRejected,
       reminderMode,
-      overdueTotal: overdueCycles.reduce((s, c) => s + c.submittableRemaining, 0),
-      pendingTotal: pendingCycles.reduce((s, c) => s + c.submittableRemaining, 0),
+      overdueTotal: overdueCycles.reduce((s, c) => s + c.remainingDue, 0),
+      pendingTotal: pendingCycles.reduce((s, c) => s + c.remainingDue, 0),
       maxDaysOverdue: overdueCycles.reduce((m, c) => Math.max(m, c.daysOverdue), 0),
       graceDaysRemaining: pendingCycles[0]?.graceDaysRemaining || 3,
       primaryCycle: overdueCycles[0] || pendingCycles[0] || unpaidCycles[0] || null
     };
-  }, [panelRestoId, restaurantProfile?.name, orders, billingLedger, settlements, dueSettlementAmount]);
+  }, [panelRestoId, restaurantProfile?.name, orders, billingLedger, settlements, dueSettlementAmount, totalClearedAmount]);
 
   const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
+  const [selectedSettlementCycleId, setSelectedSettlementCycleId] = useState('');
   const [settlementSuccessMsg, setSettlementSuccessMsg] = useState('');
   const [sliderSuccessNotice, setSliderSuccessNotice] = useState('');
 
@@ -1231,6 +1269,13 @@ export default function RestaurantPanel({
       { id: 'categories', label: 'Create Category', icon: Layers, badge: uniqueCategories.length },
       { id: 'subcategories', label: 'Create Sub-Category', icon: Tag, badge: subcategories.length },
       { id: 'sliders', label: 'Featured Sliders', icon: Sparkles, badge: featuredSliders.filter(s => s.isActive).length },
+      {
+        id: 'settlement',
+        label: 'Settlement',
+        icon: Wallet,
+        badge: settlementLifecycle.unpaidCycles.length > 0 ? settlementLifecycle.unpaidCycles.length : null,
+        badgeColor: 'bg-red-500'
+      },
       { id: 'settings', label: 'Settings', icon: Settings },
       { id: 'support', label: 'Support', icon: Headphones, badge: tickets.filter(t => t.status === 'Open').length || 'Live' }
     ];
@@ -1245,7 +1290,7 @@ export default function RestaurantPanel({
     }
 
     return defaultTabs;
-  }, [isPremiumActive, foods.length, uniqueCategories.length, subcategories.length, featuredSliders, tickets, orders]);
+  }, [isPremiumActive, foods.length, uniqueCategories.length, subcategories.length, featuredSliders, tickets, orders, settlementLifecycle.unpaidCycles.length]);
 
   // Tab Title & Breadcrumb Metadata for Modern Top Bar
   const tabMeta = useMemo(() => {
@@ -1303,6 +1348,12 @@ export default function RestaurantPanel({
           breadcrumb: 'SETTINGS',
           title: 'Restaurant Profile & Credentials Settings',
           subtitle: 'Configure restaurant information, timings, and credentials'
+        };
+      case 'settlement':
+        return {
+          breadcrumb: 'SETTLEMENT',
+          title: 'Platform Fee Settlement',
+          subtitle: 'Track weekly settlement cycles, pending dues, overdue balances, and payment history'
         };
       case 'support':
         return {
@@ -1717,7 +1768,7 @@ export default function RestaurantPanel({
 
         {/* 3-State Platform Fee Settlement Banners (Pending / Overdue / After Submit Payment) */}
         {/* Automatically vanishes once Super Admin verifies payment & balance clears */}
-        {settlementLifecycle.reminderMode === 'verification_pending' && (
+        {activeTab !== 'settlement' && settlementLifecycle.reminderMode === 'verification_pending' && (
           <div className="mx-4 sm:mx-6 mt-3 px-4 sm:px-6 py-3.5 rounded-[12px] bg-gradient-to-r from-[#1D63D0] via-[#1352B8] to-[#0B3C91] text-white shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5 min-w-0">
               <div className="w-11 h-11 rounded-[10px] bg-white/15 border border-white/25 flex items-center justify-center shrink-0">
@@ -1759,7 +1810,7 @@ export default function RestaurantPanel({
           </div>
         )}
 
-        {settlementLifecycle.reminderMode === 'overdue' && (
+        {activeTab !== 'settlement' && settlementLifecycle.reminderMode === 'overdue' && (
           <div className="mx-4 sm:mx-6 mt-3 px-4 sm:px-6 py-3.5 rounded-[12px] bg-gradient-to-r from-[#C81E1E] via-[#B91C1C] to-[#991B1B] text-white shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5 min-w-0">
               <div className="w-11 h-11 rounded-[10px] bg-white/15 border border-white/20 flex items-center justify-center shrink-0">
@@ -1803,7 +1854,7 @@ export default function RestaurantPanel({
           </div>
         )}
 
-        {settlementLifecycle.reminderMode === 'pending' && (
+        {activeTab !== 'settlement' && settlementLifecycle.reminderMode === 'pending' && (
           <div className="mx-4 sm:mx-6 mt-3 px-4 sm:px-6 py-3.5 rounded-[12px] bg-gradient-to-r from-[#FACC15] via-[#FBBF24] to-[#F59E0B] text-[#0F172A] shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5 min-w-0">
               <div className="w-11 h-11 rounded-[10px] bg-black/10 flex items-center justify-center shrink-0">
@@ -2098,21 +2149,21 @@ export default function RestaurantPanel({
                     {
                       id: 'total_due_settlement',
                       title: 'Total Due Settlement',
-                      value: `৳${dueSettlementAmount}`,
+                      value: `৳${settlementLifecycle.totalPayableDue}`,
                       icon: Wallet,
                       trend: settlementLifecycle.pendingVerificationTotal > 0
                         ? 'Verification Pending'
-                        : dueSettlementAmount > 0
+                        : settlementLifecycle.totalPayableDue > 0
                         ? 'Due to pay'
                         : 'All Settled',
                       comparison: settlementLifecycle.pendingVerificationTotal > 0
                         ? `৳${settlementLifecycle.pendingVerificationTotal} in review`
-                        : dueSettlementAmount > 0
-                        ? 'Owed to Platform'
+                        : settlementLifecycle.totalPayableDue > 0
+                        ? 'Payable Pending + Overdue'
                         : 'Paid in Full',
-                      trendType: dueSettlementAmount > 0 ? 'up' : 'neutral',
-                      sparkColor: dueSettlementAmount > 0 ? 'orange' : 'gray',
-                      action: () => setIsSettlementModalOpen(true),
+                      trendType: settlementLifecycle.totalPayableDue > 0 ? 'up' : 'neutral',
+                      sparkColor: settlementLifecycle.totalPayableDue > 0 ? 'orange' : 'gray',
+                      action: () => setActiveTab('settlement'),
                       isClickable: true,
                     },
                     {
@@ -3816,6 +3867,22 @@ export default function RestaurantPanel({
           )}
 
           {/* ====================================================== */}
+          {/* SECTION: PLATFORM FEE SETTLEMENT                       */}
+          {/* ====================================================== */}
+          {activeTab === 'settlement' && (
+            <RestaurantSettlementView
+              isDark={isDark}
+              restaurantName={restaurantProfile?.name || 'Restaurant'}
+              settlementLifecycle={settlementLifecycle}
+              onOpenSettleModal={(cycleId) => {
+                setSelectedSettlementCycleId(cycleId || settlementLifecycle.primaryCycle?.id || '');
+                setIsSettlementModalOpen(true);
+              }}
+              onRefresh={handlePaymentProofSubmitted}
+            />
+          )}
+
+          {/* ====================================================== */}
           {/* SECTION 6: SUPPORT & 24/7 LIVE CARE                    */}
           {/* ====================================================== */}
           {activeTab === 'support' && (
@@ -4635,13 +4702,16 @@ export default function RestaurantPanel({
       {/* Redesigned Platform Fee Due Settlement Modal (Method 01 QR + Method 02 Proof Submission) */}
       <RestaurantDueSettlementModal
         isOpen={isSettlementModalOpen}
-        onClose={() => setIsSettlementModalOpen(false)}
+        onClose={() => {
+          setIsSettlementModalOpen(false);
+          setSelectedSettlementCycleId('');
+        }}
         isDark={isDark}
         restaurantId={panelRestoId}
         restaurantName={restaurantProfile?.name || 'Restaurant'}
         unpaidCycles={settlementLifecycle.unpaidCycles}
         allSubmittedTransactions={settlementLifecycle.txns}
-        initialCycleId={settlementLifecycle.primaryCycle?.id || ''}
+        initialCycleId={selectedSettlementCycleId || settlementLifecycle.primaryCycle?.id || ''}
         merchantQRConfig={merchantQRConfig}
         onSubmitted={handlePaymentProofSubmitted}
       />

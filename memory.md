@@ -264,3 +264,6 @@ Before writing or editing code for any new task, verify:
   * Non-Fine Dine Primary QR scans (`!isTableTarget`) MUST NOT count scans, DGM orders, or 12h sessions; only Table QR scans (`isTableTarget`) start a 12h device-locked session.
   * Unconfirmed DGM sessions default to `৳0.00` (never hardcoded `৳150.00`). Only when the customer taps `"YES, I ORDERED"` or `"CONFIRM YOUR ORDER"` does `updateDgmSessionOrderAmount` write the real Order List `Grand Total` into `orders.total_amount` for `Gross Order Volume` and `Order Amount`.
   * `fetchLiveOrdersFromSupabase` preserves both camelCase (`orderNumber`, `totalAmount`) and snake_case (`order_number`, `total_amount`) fields, and `digitalBillsStore.js` matches `dgm_billing_ledger` rows against both so confirmed orders always reflect in `Gross Order Volume`.
+- **Restaurant Panel Settlement Page Rules (Nov 2026)**:
+  * Restaurant Panel includes a dedicated `Settlement` sidebar tab (`RestaurantSettlementView.jsx`) scoped strictly to the logged-in restaurant's own cycles and `settlements` records, reusing `RestaurantDueSettlementModal`.
+  * Restaurant Dashboard `Total Due Settlement` and Settlement Page `Total Payable Due` MUST exclude active `In Progress` cycle fees and only sum payable `Pending + Overdue` balances (e.g., Spice Lounge: `৳15` payable due, `৳5` current cycle fee, `৳20` total accrued fee).
