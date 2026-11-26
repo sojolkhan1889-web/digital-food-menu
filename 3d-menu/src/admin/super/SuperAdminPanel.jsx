@@ -46,7 +46,7 @@ import DigitalBillsView from './DigitalBillsView';
 import RevenueOverviewView from './RevenueOverviewView';
 import RestaurantDuesView from './RestaurantDuesView';
 import PaymentTransactionsView from './PaymentTransactionsView';
-import { fetchSuperAdminDGMMetrics } from '../../data/dgmSessionStore';
+import { fetchSuperAdminDGMMetrics, fetchDGMBillingLedger } from '../../data/dgmSessionStore';
 import { isSameCalendarDay } from '../../data/menuStore';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -133,6 +133,7 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
   const [orders, setOrders] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [settlements, setSettlements] = useState([]);
+  const [billingLedger, setBillingLedger] = useState([]);
   const [dgmMetrics, setDgmMetrics] = useState({ totalDgmOrders: 0, todayOrders: 0 });
   const [catalog, setCatalog] = useState({ foods: [], categories: [] });
   const [platformSettings, setPlatformSettings] = useState(getPlatformSettings);
@@ -181,7 +182,7 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
     setIsRefreshing(true);
     setLiveFetchError(null);
     try {
-      const [liveRestos, liveOrders, liveTickets, liveCatalog, liveSettings, liveSettlements, liveScansRes, liveDgm] = await Promise.all([
+      const [liveRestos, liveOrders, liveTickets, liveCatalog, liveSettings, liveSettlements, liveScansRes, liveDgm, liveLedger] = await Promise.all([
         fetchLiveRestaurantsFromSupabase(),
         fetchLiveOrdersFromSupabase(),
         fetchLiveTicketsFromSupabase(),
@@ -189,7 +190,8 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
         fetchLivePlatformSettingsFromSupabase(),
         fetchLiveSettlementsFromSupabase(),
         fetchLiveScansFromSupabase(),
-        fetchSuperAdminDGMMetrics()
+        fetchSuperAdminDGMMetrics(),
+        fetchDGMBillingLedger({ limit: 1000 })
       ]);
       if (liveRestos && liveRestos.length > 0) setRestaurants(liveRestos);
       if (Array.isArray(liveOrders)) setOrders(liveOrders);
@@ -199,6 +201,7 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
       if (Array.isArray(liveSettlements)) setSettlements(liveSettlements);
       if (liveScansRes) setLiveScans(liveScansRes);
       if (liveDgm) setDgmMetrics(liveDgm);
+      if (Array.isArray(liveLedger)) setBillingLedger(liveLedger);
     } catch (err) {
       console.warn('Super Admin load live data caught:', err);
       const errText = err?.message || 'Failed to sync latest financial data from Supabase.';
@@ -220,6 +223,10 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
         fetchLiveOrdersFromSupabase().then(res => { if (res) setOrders(res); });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dgm_table_sessions' }, () => {
+        fetchSuperAdminDGMMetrics().then(res => { if (res) setDgmMetrics(res); });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dgm_billing_ledger' }, () => {
+        fetchDGMBillingLedger({ limit: 1000 }).then(res => { if (Array.isArray(res)) setBillingLedger(res); });
         fetchSuperAdminDGMMetrics().then(res => { if (res) setDgmMetrics(res); });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_scans' }, () => {
@@ -319,15 +326,39 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
     };
   }, [settlements]);
 
+  // Unified DGM Bills: deduplicated union of `orders` + `dgm_billing_ledger` (captures QR-scan bills before waiter confirmation too)
+  const unifiedDgmBills = useMemo(() => {
+    const orderCodeSet = new Set(
+      (orders || []).map(o => String(o.orderNumber || o.order_number || '').replace(/\D/g, '')).filter(Boolean)
+    );
+    const unmatchedLedger = (billingLedger || [])
+      .filter(l => {
+        const digits = String(l.session_code || '').replace(/\D/g, '');
+        return !digits || !orderCodeSet.has(digits);
+      })
+      .map(l => ({
+        id: `ledg_${l.id}`,
+        restaurantId: l.restaurant_id,
+        orderNumber: l.session_code ? `DGM-${String(l.session_code).replace(/\D/g, '')}` : `DGM-${String(l.id).slice(-4)}`,
+        createdAt: l.created_at,
+        created_at: l.created_at,
+        orderStatus: 'confirmed'
+      }));
+    return [...(orders || []), ...unmatchedLedger];
+  }, [orders, billingLedger]);
+
   // 10 Dashboard KPI Statistics Cards
   const dynamicStats = useMemo(() => {
     const feePerBill = platformSettings?.feeRules?.platformFeePerBill ?? 5;
 
     // 1. Total DGM Orders (Single Source of Truth across Super Admin and Restaurant Panels)
-    const totalOrdersCount = orders.length || dgmMetrics?.totalDgmOrders || 15;
+    const totalOrdersCount = unifiedDgmBills.length || dgmMetrics?.totalDgmOrders || 0;
 
     // 2. Today DGM Orders (all restaurants) - Robust Local & UTC Date Matching
-    const todayOrdersCount = orders.filter(o => isSameCalendarDay(o.createdAt || o.created_at)).length;
+    const todayOrdersCount = Math.max(
+      unifiedDgmBills.filter(o => isSameCalendarDay(o.createdAt || o.created_at)).length,
+      Number(dgmMetrics?.todayOrders || 0)
+    );
 
     // 3. Total Suspended Restaurants
     const suspendedCount = restaurants.filter(r => r.status === 'suspended').length;
@@ -469,7 +500,7 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
         isEarnings: true
       }
     ];
-  }, [restaurants, orders, platformSettings, settlements, clearedPeriod, clearedByPeriod, liveScans]);
+  }, [unifiedDgmBills, dgmMetrics, restaurants, platformSettings, settlements, clearedPeriod, clearedByPeriod, liveScans]);
 
   // Pending Actions Data derived directly from real database records
   const pendingActions = useMemo(() => {
@@ -1845,7 +1876,7 @@ function Dashboard({ onNavigate, stats, restaurants, pending, orders, feePerBill
       />
 
       <div className="charts-row">
-        <TrendChart orders={orders} feePerBill={feePerBill} />
+        <TrendChart orders={unifiedDgmBills} feePerBill={feePerBill} />
         <StatusChart onNavigate={onNavigate} orders={orders} />
       </div>
 

@@ -1458,3 +1458,8 @@ This file records all architectural specifications, resolved issues, feature imp
   - Removed the `Super Admin Config` button and `Super Admin Feature Control` simulator modal from `RestaurantPanel.jsx`.
   - Replaced the sidebar `Plan Status` card with a read-only status card (`Premium Access Active` with unlocked feature checkmarks or `Standard` locked state + `"Managed by platform administrator."`).
   - Subscribed `RestaurantPanel.jsx` to Supabase Realtime (`restaurants` `UPDATE` for `panelRestoId`) so enabling/disabling `Order Management & Dashboard` in Super Admin Panel updates Restaurant Panel & route guards immediately in real time.
+
+### Update: Super Admin Dashboard Live DGM KPI Sync Fix (November 2026)
+- **Fixed Missing Today / Total DGM Orders & Fees on Super Admin Dashboard (`SuperAdminPanel.jsx`):**
+  - Previously, `dynamicStats` & `TrendChart` only counted rows in `orders`, missing new Fine-Dine QR-scan bills (`dgm_billing_ledger`, e.g. `DGM-9849`) created before waiter confirmation.
+  - Added `billingLedger` live fetch + Realtime `dgm_billing_ledger` subscription and computed `unifiedDgmBills` (deduplicated union of `orders` + `dgm_billing_ledger` by `DGM-XXXX` code) so **Total DGM Orders**, **Today DGM Orders**, **Total Fees Collections**, **Today Fees Collections**, and the **14-Day Trend Chart** update immediately in real time on every QR scan without double-counting.
