@@ -43,6 +43,7 @@ import AllRestaurantsView from './AllRestaurantsView';
 import PremiumFeaturesAccessView from './PremiumFeaturesAccessView';
 import DGMSessionTrackingView from './DGMSessionTrackingView';
 import DigitalBillsView from './DigitalBillsView';
+import { generateLiveSettlementCycles, computeSettlementSummary } from './digitalBillsStore';
 import RevenueOverviewView from './RevenueOverviewView';
 import RestaurantDuesView from './RestaurantDuesView';
 import PaymentTransactionsView from './PaymentTransactionsView';
@@ -326,33 +327,43 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
     };
   }, [settlements]);
 
-  // Unified DGM Bills: deduplicated union of `orders` + `dgm_billing_ledger` (captures QR-scan bills before waiter confirmation too)
+  // Unified DGM Bills: Single Source of Truth shared with Digital Bills & Revenue Overview (`generateLiveSettlementCycles`)
+  const dashboardCycles = useMemo(() => {
+    return generateLiveSettlementCycles({
+      restaurants,
+      orders,
+      billingLedger,
+      settlements,
+      currentDate: new Date()
+    });
+  }, [restaurants, orders, billingLedger, settlements]);
+
+  const dashboardCycleSummary = useMemo(() => {
+    return computeSettlementSummary(dashboardCycles, new Date());
+  }, [dashboardCycles]);
+
   const unifiedDgmBills = useMemo(() => {
-    const orderCodeSet = new Set(
-      (orders || []).map(o => String(o.orderNumber || o.order_number || '').replace(/\D/g, '')).filter(Boolean)
-    );
-    const unmatchedLedger = (billingLedger || [])
-      .filter(l => {
-        const digits = String(l.session_code || '').replace(/\D/g, '');
-        return !digits || !orderCodeSet.has(digits);
-      })
-      .map(l => ({
-        id: `ledg_${l.id}`,
-        restaurantId: l.restaurant_id,
-        orderNumber: l.session_code ? `DGM-${String(l.session_code).replace(/\D/g, '')}` : `DGM-${String(l.id).slice(-4)}`,
-        createdAt: l.created_at,
-        created_at: l.created_at,
-        orderStatus: 'confirmed'
-      }));
-    return [...(orders || []), ...unmatchedLedger];
-  }, [orders, billingLedger]);
+    const bills = [];
+    (dashboardCycles || []).forEach(c => {
+      (c.orders || []).forEach(o => {
+        bills.push({
+          ...o,
+          restaurantId: c.restaurantId,
+          createdAt: o.date || o.createdAt,
+          created_at: o.date || o.createdAt,
+          orderStatus: 'confirmed'
+        });
+      });
+    });
+    return bills;
+  }, [dashboardCycles]);
 
   // 10 Dashboard KPI Statistics Cards
   const dynamicStats = useMemo(() => {
     const feePerBill = platformSettings?.feeRules?.platformFeePerBill ?? 5;
 
-    // 1. Total DGM Orders (Single Source of Truth across Super Admin and Restaurant Panels)
-    const totalOrdersCount = unifiedDgmBills.length || dgmMetrics?.totalDgmOrders || 0;
+    // 1. Total DGM Orders (Single Source of Truth across Dashboard, Digital Bills, and Revenue Overview)
+    const totalOrdersCount = unifiedDgmBills.length;
 
     // 2. Today DGM Orders (all restaurants) - Robust Local & UTC Date Matching
     const todayOrdersCount = Math.max(
@@ -375,9 +386,12 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
     // 7. Today Fees Collections (all restaurants)
     const todayFees = todayOrdersCount * feePerBill;
 
-    // 8. Total Due Settlements (Total Fees minus Total Cleared Settlements)
+    // 8. Total Due Settlements (Current Cycle + Pending + Overdue unpaid balance)
     const totalClearedAmount = settlements.filter(s => s.status === 'cleared' || s.status === 'settled').reduce((sum, s) => sum + Number(s.amount || 0), 0);
-    const totalDueAmount = Math.max(0, totalFees - totalClearedAmount);
+    const totalDueAmount =
+      Number(dashboardCycleSummary.currentCycleFee || 0) +
+      Number(dashboardCycleSummary.pendingFee || 0) +
+      Number(dashboardCycleSummary.overdueFee || 0);
 
     // 9. Total Cleared Settlement (Filtered by Selected Period)
     const periodDisplayMap = {
@@ -500,7 +514,7 @@ export default function SuperAdminPanel({ onLogout, onGoToCustomerMenu, onGoToRe
         isEarnings: true
       }
     ];
-  }, [unifiedDgmBills, dgmMetrics, restaurants, platformSettings, settlements, clearedPeriod, clearedByPeriod, liveScans]);
+  }, [unifiedDgmBills, dashboardCycleSummary, dgmMetrics, restaurants, platformSettings, settlements, clearedPeriod, clearedByPeriod, liveScans]);
 
   // Pending Actions Data derived directly from real database records
   const pendingActions = useMemo(() => {

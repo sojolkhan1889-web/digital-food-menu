@@ -130,10 +130,11 @@ export default function RevenueOverviewView({
     return buildPaymentTransactions({ settlements, cycles, restaurants });
   }, [settlements, cycles, restaurants]);
 
-  // 4. Date-Filtered Metrics (Accrued Fee by Bill Date; Collected Revenue by Payment Date)
+  // 4. Date-Filtered Metrics (Accrued Fee by Bill Date from Single-Source Cycles; Collected Revenue by Payment Date)
   const dateFilteredMetrics = useMemo(() => {
-    const filteredOrders = (orders || []).filter(o => isDateInBounds(o.createdAt || o.created_at, bounds));
-    const accruedFee = filteredOrders.reduce((sum, o) => sum + Number(o.platformFee || feePerBill), 0);
+    const allCycleBills = (cycles || []).flatMap(c => c.orders || []);
+    const filteredBills = allCycleBills.filter(o => isDateInBounds(o.date || o.createdAt, bounds));
+    const accruedFee = filteredBills.reduce((sum, o) => sum + Number(o.fee || feePerBill), 0);
 
     const filteredVerifiedTxns = allTransactions.filter(
       t => t.status === 'verified' && isDateInBounds(t.paymentDate, bounds)
@@ -153,12 +154,12 @@ export default function RevenueOverviewView({
 
     return {
       accruedFee,
-      billsCount: filteredOrders.length,
+      billsCount: filteredBills.length,
       collectedRevenue,
       verifiedPaymentsCount: filteredVerifiedTxns.length,
       filteredRecentTxns
     };
-  }, [orders, allTransactions, bounds, feePerBill]);
+  }, [cycles, allTransactions, bounds, feePerBill]);
 
   // 5. Live Balances (Always As of Today — never distorted by Date Filter)
   const liveBalances = useMemo(() => {
