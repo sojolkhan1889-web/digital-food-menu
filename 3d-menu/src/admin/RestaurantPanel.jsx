@@ -911,6 +911,7 @@ export default function RestaurantPanel({
   // Live settlements, billing ledger & merchant QR config from Supabase (Instant Realtime WebSocket)
   const [settlements, setSettlements] = useState([]);
   const [billingLedger, setBillingLedger] = useState([]);
+  const [liveRestoOrders, setLiveRestoOrders] = useState([]);
   const [merchantQRConfig, setMerchantQRConfig] = useState(getMerchantQRConfig);
   const [activeReminder, setActiveReminder] = useState(() => {
     const list = getRestaurantReminders(panelRestoId);
@@ -934,15 +935,17 @@ export default function RestaurantPanel({
   useEffect(() => {
     let isMounted = true;
     const syncSettlements = async () => {
-      const [live, ledgerRes, qrRes] = await Promise.all([
+      const [live, ledgerRes, qrRes, ordersRes] = await Promise.all([
         fetchRestaurantSettlementsFromSupabase(panelRestoId),
         fetchDGMBillingLedger({ restaurantId: panelRestoId, limit: 300 }),
-        fetchMerchantQRConfigFromSupabase()
+        fetchMerchantQRConfigFromSupabase(),
+        supabase.from('orders').select('*').eq('restaurant_id', panelRestoId).order('created_at', { ascending: false })
       ]);
       if (!isMounted) return;
       if (Array.isArray(live)) setSettlements(live);
       if (Array.isArray(ledgerRes)) setBillingLedger(ledgerRes);
       if (qrRes) setMerchantQRConfig(qrRes);
+      if (Array.isArray(ordersRes?.data)) setLiveRestoOrders(ordersRes.data);
     };
     syncSettlements();
 
@@ -1030,7 +1033,7 @@ export default function RestaurantPanel({
     };
     const rawCycles = generateLiveSettlementCycles({
       restaurants: [restoEntity],
-      orders,
+      orders: liveRestoOrders.length > 0 ? liveRestoOrders : orders,
       billingLedger,
       settlements,
       currentDate: now
@@ -1147,7 +1150,7 @@ export default function RestaurantPanel({
       graceDaysRemaining: pendingCycles[0]?.graceDaysRemaining || 3,
       primaryCycle: overdueCycles[0] || pendingCycles[0] || unpaidCycles[0] || null
     };
-  }, [panelRestoId, restaurantProfile?.name, orders, billingLedger, settlements, dueSettlementAmount, totalClearedAmount]);
+  }, [panelRestoId, restaurantProfile?.name, liveRestoOrders, orders, billingLedger, settlements, dueSettlementAmount, totalClearedAmount]);
 
   const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
   const [selectedSettlementCycleId, setSelectedSettlementCycleId] = useState('');

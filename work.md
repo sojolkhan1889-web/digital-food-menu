@@ -1467,3 +1467,6 @@ This file records all architectural specifications, resolved issues, feature imp
 - **Fixed Non-Fine Dine KPI Subtitle & Session/Ledger Count Parity (`DGMSessionTrackingView.jsx`, `dgmSessionStore.js`):**
   - Replaced hardcoded `"All time (15 verified bills)"` subtitle with dynamic `All time (${metrics.totalDgmOrders} verified bills)`.
   - Included unmatched historical pre-session Non-Fine Dine `orders` (`resto_002`) in `fetchSuperAdminDGMSessions` and `fetchDGMBillingLedger` when `restaurantType === 'non_fine'`, so **Total DGM Orders KPI**, **All Sessions**, and **Billing Ledger** all show the exact matching count (`6` for Hungry Bite Café) without double-counting.
+- **Fixed Restaurant Panel `Settlement History` Paid Amount & Remaining Balance Spillover (`RestaurantPanel.jsx`, `digitalBillsStore.js`):**
+  - Guarded `unallocatedPoolRemaining` in `digitalBillsStore.js` (`w.end_at.getTime() <= now.getTime()`) so historical unallocated payments never spill over into active `In Progress` cycles.
+  - Updated `RestaurantPanel.jsx` (`syncSettlements`) to fetch all historical Supabase `orders` for `panelRestoId` (`liveRestoOrders`), ensuring past settled cycles (e.g. Hungry Bite Café `8–14 Nov 2026` `৳10`) appear in `Settlement History` and `22–28 Nov 2026` (`৳25` In Progress) accurately shows `Paid Amount: ৳0.00` and `Remaining Balance: ৳25.00`.

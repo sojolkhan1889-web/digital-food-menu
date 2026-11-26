@@ -333,7 +333,7 @@ export const generateLiveSettlementCycles = ({
       // Compute paidAmount from Supabase live records + any unsynced optimistic local overrides
       let paidAmount = directMatchedAmount;
 
-      if (matchingSettlements.length === 0 && unallocatedPoolRemaining > 0 && accruedFee > 0) {
+      if (matchingSettlements.length === 0 && unallocatedPoolRemaining > 0 && accruedFee > 0 && w.end_at.getTime() <= now.getTime()) {
         const applied = Math.min(accruedFee, unallocatedPoolRemaining);
         paidAmount += applied;
         unallocatedPoolRemaining -= applied;
