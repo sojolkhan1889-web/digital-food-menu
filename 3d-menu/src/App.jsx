@@ -3381,8 +3381,13 @@ export default function App() {
           chatMessages={chatMessagesList}
           superAdminConfig={{
             ...superAdminConfig,
+            enableDashboard: activeRestaurant?.features?.enableDashboard !== undefined
+              ? Boolean(activeRestaurant.features.enableDashboard)
+              : Boolean(activeRestaurant?.features?.enableOrderManagement),
             enableOrderManagement: Boolean(activeRestaurant?.features?.enableOrderManagement),
-            enablePayments: Boolean(activeRestaurant?.features?.enableOrderManagement)
+            enablePayments: activeRestaurant?.features?.enablePayments !== undefined
+              ? Boolean(activeRestaurant.features.enablePayments)
+              : Boolean(activeRestaurant?.features?.enableOrderManagement)
           }}
           onAddFood={handleAddFoodFromPanel}
           onDeleteFood={handleDeleteFoodFromPanel}

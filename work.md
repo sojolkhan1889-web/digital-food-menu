@@ -1452,7 +1452,7 @@ This file records all architectural specifications, resolved issues, feature imp
 ### Update: Super Admin `Premium Features Access` & Removal of Restaurant `Super Admin Config` (November 2026)
 - **1. Replaced `Restaurant Profiles` with `Premium Features Access` (`SuperAdminPanel.jsx`, `PremiumFeaturesAccessView.jsx`, `superAdminStore.js`):**
   - Renamed the `Restaurants` submenu item from `Restaurant Profiles` to **`Premium Features Access`**.
-  - Built two-column `PremiumFeaturesAccessView.jsx`: Left searchable registered restaurant list + Right per-restaurant **`Order Management & Dashboard`** toggle (`Live Dashboard`, `Order Management`, `Customer Payments`), `Cancel` / `Save Changes` controls, and bottom **`Access Change History`** audit log.
+  - Built two-column `PremiumFeaturesAccessView.jsx`: Left searchable registered restaurant list + Right per-restaurant **3 independent feature toggles** (`Live Dashboard` `enableDashboard`, `Order Management` `enableOrderManagement`, `Customer Payments` `enablePayments` — no grouped toggle), `Cancel` / `Save Changes` controls, and bottom **`Access Change History`** audit log.
   - Added `updateRestaurantFeatureAccessInSupabase` in `superAdminStore.js` persisting per-restaurant flags (`enableOrderManagement`, `enablePayments`) and `_accessHistory` in Supabase `restaurants.features` JSONB without affecting other restaurants or deleting historical orders/payments on disable.
 - **2. Removed `Super Admin Config` & Enforced Live Supabase Feature Sync (`RestaurantPanel.jsx`, `App.jsx`):**
   - Removed the `Super Admin Config` button and `Super Admin Feature Control` simulator modal from `RestaurantPanel.jsx`.

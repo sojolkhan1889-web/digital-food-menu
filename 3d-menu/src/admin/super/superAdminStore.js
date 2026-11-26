@@ -593,7 +593,7 @@ export const updateRestaurantInSupabase = async (id, updates = {}) => {
 };
 
 // 7.2 Update restaurant premium feature access & audit history in Supabase
-export const updateRestaurantFeatureAccessInSupabase = async (id, featureUpdates = {}, historyEntry = null) => {
+export const updateRestaurantFeatureAccessInSupabase = async (id, featureUpdates = {}, historyEntries = []) => {
   try {
     const { data: existingRow } = await supabase
       .from('restaurants')
@@ -606,7 +606,12 @@ export const updateRestaurantFeatureAccessInSupabase = async (id, featureUpdates
       : {};
 
     const prevHistory = Array.isArray(currentFeatures._accessHistory) ? currentFeatures._accessHistory : [];
-    const nextHistory = historyEntry ? [historyEntry, ...prevHistory].slice(0, 50) : prevHistory;
+    const entriesArray = Array.isArray(historyEntries)
+      ? historyEntries
+      : (historyEntries ? [historyEntries] : []);
+    const nextHistory = entriesArray.length > 0
+      ? [...entriesArray, ...prevHistory].slice(0, 50)
+      : prevHistory;
 
     const mergedFeatures = {
       ...currentFeatures,

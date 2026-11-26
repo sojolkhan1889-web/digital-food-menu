@@ -269,10 +269,21 @@ export default function RestaurantPanel({
     };
   }, [panelRestoIdForFeatures]);
 
-  // Super Admin Gated Premium Status: False by default! Controlled exclusively from Super Admin Panel.
-  const isPremiumActive = Boolean(
+  // Independent Super Admin Gated Premium Feature Flags: False by default!
+  const hasDashboardAccess = Boolean(
+    liveFeatures?.enableDashboard !== undefined
+      ? liveFeatures.enableDashboard
+      : (liveFeatures?.enableOrderManagement ?? superAdminConfig?.enableOrderManagement)
+  );
+  const hasOrderManageAccess = Boolean(
     liveFeatures?.enableOrderManagement ?? superAdminConfig?.enableOrderManagement
   );
+  const hasPaymentsAccess = Boolean(
+    liveFeatures?.enablePayments !== undefined
+      ? liveFeatures.enablePayments
+      : (liveFeatures?.enableOrderManagement ?? superAdminConfig?.enableOrderManagement)
+  );
+  const isPremiumActive = hasDashboardAccess || hasOrderManageAccess || hasPaymentsAccess;
 
   // Dynamic primary native language for the registered restaurant country
   const nativeLang = useMemo(() => {
@@ -292,7 +303,7 @@ export default function RestaurantPanel({
         console.error('Error parsing initial tab from URL:', e);
       }
     }
-    return isPremiumActive ? 'dashboard' : 'foods';
+    return hasDashboardAccess ? 'dashboard' : 'foods';
   };
 
   // Navigation: Default is 'foods' (Food Items & Publish) or 'dashboard' (if Order Management is enabled)
@@ -322,7 +333,7 @@ export default function RestaurantPanel({
         if (tab) {
           setActiveTab(tab);
         } else {
-          setActiveTab(isPremiumActive ? 'dashboard' : 'foods');
+          setActiveTab(hasDashboardAccess ? 'dashboard' : 'foods');
         }
       }
     };
@@ -571,12 +582,16 @@ export default function RestaurantPanel({
     }
   };
 
-  // If activeTab is premium and premium gets disabled, fallback to foods
+  // If activeTab is a gated premium tab and its access gets disabled, fallback to foods
   useEffect(() => {
-    if (!isPremiumActive && (activeTab === 'dashboard' || activeTab === 'orders' || activeTab === 'payments')) {
+    if (
+      (activeTab === 'dashboard' && !hasDashboardAccess) ||
+      (activeTab === 'orders' && !hasOrderManageAccess) ||
+      (activeTab === 'payments' && !hasPaymentsAccess)
+    ) {
       setActiveTab('foods');
     }
-  }, [isPremiumActive, activeTab]);
+  }, [hasDashboardAccess, hasOrderManageAccess, hasPaymentsAccess, activeTab]);
 
   const panelRestoId = activeRestaurant?.id || restaurantProfile?.restaurant_id || (restaurantProfile?.id ? String(restaurantProfile.id).replace(/^set_/, '') : 'resto_001');
 
@@ -1325,17 +1340,24 @@ export default function RestaurantPanel({
       { id: 'support', label: 'Support', icon: Headphones, badge: tickets.filter(t => t.status === 'Open').length || 'Live' }
     ];
 
-    if (isPremiumActive) {
-      return [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        ...defaultTabs,
-        { id: 'orders', label: 'Order Manage', icon: ShoppingBag, badge: orders.filter(o => o.orderStatus === 'pending').length || null, badgeColor: 'bg-amber-600' },
-        { id: 'payments', label: 'Payments', icon: CreditCard }
-      ];
+    const resultTabs = [...defaultTabs];
+    if (hasDashboardAccess) {
+      resultTabs.unshift({ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard });
     }
-
-    return defaultTabs;
-  }, [isPremiumActive, foods.length, uniqueCategories.length, subcategories.length, featuredSliders, tickets, orders, settlementLifecycle.unpaidCycles.length]);
+    if (hasOrderManageAccess) {
+      resultTabs.push({
+        id: 'orders',
+        label: 'Order Manage',
+        icon: ShoppingBag,
+        badge: orders.filter(o => o.orderStatus === 'pending').length || null,
+        badgeColor: 'bg-amber-600'
+      });
+    }
+    if (hasPaymentsAccess) {
+      resultTabs.push({ id: 'payments', label: 'Payments', icon: CreditCard });
+    }
+    return resultTabs;
+  }, [hasDashboardAccess, hasOrderManageAccess, hasPaymentsAccess, foods.length, uniqueCategories.length, subcategories.length, featuredSliders, tickets, orders, settlementLifecycle.unpaidCycles.length]);
 
   // Tab Title & Breadcrumb Metadata for Modern Top Bar
   const tabMeta = useMemo(() => {
@@ -1657,18 +1679,24 @@ export default function RestaurantPanel({
                       <span>Premium Access Active</span>
                     </div>
                     <ul className="space-y-1 text-[10.5px] mb-2">
-                      <li className="flex items-center gap-1.5">
-                        <Check className="w-3 h-3 text-emerald-500 shrink-0" />
-                        <span>Live Dashboard</span>
-                      </li>
-                      <li className="flex items-center gap-1.5">
-                        <Check className="w-3 h-3 text-emerald-500 shrink-0" />
-                        <span>Order Management</span>
-                      </li>
-                      <li className="flex items-center gap-1.5">
-                        <Check className="w-3 h-3 text-emerald-500 shrink-0" />
-                        <span>Customer Payments</span>
-                      </li>
+                      {hasDashboardAccess && (
+                        <li className="flex items-center gap-1.5">
+                          <Check className="w-3 h-3 text-emerald-500 shrink-0" />
+                          <span>Live Dashboard</span>
+                        </li>
+                      )}
+                      {hasOrderManageAccess && (
+                        <li className="flex items-center gap-1.5">
+                          <Check className="w-3 h-3 text-emerald-500 shrink-0" />
+                          <span>Order Management</span>
+                        </li>
+                      )}
+                      {hasPaymentsAccess && (
+                        <li className="flex items-center gap-1.5">
+                          <Check className="w-3 h-3 text-emerald-500 shrink-0" />
+                          <span>Customer Payments</span>
+                        </li>
+                      )}
                     </ul>
                   </>
                 ) : (
@@ -4342,7 +4370,7 @@ export default function RestaurantPanel({
           {/* ====================================================== */}
           {/* SECTION 7: DASHBOARD (PREMIUM ONLY)                    */}
           {/* ====================================================== */}
-          {activeTab === 'dashboard' && isPremiumActive && (
+          {activeTab === 'dashboard' && hasDashboardAccess && (
             <div className="space-y-6">
               {/* 6 Metric Cards */}
               <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
@@ -4489,7 +4517,7 @@ export default function RestaurantPanel({
           {/* ====================================================== */}
           {/* SECTION 8: ORDER MANAGE (PREMIUM ONLY)                 */}
           {/* ====================================================== */}
-          {activeTab === 'orders' && isPremiumActive && (
+          {activeTab === 'orders' && hasOrderManageAccess && (
             <div className="space-y-6">
               <div className={`p-4 rounded-[5px] border flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-300 shadow-sm'
                 }`}>
@@ -4584,7 +4612,7 @@ export default function RestaurantPanel({
           {/* ====================================================== */}
           {/* SECTION 9: PAYMENTS (PREMIUM ONLY)                     */}
           {/* ====================================================== */}
-          {activeTab === 'payments' && isPremiumActive && (
+          {activeTab === 'payments' && hasPaymentsAccess && (
             <div className="space-y-6">
               <div className={`p-4 rounded-[5px] border flex items-center justify-between ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-300 shadow-sm'
                 }`}>

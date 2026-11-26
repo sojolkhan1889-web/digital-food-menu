@@ -5,7 +5,7 @@ import {
   Store,
   ChevronRight,
   LayoutDashboard,
-  ShoppingBag,
+  ClipboardList,
   CreditCard,
   ToggleLeft,
   ToggleRight,
@@ -17,19 +17,39 @@ import {
 } from 'lucide-react';
 import { formatDhakaDateTime } from './revenueSettlementService';
 
-export const PREMIUM_FEATURE_GROUPS = [
+export const INDIVIDUAL_PREMIUM_FEATURES = [
+  {
+    key: 'enableDashboard',
+    label: 'Live Dashboard',
+    description: 'View live restaurant insights and performance summaries.',
+    scope: 'Restaurant panel',
+    icon: LayoutDashboard
+  },
   {
     key: 'enableOrderManagement',
-    label: 'Order Management & Dashboard',
-    description: 'Unlocks Live Dashboard, Order Management, and Customer Payments tabs in Restaurant Panel.',
-    scope: 'Restaurant Panel & applicable digital menu order workflows',
-    included: [
-      { label: 'Live Dashboard', icon: LayoutDashboard },
-      { label: 'Order Management', icon: ShoppingBag },
-      { label: 'Customer Payments', icon: CreditCard }
-    ]
+    label: 'Order Management',
+    description: 'Receive, manage and track digital menu orders.',
+    scope: 'Restaurant panel / applicable digital menu functions',
+    icon: ClipboardList
+  },
+  {
+    key: 'enablePayments',
+    label: 'Customer Payments',
+    description: 'Access customer payment records and transaction management.',
+    scope: 'Restaurant panel',
+    icon: CreditCard
   }
 ];
+
+export const resolveRestaurantFeatures = (features = {}) => {
+  const f = features && typeof features === 'object' ? features : {};
+  const legacyGroup = Boolean(f.enableOrderManagement);
+  return {
+    enableDashboard: f.enableDashboard !== undefined ? Boolean(f.enableDashboard) : legacyGroup,
+    enableOrderManagement: Boolean(f.enableOrderManagement),
+    enablePayments: f.enablePayments !== undefined ? Boolean(f.enablePayments) : legacyGroup
+  };
+};
 
 export default function PremiumFeaturesAccessView({
   restaurants = [],
@@ -38,7 +58,11 @@ export default function PremiumFeaturesAccessView({
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRestoId, setSelectedRestoId] = useState(() => restaurants[0]?.id || '');
-  const [draftFeatures, setDraftFeatures] = useState({});
+  const [draftFeatures, setDraftFeatures] = useState({
+    enableDashboard: false,
+    enableOrderManagement: false,
+    enablePayments: false
+  });
   const [saving, setSaving] = useState(false);
 
   // Keep selectedRestoId valid if restaurants list loads asynchronously
@@ -53,13 +77,15 @@ export default function PremiumFeaturesAccessView({
     [restaurants, selectedRestoId]
   );
 
+  const savedFeatures = useMemo(
+    () => resolveRestaurantFeatures(selectedRestaurant?.features),
+    [selectedRestaurant]
+  );
+
   // Reset draft whenever selected restaurant or its saved features change
   useEffect(() => {
     if (selectedRestaurant) {
-      const f = selectedRestaurant.features || {};
-      setDraftFeatures({
-        enableOrderManagement: Boolean(f.enableOrderManagement)
-      });
+      setDraftFeatures(resolveRestaurantFeatures(selectedRestaurant.features));
     }
   }, [selectedRestaurant]);
 
@@ -73,9 +99,17 @@ export default function PremiumFeaturesAccessView({
     );
   }, [restaurants, searchQuery]);
 
-  const savedEnabled = Boolean(selectedRestaurant?.features?.enableOrderManagement);
-  const draftEnabled = Boolean(draftFeatures.enableOrderManagement);
-  const hasUnsavedChanges = Boolean(selectedRestaurant && savedEnabled !== draftEnabled);
+  const hasUnsavedChanges = useMemo(() => {
+    if (!selectedRestaurant) return false;
+    return INDIVIDUAL_PREMIUM_FEATURES.some(
+      (feat) => Boolean(draftFeatures[feat.key]) !== Boolean(savedFeatures[feat.key])
+    );
+  }, [selectedRestaurant, draftFeatures, savedFeatures]);
+
+  const draftEnabledCount = useMemo(
+    () => INDIVIDUAL_PREMIUM_FEATURES.filter((feat) => Boolean(draftFeatures[feat.key])).length,
+    [draftFeatures]
+  );
 
   const accessHistory = useMemo(() => {
     const hist = selectedRestaurant?.features?._accessHistory;
@@ -84,35 +118,36 @@ export default function PremiumFeaturesAccessView({
 
   const handleCancel = () => {
     if (!selectedRestaurant) return;
-    setDraftFeatures({
-      enableOrderManagement: Boolean(selectedRestaurant.features?.enableOrderManagement)
-    });
+    setDraftFeatures(savedFeatures);
   };
 
   const handleSave = async () => {
     if (!selectedRestaurant || !hasUnsavedChanges || saving) return;
     setSaving(true);
     try {
-      const nextEnable = Boolean(draftFeatures.enableOrderManagement);
-      const historyEntry = {
-        id: `acc_${Date.now()}`,
-        featureKey: 'enableOrderManagement',
-        featureLabel: 'Order Management & Dashboard',
-        previousStatus: savedEnabled ? 'Enabled' : 'Disabled',
-        newStatus: nextEnable ? 'Enabled' : 'Disabled',
-        changedBy: 'Super Admin',
-        timestamp: new Date().toISOString()
-      };
+      const nowIso = new Date().toISOString();
+      const changedEntries = INDIVIDUAL_PREMIUM_FEATURES
+        .filter((feat) => Boolean(draftFeatures[feat.key]) !== Boolean(savedFeatures[feat.key]))
+        .map((feat, idx) => ({
+          id: `acc_${Date.now()}_${idx}`,
+          featureKey: feat.key,
+          featureLabel: feat.label,
+          previousStatus: savedFeatures[feat.key] ? 'Enabled' : 'Disabled',
+          newStatus: draftFeatures[feat.key] ? 'Enabled' : 'Disabled',
+          changedBy: 'Super Admin',
+          timestamp: nowIso
+        }));
 
       const nextPayload = {
-        enableOrderManagement: nextEnable,
-        enablePayments: nextEnable
+        enableDashboard: Boolean(draftFeatures.enableDashboard),
+        enableOrderManagement: Boolean(draftFeatures.enableOrderManagement),
+        enablePayments: Boolean(draftFeatures.enablePayments)
       };
 
-      await onSaveFeatureAccess(selectedRestaurant.id, nextPayload, historyEntry);
+      await onSaveFeatureAccess(selectedRestaurant.id, nextPayload, changedEntries);
       if (showToast) {
         showToast(
-          `Saved "${selectedRestaurant.name}" Premium Access (${nextEnable ? 'Enabled' : 'Disabled'}).`
+          `Saved "${selectedRestaurant.name}" Premium Access (${draftEnabledCount} of ${INDIVIDUAL_PREMIUM_FEATURES.length} enabled).`
         );
       }
     } catch (err) {
@@ -238,7 +273,8 @@ export default function PremiumFeaturesAccessView({
             ) : (
               filteredRestaurants.map((r) => {
                 const isSelected = r.id === selectedRestaurant?.id;
-                const isActiveFeat = Boolean(r.features?.enableOrderManagement);
+                const resolved = resolveRestaurantFeatures(r.features);
+                const enabledCount = INDIVIDUAL_PREMIUM_FEATURES.filter((f) => Boolean(resolved[f.key])).length;
                 return (
                   <button
                     key={r.id}
@@ -301,11 +337,11 @@ export default function PremiumFeaturesAccessView({
                           borderRadius: '999px',
                           fontSize: '11px',
                           fontWeight: 700,
-                          background: isActiveFeat ? '#dcfce7' : '#f1f5f9',
-                          color: isActiveFeat ? '#15803d' : '#475569'
+                          background: enabledCount > 0 ? '#dcfce7' : '#f1f5f9',
+                          color: enabledCount > 0 ? '#15803d' : '#475569'
                         }}
                       >
-                        {isActiveFeat ? '1/1 active' : '0/1 active'}
+                        {enabledCount}/{INDIVIDUAL_PREMIUM_FEATURES.length} active
                       </span>
                       <ChevronRight size={15} color={isSelected ? '#ea580c' : '#94a3b8'} />
                     </div>
@@ -366,7 +402,7 @@ export default function PremiumFeaturesAccessView({
                       {selectedRestaurant.name}
                     </div>
                     <div style={{ fontSize: '12px', color: '#64748b' }}>
-                      /{selectedRestaurant.slug || 'menu'} · {selectedRestaurant.type === 'fine' ? 'Fine Dine' : 'Non-Fine Dine'} · {selectedRestaurant.plan || 'Starter'}
+                      Selected restaurant · /{selectedRestaurant.slug || 'menu'}
                     </div>
                   </div>
                 </div>
@@ -377,109 +413,110 @@ export default function PremiumFeaturesAccessView({
                     borderRadius: '999px',
                     fontSize: '12px',
                     fontWeight: 700,
-                    background: draftEnabled ? '#dcfce7' : '#f1f5f9',
-                    color: draftEnabled ? '#15803d' : '#475569'
+                    background: draftEnabledCount > 0 ? '#dcfce7' : '#f1f5f9',
+                    color: draftEnabledCount > 0 ? '#15803d' : '#475569'
                   }}
                 >
-                  {draftEnabled ? '1 of 1 feature group enabled' : 'Standard Plan (0 enabled)'}
+                  {draftEnabledCount} of {INDIVIDUAL_PREMIUM_FEATURES.length} features enabled
                 </span>
               </div>
 
-              {/* Feature Access Control List */}
+              {/* Independent Feature Access Control List */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                   <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#0f172a' }}>
                     Premium Feature Access Control
                   </span>
                   <span style={{ fontSize: '11.5px', color: '#64748b' }}>
-                    {PREMIUM_FEATURE_GROUPS.length} feature group
+                    {INDIVIDUAL_PREMIUM_FEATURES.length} individual features
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {PREMIUM_FEATURE_GROUPS.map((fg) => {
-                    const enabled = Boolean(draftFeatures[fg.key]);
+                <div
+                  style={{
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '14px',
+                    overflow: 'hidden',
+                    background: '#ffffff'
+                  }}
+                >
+                  {INDIVIDUAL_PREMIUM_FEATURES.map((feat, index) => {
+                    const enabled = Boolean(draftFeatures[feat.key]);
+                    const IconComp = feat.icon;
                     return (
                       <div
-                        key={fg.key}
+                        key={feat.key}
                         style={{
-                          border: enabled ? '1px solid #bbf7d0' : '1px solid #e2e8f0',
-                          background: enabled ? '#f0fdf4' : '#f8fafc',
-                          borderRadius: '14px',
-                          padding: '16px'
+                          padding: '15px 18px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '14px',
+                          borderTop: index > 0 ? '1px solid #f1f5f9' : 'none',
+                          background: '#ffffff'
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '14px' }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: '14.5px', fontWeight: 800, color: '#0f172a' }}>
-                              {fg.label}
-                            </div>
-                            <p style={{ margin: '4px 0 10px', fontSize: '12.5px', color: '#475569', lineHeight: 1.5 }}>
-                              {fg.description}
-                            </p>
-
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
-                              {fg.included.map((item) => {
-                                const IconComp = item.icon;
-                                return (
-                                  <span
-                                    key={item.label}
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '5px',
-                                      padding: '4px 10px',
-                                      borderRadius: '8px',
-                                      fontSize: '11.5px',
-                                      fontWeight: 700,
-                                      background: '#ffffff',
-                                      border: '1px solid #e2e8f0',
-                                      color: '#334155'
-                                    }}
-                                  >
-                                    <IconComp size={13} color={enabled ? '#16a34a' : '#64748b'} />
-                                    {item.label}
-                                  </span>
-                                );
-                              })}
-                            </div>
-
-                            <div style={{ fontSize: '11px', color: '#64748b' }}>
-                              Scope: {fg.scope}
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setDraftFeatures((prev) => ({
-                                ...prev,
-                                [fg.key]: !prev[fg.key]
-                              }))
-                            }
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', minWidth: 0 }}>
+                          <div
                             style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              padding: '6px 10px',
+                              width: '36px',
+                              height: '36px',
                               borderRadius: '10px',
-                              border: 'none',
-                              background: 'transparent',
-                              cursor: 'pointer',
-                              fontSize: '12.5px',
-                              fontWeight: 800,
-                              color: enabled ? '#16a34a' : '#64748b',
-                              flexShrink: 0
+                              background: '#fff7ed',
+                              border: '1px solid #ffedd5',
+                              color: '#ea580c',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                              marginTop: '2px'
                             }}
                           >
-                            {enabled ? (
-                              <ToggleRight size={32} color="#16a34a" />
-                            ) : (
-                              <ToggleLeft size={32} color="#94a3b8" />
-                            )}
-                            <span>{enabled ? 'Enabled' : 'Disabled'}</span>
-                          </button>
+                            <IconComp size={17} />
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
+                              {feat.label}
+                            </div>
+                            <div style={{ fontSize: '12.5px', color: '#475569', marginTop: '2px' }}>
+                              {feat.description}
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '3px' }}>
+                              {feat.scope}
+                            </div>
+                          </div>
                         </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDraftFeatures((prev) => ({
+                              ...prev,
+                              [feat.key]: !prev[feat.key]
+                            }))
+                          }
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '4px 6px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            fontSize: '12.5px',
+                            fontWeight: 700,
+                            color: enabled ? '#15803d' : '#64748b',
+                            flexShrink: 0
+                          }}
+                        >
+                          {enabled ? (
+                            <ToggleRight size={34} color="#059669" />
+                          ) : (
+                            <ToggleLeft size={34} color="#94a3b8" />
+                          )}
+                          <span>{enabled ? 'Enabled' : 'Disabled'}</span>
+                        </button>
                       </div>
                     );
                   })}
@@ -492,16 +529,12 @@ export default function PremiumFeaturesAccessView({
                   alignItems: 'center',
                   gap: '8px',
                   fontSize: '12px',
-                  color: '#64748b',
-                  background: '#f8fafc',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: '1px solid #f1f5f9'
+                  color: '#64748b'
                 }}
               >
                 <Info size={15} style={{ flexShrink: 0 }} />
                 <span>
-                  Disabling a feature hides/locks it in Restaurant Panel without deleting historical orders, payments, or settlement records.
+                  Each feature is controlled independently. Changes take effect after saving.
                 </span>
               </div>
 
