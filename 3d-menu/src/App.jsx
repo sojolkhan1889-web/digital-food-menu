@@ -4877,11 +4877,11 @@ export default function App() {
                             <Check className="w-5 h-5 stroke-[3]" />
                           </div>
                           <div>
-                            <div className="text-white font-extrabold text-sm sm:text-base leading-tight">
-                              Order Placed Successfully!
+                            <div className={`text-white font-extrabold text-sm sm:text-base leading-tight ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}>
+                              {t('order_placed_success', customerLanguage)}
                             </div>
-                            <div className="text-xs text-emerald-200/80 mt-0.5">
-                              Your order has been sent to the restaurant.
+                            <div className={`text-xs text-emerald-200/80 mt-0.5 ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}>
+                              {t('order_sent_to_restaurant', customerLanguage)}
                             </div>
                           </div>
                         </div>
@@ -4889,9 +4889,9 @@ export default function App() {
                         {/* 3-Column Order ID / Live Status / Placed At */}
                         <div className="p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 grid grid-cols-3 gap-2 text-left">
                           <div>
-                            <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                            <div className={`flex items-center gap-1 text-[11px] text-slate-400 ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}>
                               <FileText className="w-3.5 h-3.5 text-[#F59E0B]" />
-                              <span>Order ID</span>
+                              <span>{t('order_id_label', customerLanguage)}</span>
                             </div>
                             <div className="text-xs sm:text-sm font-extrabold text-white font-mono mt-1">
                               {directPlacedOrder.orderNumber}
@@ -4899,13 +4899,13 @@ export default function App() {
                           </div>
 
                           <div>
-                            <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                            <div className={`flex items-center gap-1 text-[11px] text-slate-400 ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}>
                               <Layers className="w-3.5 h-3.5 text-[#F59E0B]" />
-                              <span>Order Status</span>
+                              <span>{t('order_status_label', customerLanguage)}</span>
                             </div>
                             <div className="mt-1">
                               <span
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold capitalize border ${
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${customerLanguage === 'bn' ? 'font-bengali' : 'capitalize'} ${
                                   directPlacedOrder.orderStatus === 'completed'
                                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                                     : directPlacedOrder.orderStatus === 'preparing'
@@ -4926,28 +4926,29 @@ export default function App() {
                                       : 'bg-amber-400 animate-pulse'
                                   }`}
                                 />
-                                {directPlacedOrder.orderStatus || 'Pending'}
+                                {t(`status_${(directPlacedOrder.orderStatus || 'pending').toLowerCase()}`, customerLanguage)}
                               </span>
                             </div>
                           </div>
 
                           <div>
-                            <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                            <div className={`flex items-center gap-1 text-[11px] text-slate-400 ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}>
                               <Clock className="w-3.5 h-3.5 text-[#F59E0B]" />
-                              <span>Placed At</span>
+                              <span>{t('placed_at_label', customerLanguage)}</span>
                             </div>
-                            <div className="text-[11px] sm:text-xs font-bold text-white mt-1">
+                            <div className={`text-[11px] sm:text-xs font-bold text-white mt-1 ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}>
                               {(() => {
                                 try {
-                                  return new Intl.DateTimeFormat('en-US', {
+                                  const formatted = new Intl.DateTimeFormat(customerLanguage === 'bn' ? 'bn-BD' : 'en-US', {
                                     month: 'short',
                                     day: 'numeric',
                                     hour: 'numeric',
                                     minute: '2-digit',
                                     hour12: true
                                   }).format(new Date(directPlacedOrder.placedAt));
+                                  return customerLanguage === 'bn' ? toBengaliDigits(formatted) : formatted;
                                 } catch {
-                                  return 'Just now';
+                                  return t('just_now', customerLanguage);
                                 }
                               })()}
                             </div>
@@ -4957,7 +4958,7 @@ export default function App() {
                         <button
                           type="button"
                           onClick={handleCloseSelectedListModal}
-                          className="w-full py-3.5 px-6 rounded-full bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] active:scale-[0.98] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
+                          className={`w-full py-3.5 px-6 rounded-full bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] active:scale-[0.98] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}
                         >
                           <span>{t('back_to_menu', customerLanguage)}</span>
                         </button>
@@ -4968,10 +4969,10 @@ export default function App() {
                           type="button"
                           disabled={isPlacingDirectOrder}
                           onClick={handleConfirmDirectMenuOrder}
-                          className="w-full py-3.5 px-6 rounded-full bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] active:scale-[0.98] text-white font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 shadow-[0_8px_24px_rgba(249,115,22,0.35)] transition-all cursor-pointer disabled:opacity-60"
+                          className={`w-full py-3.5 px-6 rounded-full bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] active:scale-[0.98] text-white font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 shadow-[0_8px_24px_rgba(249,115,22,0.35)] transition-all cursor-pointer disabled:opacity-60 ${customerLanguage === 'bn' ? 'font-bengali' : ''}`}
                         >
                           <Send className="w-4 h-4" />
-                          <span>{isPlacingDirectOrder ? 'Placing Order...' : 'Confirm Your Order'}</span>
+                          <span>{isPlacingDirectOrder ? t('placing_order', customerLanguage) : t('confirm_your_order', customerLanguage)}</span>
                         </button>
 
                         <button
