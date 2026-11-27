@@ -1061,59 +1061,6 @@ export default function App() {
     } catch {}
   }, [directPlacedOrder, directOrderStorageKey]);
 
-  // Realtime sync for customer's direct placed order status (Pending -> Preparing -> Completed)
-  useEffect(() => {
-    if (!directPlacedOrder?.orderNumber || !currentRestoId) return;
-
-    // Fetch latest status from Supabase on mount/reopen
-    supabase
-      .from('orders')
-      .select('id, order_number, order_status')
-      .eq('restaurant_id', currentRestoId)
-      .eq('order_number', directPlacedOrder.orderNumber)
-      .limit(1)
-      .then(({ data }) => {
-        if (data && data[0]) {
-          const st = data[0].order_status || 'pending';
-          if (st === 'completed' && !isSelectedListOpen) {
-            setSelectedList([]);
-            setDirectPlacedOrder(null);
-          } else {
-            setDirectPlacedOrder(prev => prev ? { ...prev, id: data[0].id, orderStatus: st } : prev);
-          }
-        }
-      });
-
-    const channel = supabase
-      .channel(`realtime_customer_direct_order_${currentRestoId}_${directPlacedOrder.orderNumber}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'orders',
-        filter: `restaurant_id=eq.${currentRestoId}`
-      }, (payload) => {
-        const updatedRow = payload?.new;
-        if (!updatedRow) return;
-        const matches =
-          (directPlacedOrder.id && updatedRow.id === directPlacedOrder.id) ||
-          (updatedRow.order_number && updatedRow.order_number === directPlacedOrder.orderNumber);
-        if (matches) {
-          const nextStatus = updatedRow.order_status || 'pending';
-          if (nextStatus === 'completed' && !isSelectedListOpen) {
-            setSelectedList([]);
-            setDirectPlacedOrder(null);
-          } else {
-            setDirectPlacedOrder(prev => prev ? { ...prev, orderStatus: nextStatus } : prev);
-          }
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [directPlacedOrder?.orderNumber, directPlacedOrder?.id, currentRestoId, isSelectedListOpen]);
-
   // Record real menu scan in Supabase menu_scans or start Fine-Dine 90m session
   const hasRecordedScanRef = useRef(false);
 
@@ -1948,6 +1895,58 @@ export default function App() {
     }
   }, [currentRestoId]);
   const [isSelectedListOpen, setIsSelectedListOpen] = useState(false);
+
+  // Realtime sync for customer's direct placed order status (Pending -> Preparing -> Completed)
+  useEffect(() => {
+    if (!directPlacedOrder?.orderNumber || !currentRestoId) return;
+
+    supabase
+      .from('orders')
+      .select('id, order_number, order_status')
+      .eq('restaurant_id', currentRestoId)
+      .eq('order_number', directPlacedOrder.orderNumber)
+      .limit(1)
+      .then(({ data }) => {
+        if (data && data[0]) {
+          const st = data[0].order_status || 'pending';
+          if (st === 'completed' && !isSelectedListOpen) {
+            setSelectedList([]);
+            setDirectPlacedOrder(null);
+          } else {
+            setDirectPlacedOrder(prev => prev ? { ...prev, id: data[0].id, orderStatus: st } : prev);
+          }
+        }
+      });
+
+    const channel = supabase
+      .channel(`realtime_customer_direct_order_${currentRestoId}_${directPlacedOrder.orderNumber}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'orders',
+        filter: `restaurant_id=eq.${currentRestoId}`
+      }, (payload) => {
+        const updatedRow = payload?.new;
+        if (!updatedRow) return;
+        const matches =
+          (directPlacedOrder.id && updatedRow.id === directPlacedOrder.id) ||
+          (updatedRow.order_number && updatedRow.order_number === directPlacedOrder.orderNumber);
+        if (matches) {
+          const nextStatus = updatedRow.order_status || 'pending';
+          if (nextStatus === 'completed' && !isSelectedListOpen) {
+            setSelectedList([]);
+            setDirectPlacedOrder(null);
+          } else {
+            setDirectPlacedOrder(prev => prev ? { ...prev, orderStatus: nextStatus } : prev);
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [directPlacedOrder?.orderNumber, directPlacedOrder?.id, currentRestoId, isSelectedListOpen]);
   const [isConfirmOrderModalOpen, setIsConfirmOrderModalOpen] = useState(false);
   const [orderConfirmationSuccess, setOrderConfirmationSuccess] = useState(false);
   const [addToListToast, setAddToListToast] = useState(null);
