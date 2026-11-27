@@ -1397,21 +1397,34 @@ function KpiRow({ stats, onNavigate, onSelectClearedPeriod, currentClearedPeriod
 function TrendChart({ orders = [], feePerBill = 5 }) {
   const [hoveredIdx, setHoveredIdx] = useState(null);
 
-  // Group real orders by the last 14 days
+  // Group real orders by the last 14 days in Asia/Dhaka (UTC+6) calendar date
   const trendData = useMemo(() => {
+    const toDhakaYmd = (dateInput) => {
+      try {
+        return new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Dhaka',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        }).format(new Date(dateInput));
+      } catch {
+        return '';
+      }
+    };
+
     const days = [];
     const today = new Date();
     for (let i = 13; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
-      const dayKey = d.toISOString().slice(0, 10);
-      const dayLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const dayFull = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const dayKey = toDhakaYmd(d);
+      const dayLabel = d.toLocaleDateString('en-US', { timeZone: 'Asia/Dhaka', month: 'short', day: 'numeric' });
+      const dayFull = d.toLocaleDateString('en-US', { timeZone: 'Asia/Dhaka', month: 'short', day: 'numeric', year: 'numeric' });
 
       const dayOrders = orders.filter(o => {
-        if (!o.createdAt) return false;
-        const ordDay = new Date(o.createdAt).toISOString().slice(0, 10);
-        return ordDay === dayKey;
+        const rawDate = o.createdAt || o.created_at || o.date;
+        if (!rawDate) return false;
+        return toDhakaYmd(rawDate) === dayKey;
       });
 
       const count = dayOrders.length;
