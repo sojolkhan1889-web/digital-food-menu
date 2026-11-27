@@ -2975,6 +2975,7 @@ export default function App() {
       const itemsPayload = selectedList.map(item => ({
         name: item.title,
         title: item.title,
+        image: item.image || '',
         portion: item.portion || 'Standard Portion',
         addons: item.addons?.map(a => `${a.name} (x${a.quantity || 1})`).join(', ') || '',
         quantity: item.quantity || 1,

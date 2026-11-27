@@ -4570,6 +4570,7 @@ export default function RestaurantPanel({
           {activeTab === 'orders' && hasOrderManageAccess && (
             <RestaurantOrderManagementView
               orders={displayOrders}
+              foods={foods}
               currency={currency}
               isDark={isDark}
               onUpdateOrderStatus={(orderId, newStatus) => {

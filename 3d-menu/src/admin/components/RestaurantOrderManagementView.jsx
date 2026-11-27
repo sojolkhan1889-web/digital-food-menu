@@ -14,6 +14,7 @@ import {
   X,
   Receipt
 } from 'lucide-react';
+import { resolveMediaUrl } from '../../lib/mediaStorageService';
 
 const STATUS_TABS = [
   { key: 'all', label: 'All' },
@@ -40,6 +41,7 @@ const getStatusPillClasses = (status) => {
 
 export default function RestaurantOrderManagementView({
   orders = [],
+  foods = [],
   currency = '৳',
   isDark = false,
   onUpdateOrderStatus
@@ -49,6 +51,29 @@ export default function RestaurantOrderManagementView({
   const [page, setPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const pageSize = 6;
+
+  // Map food titles (lowercase) -> resolved image URL for crisp thumbnails on all order cards
+  const foodImageMap = useMemo(() => {
+    const map = {};
+    (foods || []).forEach((f) => {
+      const key = String(f?.title || f?.name || '').trim().toLowerCase();
+      if (key && f?.image) {
+        map[key] = resolveMediaUrl(f.image);
+      }
+    });
+    return map;
+  }, [foods]);
+
+  const getOrderItemImage = (it) => {
+    if (it?.image) return resolveMediaUrl(it.image);
+    const rawName = String(it?.name || it?.title || '').trim().toLowerCase();
+    if (rawName && foodImageMap[rawName]) return foodImageMap[rawName];
+    // Partial fallback match for slight title variations
+    const matchedKey = Object.keys(foodImageMap).find(
+      (k) => rawName && (rawName.includes(k) || k.includes(rawName))
+    );
+    return matchedKey ? foodImageMap[matchedKey] : '/Food.gif';
+  };
 
   // Live counts per status tab
   const statusCounts = useMemo(() => {
@@ -179,9 +204,9 @@ export default function RestaurantOrderManagementView({
       {/* 2-Column Order Cards Grid */}
       {paginatedOrders.length === 0 ? (
         <div className={`rounded-2xl border p-12 text-center shadow-xs ${cardSurface}`}>
-          <ShoppingBag className={`w-10 h-10 mx-auto mb-2.5 opacity-40 ${subtleText}`} />
-          <p className="font-bold text-sm">No orders match the selected filter.</p>
-          <p className={`text-xs mt-1 ${subtleText}`}>
+          <ShoppingBag className={`w-11 h-11 mx-auto mb-3 opacity-40 ${subtleText}`} />
+          <p className="font-extrabold text-base sm:text-lg">No orders match the selected filter.</p>
+          <p className={`text-sm sm:text-[15px] mt-1.5 ${subtleText}`}>
             New customer table orders will appear here automatically in real time.
           </p>
         </div>
@@ -203,12 +228,12 @@ export default function RestaurantOrderManagementView({
                       {ord.orderNumber}
                     </span>
                     <span className="text-slate-300 dark:text-slate-700">|</span>
-                    <span className={`inline-flex items-center gap-1 text-xs font-medium ${subtleText}`}>
-                      <User className="w-3.5 h-3.5" />
+                    <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${subtleText}`}>
+                      <User className="w-4 h-4" />
                       <span>{ord.tableNumber || 'Customer QR'}</span>
                     </span>
-                    <span className={`inline-flex items-center gap-1 text-xs font-medium ${subtleText}`}>
-                      <Clock className="w-3.5 h-3.5" />
+                    <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${subtleText}`}>
+                      <Clock className="w-4 h-4" />
                       <span>{ord.displayTime || 'Recent'}</span>
                     </span>
                   </div>
@@ -229,25 +254,38 @@ export default function RestaurantOrderManagementView({
                   </div>
                 </div>
 
-                {/* Items List */}
-                <div className="space-y-1.5 text-xs sm:text-[13px] min-h-[44px]">
+                {/* Items List with Food Thumbnails */}
+                <div className="space-y-2.5 text-sm sm:text-[15px] min-h-[52px]">
                   {Array.isArray(ord.items) && ord.items.length > 0 ? (
                     ord.items.map((it, idx) => (
-                      <div key={idx} className="flex items-start justify-between gap-3">
-                        <span className="font-medium leading-snug">
-                          {it.quantity || 1}x {it.name || it.title || 'Item'}{' '}
-                          <span className={subtleText}>
-                            ({it.portion || 'Standard'})
-                            {it.addons ? ` · ${it.addons}` : ''}
-                          </span>
-                        </span>
-                        <span className="font-mono font-bold shrink-0">
+                      <div key={idx} className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img
+                            src={getOrderItemImage(it)}
+                            alt={it.name || it.title || 'Food item'}
+                            loading="lazy"
+                            onError={(e) => { e.currentTarget.src = '/Food.gif'; }}
+                            className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl object-cover border shrink-0 shadow-xs ${
+                              isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'
+                            }`}
+                          />
+                          <div className="min-w-0 leading-snug">
+                            <span className="font-bold block truncate sm:whitespace-normal">
+                              {it.quantity || 1}x {it.name || it.title || 'Item'}
+                            </span>
+                            <span className={`text-xs sm:text-[13px] ${subtleText}`}>
+                              ({it.portion || 'Standard'})
+                              {it.addons ? ` · ${it.addons}` : ''}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="font-mono font-extrabold text-sm sm:text-[15px] shrink-0">
                           {currency}{Number(it.price || 0).toFixed(2)}
                         </span>
                       </div>
                     ))
                   ) : (
-                    <div className={`text-xs italic ${subtleText}`}>
+                    <div className={`text-sm italic py-1 ${subtleText}`}>
                       QR session active — awaiting food item selection
                     </div>
                   )}
@@ -277,18 +315,18 @@ export default function RestaurantOrderManagementView({
                   </button>
 
                   {selectVal === 'completed' ? (
-                    <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-emerald-600 dark:text-emerald-400">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span className="inline-flex items-center gap-1.5 text-xs sm:text-[13px] font-semibold text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="w-4 h-4" />
                       <span>Order completed &amp; fulfilled</span>
                     </span>
                   ) : selectVal === 'cancelled' ? (
-                    <span className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-rose-500">
-                      <XCircle className="w-3.5 h-3.5" />
+                    <span className="inline-flex items-center gap-1.5 text-xs sm:text-[13px] font-semibold text-rose-500">
+                      <XCircle className="w-4 h-4" />
                       <span>Order cancelled</span>
                     </span>
                   ) : (
-                    <span className={`inline-flex items-center gap-1.5 text-[11.5px] italic ${subtleText}`}>
-                      <Info className="w-3.5 h-3.5" />
+                    <span className={`inline-flex items-center gap-1.5 text-xs sm:text-[13px] italic ${subtleText}`}>
+                      <Info className="w-4 h-4" />
                       <span>Update status to continue workflow</span>
                     </span>
                   )}
@@ -405,13 +443,23 @@ export default function RestaurantOrderManagementView({
                 </div>
                 {Array.isArray(selectedOrder.items) && selectedOrder.items.length > 0 ? (
                   selectedOrder.items.map((it, idx) => (
-                    <div key={idx} className="flex items-start justify-between gap-3 py-1 border-b last:border-b-0 border-slate-200/70 dark:border-slate-800">
-                      <div>
-                        <div className="font-bold">
-                          {it.quantity || 1}x {it.name || it.title || 'Item'}
-                        </div>
-                        <div className={`text-[11px] ${subtleText}`}>
-                          {it.portion || 'Standard'}{it.addons ? ` · ${it.addons}` : ''}
+                    <div key={idx} className="flex items-center justify-between gap-3 py-1.5 border-b last:border-b-0 border-slate-200/70 dark:border-slate-800">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <img
+                          src={getOrderItemImage(it)}
+                          alt={it.name || it.title || 'Food item'}
+                          onError={(e) => { e.currentTarget.src = '/Food.gif'; }}
+                          className={`w-10 h-10 rounded-lg object-cover border shrink-0 ${
+                            isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
+                          }`}
+                        />
+                        <div className="min-w-0">
+                          <div className="font-bold">
+                            {it.quantity || 1}x {it.name || it.title || 'Item'}
+                          </div>
+                          <div className={`text-xs ${subtleText}`}>
+                            {it.portion || 'Standard'}{it.addons ? ` · ${it.addons}` : ''}
+                          </div>
                         </div>
                       </div>
                       <span className="font-mono font-bold shrink-0">
