@@ -1197,7 +1197,7 @@ export default function RestaurantPanel({
 
   // Filtered Orders
   const displayOrders = useMemo(() => {
-    const byKey = new Map();
+    const byOrderKey = new Map();
     (liveRestoOrders || []).forEach(o => {
       const normalized = {
         id: String(o.id),
@@ -1218,14 +1218,16 @@ export default function RestaurantPanel({
           ? new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           : (o.displayTime || 'Recent')
       };
-      byKey.set(normalized.id, normalized);
+      const key = normalized.orderNumber || normalized.id;
+      byOrderKey.set(key, normalized);
     });
     (orders || []).forEach(o => {
-      if ((o.restaurantId || o.restaurant_id || panelRestoId) === panelRestoId && !byKey.has(String(o.id))) {
-        byKey.set(String(o.id), o);
+      const key = o.orderNumber || o.order_number || String(o.id);
+      if ((o.restaurantId || o.restaurant_id || panelRestoId) === panelRestoId && !byOrderKey.has(key)) {
+        byOrderKey.set(key, o);
       }
     });
-    return Array.from(byKey.values()).sort(
+    return Array.from(byOrderKey.values()).sort(
       (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
     );
   }, [liveRestoOrders, orders, panelRestoId]);
@@ -4517,7 +4519,7 @@ export default function RestaurantPanel({
                       </tr>
                     </thead>
                     <tbody className={`divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-200'}`}>
-                      {orders.slice(0, 5).map(order => (
+                      {displayOrders.slice(0, 5).map(order => (
                         <tr key={order.id} className={isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}>
                           <td className="px-4 py-3 font-mono font-bold text-orange-600">
                             {order.orderNumber}
@@ -4530,7 +4532,7 @@ export default function RestaurantPanel({
                             <div className="space-y-0.5">
                               {order.items?.map((it, idx) => (
                                 <div key={idx} className="text-[11px] truncate max-w-xs">
-                                  {it.quantity}x {it.title} ({it.portion})
+                                  {it.quantity || 1}x {it.name || it.title || 'Item'} ({it.portion || 'Standard'}){it.addons ? ` · ${it.addons}` : ''}
                                 </div>
                               ))}
                             </div>
@@ -4637,9 +4639,12 @@ export default function RestaurantPanel({
 
                     <div className="border-t border-b py-2 space-y-1 text-xs border-slate-200 dark:border-slate-800">
                       {ord.items?.map((it, idx) => (
-                        <div key={idx} className="flex justify-between">
-                          <span>{it.quantity}x {it.name || it.title} ({it.portion || 'Standard'})</span>
-                          <span className="font-mono">{currency}{Number(it.price || 0).toFixed(2)}</span>
+                        <div key={idx} className="flex justify-between gap-2">
+                          <span>
+                            {it.quantity || 1}x {it.name || it.title || 'Item'} ({it.portion || 'Standard'})
+                            {it.addons ? ` · ${it.addons}` : ''}
+                          </span>
+                          <span className="font-mono shrink-0">{currency}{Number(it.price || 0).toFixed(2)}</span>
                         </div>
                       ))}
                     </div>

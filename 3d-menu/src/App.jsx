@@ -2982,6 +2982,7 @@ export default function App() {
       }));
 
       let savedOrderId = `ord_dgm_${Date.now()}`;
+      let mergedResult = null;
       if (sId) {
         if (isCurrentFineDine) {
           confirmFineDineTableSession(sId);
@@ -2989,7 +2990,7 @@ export default function App() {
           confirmNonFineDineSession(sId, currentRestoId);
         }
         setIsFineDineConfirmed(true);
-        const res = await updateDgmSessionOrderAmount({
+        mergedResult = await updateDgmSessionOrderAmount({
           sessionId: sId,
           sessionCode: sCode,
           restaurantId: currentRestoId,
@@ -3000,9 +3001,10 @@ export default function App() {
           grandTotal: selectedListGrandTotal,
           items: itemsPayload,
           paymentMethod: 'Online / Table Order',
-          orderStatus: 'pending'
+          orderStatus: 'pending',
+          appendToExisting: true
         });
-        if (res?.id) savedOrderId = res.id;
+        if (mergedResult?.id) savedOrderId = mergedResult.id;
       } else {
         await supabase.from('orders').insert([{
           id: savedOrderId,
@@ -3032,11 +3034,11 @@ export default function App() {
         tableNumber: tableDisp,
         customerName: `Customer (${tableDisp})`,
         diningMode: 'dine-in',
-        items: itemsPayload,
-        subtotal: selectedListSubtotal,
-        vat: selectedListVat,
-        serviceFee: selectedListServiceFee,
-        totalAmount: selectedListGrandTotal,
+        items: mergedResult?.items || itemsPayload,
+        subtotal: mergedResult?.subtotal ?? selectedListSubtotal,
+        vat: mergedResult?.vat ?? selectedListVat,
+        serviceFee: mergedResult?.serviceFee ?? selectedListServiceFee,
+        totalAmount: mergedResult?.totalAmount ?? selectedListGrandTotal,
         paymentMethod: 'Online / Table Order',
         paymentStatus: 'pending',
         orderStatus: 'pending',
@@ -3045,15 +3047,20 @@ export default function App() {
         date: 'Just now',
         _skipSupabaseInsert: true
       };
-      const updatedOrders = addStoredOrder(newOrder);
-      if (updatedOrders) setOrdersList(updatedOrders);
+      // Replace existing DGM order in local state if merged, so no duplicate row appears
+      setOrdersList(prev => {
+        const filtered = (prev || []).filter(o => o.orderNumber !== orderNumber && o.id !== savedOrderId);
+        const nextList = [newOrder, ...filtered];
+        if (currentRestoId === 'resto_001') saveStoredOrders(nextList);
+        return nextList;
+      });
 
       setDirectPlacedOrder({
         id: savedOrderId,
         orderNumber,
         orderStatus: 'pending',
         placedAt: nowIso,
-        grandTotal: selectedListGrandTotal
+        grandTotal: mergedResult?.totalAmount ?? selectedListGrandTotal
       });
     } catch (err) {
       console.error('Failed placing direct order:', err);

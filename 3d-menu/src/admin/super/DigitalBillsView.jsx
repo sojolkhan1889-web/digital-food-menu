@@ -291,9 +291,13 @@ export default function DigitalBillsView({
     }
   };
 
-  // Confirmed orders list for customer confirmations tab
+  // Confirmed & placed orders list for customer confirmations tab (includes live direct Pending/Preparing/Completed orders)
   const confirmedOrders = useMemo(() => {
-    return (orders || []).filter(o => o.orderStatus === 'confirmed' || o.orderStatus === 'completed' || o.paymentStatus === 'paid');
+    return (orders || []).filter(o =>
+      o.orderStatus !== 'cancelled' &&
+      o.orderStatus !== 'disputed' &&
+      ((Array.isArray(o.items) && o.items.length > 0) || Number(o.totalAmount || o.total_amount || 0) > 0 || o.orderStatus === 'confirmed' || o.orderStatus === 'completed')
+    );
   }, [orders]);
 
   // CSV Export
@@ -1031,7 +1035,7 @@ export default function DigitalBillsView({
                       <td>
                         <div style={{ fontSize: 12, fontWeight: 600 }}>
                           {ord.items && ord.items.length > 0
-                            ? ord.items.map(it => `${it.name || it.title || 'Item'} (${it.portion || 'Standard'})`).join(', ')
+                            ? ord.items.map(it => `${it.quantity ? it.quantity + 'x ' : ''}${it.name || it.title || 'Item'} (${it.portion || 'Standard'}${it.addons ? ' + ' + it.addons : ''})`).join(', ')
                             : 'Order items recorded'}
                         </div>
                       </td>

@@ -332,7 +332,8 @@ export const updateDgmSessionOrderAmount = async ({
   grandTotal = 0,
   items = [],
   paymentMethod = 'Cash / Waiter',
-  orderStatus = 'confirmed'
+  orderStatus = 'confirmed',
+  appendToExisting = false
 }) => {
   if (!restaurantId) return { success: false, reason: 'missing_restaurant_id' };
   const digits = String(sessionCode || '').replace(/\D/g, '');
@@ -344,34 +345,57 @@ export const updateDgmSessionOrderAmount = async ({
   const safeSubtotal = Number(subtotal) || 0;
   const safeVat = Number(vat) || 0;
   const safeServiceFee = Number(serviceFee) || 0;
+  const normalizedNewItems = Array.isArray(items) ? items : [];
 
   try {
     const { data: existing, error: findErr } = await supabase
       .from('orders')
-      .select('id')
+      .select('id, items, subtotal, vat, service_fee, total_amount')
       .eq('restaurant_id', restaurantId)
       .eq('order_number', orderNumber)
       .limit(1);
 
     if (!findErr && existing && existing.length > 0) {
+      const prev = existing[0];
+      const prevItems = Array.isArray(prev.items) ? prev.items : [];
+      const prevTotal = Number(prev.total_amount || 0);
+      const shouldMerge = appendToExisting && (prevItems.length > 0 || prevTotal > 0);
+
+      const finalItems = shouldMerge ? [...prevItems, ...normalizedNewItems] : normalizedNewItems;
+      const finalSubtotal = shouldMerge ? (Number(prev.subtotal || 0) + safeSubtotal) : safeSubtotal;
+      const finalVat = shouldMerge ? (Number(prev.vat || 0) + safeVat) : safeVat;
+      const finalServiceFee = shouldMerge ? (Number(prev.service_fee || 0) + safeServiceFee) : safeServiceFee;
+      const finalGrandTotal = shouldMerge ? (prevTotal + safeGrandTotal) : safeGrandTotal;
+
       const { error: updErr } = await supabase
         .from('orders')
         .update({
-          items: Array.isArray(items) ? items : [],
-          subtotal: safeSubtotal,
-          vat: safeVat,
-          service_fee: safeServiceFee,
-          total_amount: safeGrandTotal,
+          items: finalItems,
+          subtotal: finalSubtotal,
+          vat: finalVat,
+          service_fee: finalServiceFee,
+          total_amount: finalGrandTotal,
           payment_method: paymentMethod,
           order_status: orderStatus
         })
-        .eq('id', existing[0].id);
+        .eq('id', prev.id);
 
       if (updErr) {
         console.warn('updateDgmSessionOrderAmount update warning:', updErr.message);
         return { success: false, error: updErr.message };
       }
-      return { success: true, id: existing[0].id, orderNumber, totalAmount: safeGrandTotal, updated: true };
+      return {
+        success: true,
+        id: prev.id,
+        orderNumber,
+        items: finalItems,
+        subtotal: finalSubtotal,
+        vat: finalVat,
+        serviceFee: finalServiceFee,
+        totalAmount: finalGrandTotal,
+        updated: true,
+        merged: shouldMerge
+      };
     }
 
     // No pre-created orders row (e.g. Fine Dine RPC); insert 1 canonical DGM order row
@@ -385,7 +409,7 @@ export const updateDgmSessionOrderAmount = async ({
         table_number: tableNumber,
         customer_name: tableNumber ? `Customer (${tableNumber})` : 'DGM Customer',
         dining_mode: 'dine-in',
-        items: Array.isArray(items) ? items : [],
+        items: normalizedNewItems,
         subtotal: safeSubtotal,
         vat: safeVat,
         service_fee: safeServiceFee,
@@ -400,7 +424,18 @@ export const updateDgmSessionOrderAmount = async ({
       console.warn('updateDgmSessionOrderAmount insert warning:', insErr.message);
       return { success: false, error: insErr.message };
     }
-    return { success: true, id: newOrdId, orderNumber, totalAmount: safeGrandTotal, inserted: true };
+    return {
+      success: true,
+      id: newOrdId,
+      orderNumber,
+      items: normalizedNewItems,
+      subtotal: safeSubtotal,
+      vat: safeVat,
+      serviceFee: safeServiceFee,
+      totalAmount: safeGrandTotal,
+      inserted: true,
+      merged: false
+    };
   } catch (err) {
     console.warn('Exception in updateDgmSessionOrderAmount:', err);
     return { success: false, error: err?.message };
