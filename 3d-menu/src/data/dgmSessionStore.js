@@ -331,7 +331,8 @@ export const updateDgmSessionOrderAmount = async ({
   serviceFee = 0,
   grandTotal = 0,
   items = [],
-  paymentMethod = 'Cash / Waiter'
+  paymentMethod = 'Cash / Waiter',
+  orderStatus = 'confirmed'
 }) => {
   if (!restaurantId) return { success: false, reason: 'missing_restaurant_id' };
   const digits = String(sessionCode || '').replace(/\D/g, '');
@@ -362,7 +363,7 @@ export const updateDgmSessionOrderAmount = async ({
           service_fee: safeServiceFee,
           total_amount: safeGrandTotal,
           payment_method: paymentMethod,
-          order_status: 'confirmed'
+          order_status: orderStatus
         })
         .eq('id', existing[0].id);
 
@@ -370,14 +371,15 @@ export const updateDgmSessionOrderAmount = async ({
         console.warn('updateDgmSessionOrderAmount update warning:', updErr.message);
         return { success: false, error: updErr.message };
       }
-      return { success: true, orderNumber, totalAmount: safeGrandTotal, updated: true };
+      return { success: true, id: existing[0].id, orderNumber, totalAmount: safeGrandTotal, updated: true };
     }
 
     // No pre-created orders row (e.g. Fine Dine RPC); insert 1 canonical DGM order row
+    const newOrdId = `ord_dgm_${Date.now()}_${digits || '0000'}`;
     const { error: insErr } = await supabase
       .from('orders')
       .insert([{
-        id: `ord_dgm_${Date.now()}_${digits || '0000'}`,
+        id: newOrdId,
         restaurant_id: restaurantId,
         order_number: orderNumber,
         table_number: tableNumber,
@@ -390,7 +392,7 @@ export const updateDgmSessionOrderAmount = async ({
         total_amount: safeGrandTotal,
         payment_method: paymentMethod,
         payment_status: 'pending',
-        order_status: 'confirmed',
+        order_status: orderStatus,
         created_at: new Date().toISOString()
       }]);
 
@@ -398,7 +400,7 @@ export const updateDgmSessionOrderAmount = async ({
       console.warn('updateDgmSessionOrderAmount insert warning:', insErr.message);
       return { success: false, error: insErr.message };
     }
-    return { success: true, orderNumber, totalAmount: safeGrandTotal, inserted: true };
+    return { success: true, id: newOrdId, orderNumber, totalAmount: safeGrandTotal, inserted: true };
   } catch (err) {
     console.warn('Exception in updateDgmSessionOrderAmount:', err);
     return { success: false, error: err?.message };

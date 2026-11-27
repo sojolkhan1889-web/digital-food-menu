@@ -36,7 +36,11 @@ import {
   AlertTriangle,
   Info,
   Headphones,
-  Globe
+  Globe,
+  ShoppingBasket,
+  Send,
+  Clock,
+  FileText
 } from 'lucide-react';
 
 import foodGif from './assets/Food.gif';
@@ -1023,7 +1027,92 @@ export default function App() {
     return currentRestoId === 'resto_001' || currentRestoId === 'resto_003';
   }, [activeRestaurant, currentRestoId]);
 
+  const isDirectOrderManagementEnabled = Boolean(activeRestaurant?.features?.enableOrderManagement);
   const isDgmOrderPopupActive = isTableMode || (!isCurrentFineDine && Boolean(currentDgmSession?.session_id));
+
+  // Direct Order Management: Placed order state + Realtime live status tracking
+  const directOrderStorageKey = `dgm_direct_order_${currentRestoId}`;
+  const [directPlacedOrder, setDirectPlacedOrder] = useState(() => {
+    try {
+      const raw = localStorage.getItem(`dgm_direct_order_${currentRestoId}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [isPlacingDirectOrder, setIsPlacingDirectOrder] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(directOrderStorageKey);
+      setDirectPlacedOrder(raw ? JSON.parse(raw) : null);
+    } catch {
+      setDirectPlacedOrder(null);
+    }
+  }, [directOrderStorageKey]);
+
+  useEffect(() => {
+    try {
+      if (directPlacedOrder) {
+        localStorage.setItem(directOrderStorageKey, JSON.stringify(directPlacedOrder));
+      } else {
+        localStorage.removeItem(directOrderStorageKey);
+      }
+    } catch {}
+  }, [directPlacedOrder, directOrderStorageKey]);
+
+  // Realtime sync for customer's direct placed order status (Pending -> Preparing -> Completed)
+  useEffect(() => {
+    if (!directPlacedOrder?.orderNumber || !currentRestoId) return;
+
+    // Fetch latest status from Supabase on mount/reopen
+    supabase
+      .from('orders')
+      .select('id, order_number, order_status')
+      .eq('restaurant_id', currentRestoId)
+      .eq('order_number', directPlacedOrder.orderNumber)
+      .limit(1)
+      .then(({ data }) => {
+        if (data && data[0]) {
+          const st = data[0].order_status || 'pending';
+          if (st === 'completed' && !isSelectedListOpen) {
+            setSelectedList([]);
+            setDirectPlacedOrder(null);
+          } else {
+            setDirectPlacedOrder(prev => prev ? { ...prev, id: data[0].id, orderStatus: st } : prev);
+          }
+        }
+      });
+
+    const channel = supabase
+      .channel(`realtime_customer_direct_order_${currentRestoId}_${directPlacedOrder.orderNumber}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'orders',
+        filter: `restaurant_id=eq.${currentRestoId}`
+      }, (payload) => {
+        const updatedRow = payload?.new;
+        if (!updatedRow) return;
+        const matches =
+          (directPlacedOrder.id && updatedRow.id === directPlacedOrder.id) ||
+          (updatedRow.order_number && updatedRow.order_number === directPlacedOrder.orderNumber);
+        if (matches) {
+          const nextStatus = updatedRow.order_status || 'pending';
+          if (nextStatus === 'completed' && !isSelectedListOpen) {
+            setSelectedList([]);
+            setDirectPlacedOrder(null);
+          } else {
+            setDirectPlacedOrder(prev => prev ? { ...prev, orderStatus: nextStatus } : prev);
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [directPlacedOrder?.orderNumber, directPlacedOrder?.id, currentRestoId, isSelectedListOpen]);
 
   // Record real menu scan in Supabase menu_scans or start Fine-Dine 90m session
   const hasRecordedScanRef = useRef(false);
@@ -1352,6 +1441,13 @@ export default function App() {
     const updated = ordersList.map(o => o.id === orderId ? { ...o, orderStatus: newStatus } : o);
     setOrdersList(updated);
     if (currentRestoId === 'resto_001') saveStoredOrders(updated);
+    supabase
+      .from('orders')
+      .update({ order_status: newStatus })
+      .eq('id', String(orderId))
+      .then(({ error }) => {
+        if (error) console.warn('Supabase update order_status warning:', error.message);
+      });
   };
 
   const handleAddSubcategory = (newSub) => {
@@ -2850,9 +2946,143 @@ export default function App() {
       clearTimeout(autoConfirmTimerRef.current);
     }
 
-    // Immediately show mandatory order confirmation popup right upon exiting customization (200ms)
+  // When customer clicks "Confirm Your Order" inside Order List (Order Management Premium Feature)
+  const handleConfirmDirectMenuOrder = async () => {
+    if (isPlacingDirectOrder || !selectedList || selectedList.length === 0) return;
+    if (isTableMode && (!tableStatusState.isValid || !tableStatusState.isActive)) {
+      alert(tableStatusState.errorMessage || 'Orders cannot be placed from an inactive or invalid table QR.');
+      return;
+    }
+
+    setIsPlacingDirectOrder(true);
+    try {
+      const sId = currentDgmSession?.session_id || currentDgmSession?.id;
+      const sCode = currentDgmSession?.session_code;
+      const sessionDigits = String(sCode || '').replace(/\D/g, '');
+      const orderNumber = (sId && sessionDigits)
+        ? `DGM-${sessionDigits}`
+        : `DGM-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      const tableDisp = resolvedTableDisplay || tableNumber || (isCurrentFineDine ? 'Table 01' : 'Customer QR');
+      const itemsPayload = selectedList.map(item => ({
+        name: item.title,
+        title: item.title,
+        portion: item.portion || 'Standard Portion',
+        addons: item.addons?.map(a => `${a.name} (x${a.quantity || 1})`).join(', ') || '',
+        quantity: item.quantity || 1,
+        price: (Number(item.totalPrice) || 0) * (item.quantity || 1)
+      }));
+
+      let savedOrderId = `ord_dgm_${Date.now()}`;
+      if (sId) {
+        if (isCurrentFineDine) {
+          confirmFineDineTableSession(sId);
+        } else {
+          confirmNonFineDineSession(sId, currentRestoId);
+        }
+        setIsFineDineConfirmed(true);
+        const res = await updateDgmSessionOrderAmount({
+          sessionId: sId,
+          sessionCode: sCode,
+          restaurantId: currentRestoId,
+          tableNumber: tableDisp,
+          subtotal: selectedListSubtotal,
+          vat: selectedListVat,
+          serviceFee: selectedListServiceFee,
+          grandTotal: selectedListGrandTotal,
+          items: itemsPayload,
+          paymentMethod: 'Online / Table Order',
+          orderStatus: 'pending'
+        });
+        if (res?.id) savedOrderId = res.id;
+      } else {
+        await supabase.from('orders').insert([{
+          id: savedOrderId,
+          restaurant_id: currentRestoId,
+          order_number: orderNumber,
+          table_number: tableDisp,
+          customer_name: `Customer (${tableDisp})`,
+          dining_mode: 'dine-in',
+          items: itemsPayload,
+          subtotal: selectedListSubtotal,
+          vat: selectedListVat,
+          service_fee: selectedListServiceFee,
+          total_amount: selectedListGrandTotal,
+          payment_method: 'Online / Table Order',
+          payment_status: 'pending',
+          order_status: 'pending',
+          created_at: new Date().toISOString()
+        }]);
+      }
+
+      const nowIso = new Date().toISOString();
+      const newOrder = {
+        id: savedOrderId,
+        orderNumber,
+        restaurantId: currentRestoId,
+        restaurantName: restaurantProfile?.name || activeRestaurant?.name || 'Restaurant',
+        tableNumber: tableDisp,
+        customerName: `Customer (${tableDisp})`,
+        diningMode: 'dine-in',
+        items: itemsPayload,
+        subtotal: selectedListSubtotal,
+        vat: selectedListVat,
+        serviceFee: selectedListServiceFee,
+        totalAmount: selectedListGrandTotal,
+        paymentMethod: 'Online / Table Order',
+        paymentStatus: 'pending',
+        orderStatus: 'pending',
+        createdAt: nowIso,
+        created_at: nowIso,
+        date: 'Just now',
+        _skipSupabaseInsert: true
+      };
+      const updatedOrders = addStoredOrder(newOrder);
+      if (updatedOrders) setOrdersList(updatedOrders);
+
+      setDirectPlacedOrder({
+        id: savedOrderId,
+        orderNumber,
+        orderStatus: 'pending',
+        placedAt: nowIso,
+        grandTotal: selectedListGrandTotal
+      });
+    } catch (err) {
+      console.error('Failed placing direct order:', err);
+    } finally {
+      setIsPlacingDirectOrder(false);
+    }
+  };
+
+  // Close Order List modal; auto-empty list if direct order is already completed
+  const handleCloseSelectedListModal = () => {
+    setIsSelectedListOpen(false);
+    if (directPlacedOrder?.orderStatus === 'completed') {
+      setSelectedList([]);
+      setDirectPlacedOrder(null);
+      return;
+    }
+    if (!isDirectOrderManagementEnabled) {
+      if (!isDgmOrderPopupActive || isFineDineConfirmed) {
+        if (autoConfirmTimerRef.current) {
+          clearTimeout(autoConfirmTimerRef.current);
+          autoConfirmTimerRef.current = null;
+        }
+        return;
+      }
+      if (selectedList && selectedList.length > 0) {
+        setAutoConfirmSource('selectedList');
+        if (autoConfirmTimerRef.current) clearTimeout(autoConfirmTimerRef.current);
+        autoConfirmTimerRef.current = setTimeout(() => {
+          setIsAutoConfirmPopupOpen(true);
+        }, 200);
+      }
+    }
+  };
+
+  // Immediately show mandatory order confirmation popup right upon exiting customization (200ms)
     // Customer won't have time to navigate anywhere else before answering
-    if (isDgmOrderPopupActive && !isFineDineConfirmed) {
+    if (isDgmOrderPopupActive && !isFineDineConfirmed && !isDirectOrderManagementEnabled) {
       autoConfirmTimerRef.current = setTimeout(() => {
         setIsAutoConfirmPopupOpen(true);
       }, 200);
@@ -2861,29 +3091,7 @@ export default function App() {
 
   // When customer exits Selected Food Items modal without answering (accidentally closes with X or outside tap)
   const handleCloseSelectedListWithoutConfirm = () => {
-    setIsSelectedListOpen(false);
-
-    // If not in verified Table QR mode or active Non-Fine Dine session, do NOT trigger order confirmation popup
-    if (!isDgmOrderPopupActive || isFineDineConfirmed) {
-      if (autoConfirmTimerRef.current) {
-        clearTimeout(autoConfirmTimerRef.current);
-        autoConfirmTimerRef.current = null;
-      }
-      return;
-    }
-
-    if (selectedList && selectedList.length > 0) {
-      setAutoConfirmSource('selectedList');
-      if (autoConfirmTimerRef.current) {
-        clearTimeout(autoConfirmTimerRef.current);
-      }
-      // Immediately show mandatory order confirmation popup (200ms)
-      if (!isFineDineConfirmed) {
-        autoConfirmTimerRef.current = setTimeout(() => {
-          setIsAutoConfirmPopupOpen(true);
-        }, 200);
-      }
-    }
+    handleCloseSelectedListModal();
   };
 
   // When customer clicks "Not yet — Keep Browsing" button inside Selected Food Items modal
@@ -4279,7 +4487,7 @@ export default function App() {
       {/* Matches reference screenshot media_1794458766645_e708b220.jpg */}
       {/* Table QR mode only: hidden for Primary QR generic browse mode */}
       {/* ======================================================== */}
-      {isAutoConfirmPopupOpen && isDgmOrderPopupActive && !isFineDineConfirmed && (
+      {isAutoConfirmPopupOpen && isDgmOrderPopupActive && !isFineDineConfirmed && !isDirectOrderManagementEnabled && (
         <div
           className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-[fadeIn_0.2s_ease-out] select-none"
         >
@@ -4386,19 +4594,32 @@ export default function App() {
               className="flex-1 overflow-y-auto py-3 space-y-3.5 pr-1 no-scrollbar [scrollbar-width:none]"
             >
               {selectedList.length === 0 ? (
-                <div className="py-12 text-center space-y-3">
-                  <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-slate-400">
-                    <Utensils className="w-7 h-7 stroke-[1.5]" />
+                <div className="py-10 sm:py-12 px-4 text-center flex flex-col items-center justify-center space-y-4">
+                  <div className="relative inline-flex items-center justify-center pt-3">
+                    <div className="absolute -top-0.5 flex items-center gap-2.5 text-[#F97316]">
+                      <span className="w-0.5 h-2.5 bg-[#F97316] rounded-full -rotate-18" />
+                      <span className="w-0.5 h-3 bg-[#F97316] rounded-full -translate-y-1" />
+                      <span className="w-0.5 h-2.5 bg-[#F97316] rounded-full rotate-18" />
+                    </div>
+                    <ShoppingBasket className="w-16 h-16 text-slate-400/90 stroke-[1.5]" />
                   </div>
-                  <p className="text-white font-bold text-sm">{t('no_items_selected', customerLanguage)}</p>
-                  <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                    {t('no_items_desc', customerLanguage)}
-                  </p>
+                  <div className="space-y-1.5">
+                    <p className="text-white font-extrabold text-lg sm:text-xl tracking-tight">
+                      {customerLanguage === 'bn' ? 'আপনার অর্ডার লিস্ট খালি' : 'Your order list is empty'}
+                    </p>
+                    <p className="text-xs sm:text-sm text-slate-400 max-w-[260px] mx-auto leading-relaxed">
+                      {customerLanguage === 'bn'
+                        ? 'অর্ডার করতে মেনু থেকে আপনার পছন্দের খাবার যোগ করুন।'
+                        : 'Add your favorite food from the menu to place an order.'}
+                    </p>
+                  </div>
                   <button
-                    onClick={handleDismissSelectedListWithoutPopup}
-                    className="mt-2 px-5 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all cursor-pointer"
+                    type="button"
+                    onClick={handleCloseSelectedListModal}
+                    className="w-full max-w-xs mt-2 py-3.5 px-6 rounded-full bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] active:scale-[0.98] text-white text-sm font-bold flex items-center justify-center gap-2 shadow-[0_8px_24px_rgba(249,115,22,0.35)] transition-all cursor-pointer"
                   >
-                    {t('browse_menu', customerLanguage)}
+                    <Utensils className="w-4 h-4" />
+                    <span>{t('browse_menu', customerLanguage)}</span>
                   </button>
                 </div>
               ) : (
@@ -4647,8 +4868,123 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* 3. Order Confirmation with Waiter Card (Only rendered in Table QR mode; hidden in Primary QR mode) */}
-                  {isDgmOrderPopupActive && !isFineDineConfirmed ? (
+                  {/* 3. Direct Order Management (Confirm Your Order) OR Waiter Confirmation Card */}
+                  {isDirectOrderManagementEnabled ? (
+                    directPlacedOrder ? (
+                      <div className="space-y-3 pt-1">
+                        {/* Green Confirmation Banner */}
+                        <div className="p-3.5 sm:p-4 rounded-2xl bg-emerald-950/60 border border-emerald-500/40 flex items-center gap-3.5 shadow-md">
+                          <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white shrink-0 shadow-[0_0_15px_rgba(16,185,129,0.45)]">
+                            <Check className="w-5 h-5 stroke-[3]" />
+                          </div>
+                          <div>
+                            <div className="text-white font-extrabold text-sm sm:text-base leading-tight">
+                              Order Placed Successfully!
+                            </div>
+                            <div className="text-xs text-emerald-200/80 mt-0.5">
+                              Your order has been sent to the restaurant.
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 3-Column Order ID / Live Status / Placed At */}
+                        <div className="p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 grid grid-cols-3 gap-2 text-left">
+                          <div>
+                            <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                              <FileText className="w-3.5 h-3.5 text-[#F59E0B]" />
+                              <span>Order ID</span>
+                            </div>
+                            <div className="text-xs sm:text-sm font-extrabold text-white font-mono mt-1">
+                              {directPlacedOrder.orderNumber}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                              <Layers className="w-3.5 h-3.5 text-[#F59E0B]" />
+                              <span>Order Status</span>
+                            </div>
+                            <div className="mt-1">
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold capitalize border ${
+                                  directPlacedOrder.orderStatus === 'completed'
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                    : directPlacedOrder.orderStatus === 'preparing'
+                                    ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                                    : directPlacedOrder.orderStatus === 'cancelled'
+                                    ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                                    : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                }`}
+                              >
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    directPlacedOrder.orderStatus === 'completed'
+                                      ? 'bg-emerald-400'
+                                      : directPlacedOrder.orderStatus === 'preparing'
+                                      ? 'bg-sky-400 animate-pulse'
+                                      : directPlacedOrder.orderStatus === 'cancelled'
+                                      ? 'bg-red-400'
+                                      : 'bg-amber-400 animate-pulse'
+                                  }`}
+                                />
+                                {directPlacedOrder.orderStatus || 'Pending'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                              <Clock className="w-3.5 h-3.5 text-[#F59E0B]" />
+                              <span>Placed At</span>
+                            </div>
+                            <div className="text-[11px] sm:text-xs font-bold text-white mt-1">
+                              {(() => {
+                                try {
+                                  return new Intl.DateTimeFormat('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                    hour12: true
+                                  }).format(new Date(directPlacedOrder.placedAt));
+                                } catch {
+                                  return 'Just now';
+                                }
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleCloseSelectedListModal}
+                          className="w-full py-3.5 px-6 rounded-full bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] active:scale-[0.98] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
+                        >
+                          <span>{t('back_to_menu', customerLanguage)}</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5 pt-1">
+                        <button
+                          type="button"
+                          disabled={isPlacingDirectOrder}
+                          onClick={handleConfirmDirectMenuOrder}
+                          className="w-full py-3.5 px-6 rounded-full bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] active:scale-[0.98] text-white font-extrabold text-sm sm:text-base flex items-center justify-center gap-2 shadow-[0_8px_24px_rgba(249,115,22,0.35)] transition-all cursor-pointer disabled:opacity-60"
+                        >
+                          <Send className="w-4 h-4" />
+                          <span>{isPlacingDirectOrder ? 'Placing Order...' : 'Confirm Your Order'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleCloseSelectedListModal}
+                          className="w-full py-3 px-6 rounded-full bg-white/[0.04] hover:bg-white/10 active:scale-[0.98] border border-white/15 text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+                        >
+                          <span>{t('back_to_menu', customerLanguage)}</span>
+                        </button>
+                      </div>
+                    )
+                  ) : isDgmOrderPopupActive && !isFineDineConfirmed ? (
                     <div className="p-4 sm:p-5 rounded-2xl bg-[#121826]/95 border border-white/10 space-y-3.5 shadow-md">
                       <div className="flex items-start gap-3.5">
                         <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0 shadow-[0_0_15px_rgba(245,158,11,0.2)]">

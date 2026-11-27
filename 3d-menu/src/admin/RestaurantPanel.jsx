@@ -970,6 +970,16 @@ export default function RestaurantPanel({
       )
       .on(
         'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        (payload) => {
+          const rId = payload?.new?.restaurant_id || payload?.old?.restaurant_id;
+          if (isMounted && (!rId || rId === panelRestoId)) {
+            syncSettlements();
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
         { event: '*', schema: 'public', table: 'platform_settings' },
         () => {
           if (isMounted) fetchMerchantQRConfigFromSupabase().then(qr => qr && setMerchantQRConfig(qr));
@@ -1186,8 +1196,42 @@ export default function RestaurantPanel({
   }, [foods, foodFilterTab, selectedFoodCategory, foodSearchQuery]);
 
   // Filtered Orders
+  const displayOrders = useMemo(() => {
+    const byKey = new Map();
+    (liveRestoOrders || []).forEach(o => {
+      const normalized = {
+        id: String(o.id),
+        orderNumber: o.order_number || o.orderNumber || `#ORD-${String(o.id).slice(-4)}`,
+        restaurantId: o.restaurant_id || o.restaurantId || panelRestoId,
+        tableNumber: o.table_number || o.tableNumber || 'Table 01',
+        customerName: o.customer_name || o.customerName || 'Customer',
+        items: Array.isArray(o.items) ? o.items : [],
+        subtotal: Number(o.subtotal || 0),
+        vat: Number(o.vat || 0),
+        serviceFee: Number(o.service_fee || o.serviceFee || 0),
+        totalAmount: Number(o.total_amount ?? o.totalAmount ?? 0),
+        paymentMethod: o.payment_method || o.paymentMethod || 'Cash',
+        paymentStatus: o.payment_status || o.paymentStatus || 'pending',
+        orderStatus: o.order_status || o.orderStatus || 'pending',
+        createdAt: o.created_at || o.createdAt,
+        displayTime: o.created_at
+          ? new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : (o.displayTime || 'Recent')
+      };
+      byKey.set(normalized.id, normalized);
+    });
+    (orders || []).forEach(o => {
+      if ((o.restaurantId || o.restaurant_id || panelRestoId) === panelRestoId && !byKey.has(String(o.id))) {
+        byKey.set(String(o.id), o);
+      }
+    });
+    return Array.from(byKey.values()).sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+  }, [liveRestoOrders, orders, panelRestoId]);
+
   const filteredOrders = useMemo(() => {
-    return orders.filter(o => {
+    return displayOrders.filter(o => {
       if (orderStatusFilter !== 'all' && o.orderStatus !== orderStatusFilter) return false;
       if (orderSearchQuery.trim()) {
         const q = orderSearchQuery.toLowerCase();
@@ -1198,7 +1242,7 @@ export default function RestaurantPanel({
       }
       return true;
     });
-  }, [orders, orderStatusFilter, orderSearchQuery]);
+  }, [displayOrders, orderStatusFilter, orderSearchQuery]);
 
   // Handlers
   const handleCreateCategory = (e) => {
@@ -1352,7 +1396,7 @@ export default function RestaurantPanel({
         id: 'orders',
         label: 'Order Manage',
         icon: ShoppingBag,
-        badge: orders.filter(o => o.orderStatus === 'pending').length || null,
+        badge: displayOrders.filter(o => o.orderStatus === 'pending').length || null,
         badgeColor: 'bg-amber-600'
       });
     }
@@ -4594,8 +4638,8 @@ export default function RestaurantPanel({
                     <div className="border-t border-b py-2 space-y-1 text-xs border-slate-200 dark:border-slate-800">
                       {ord.items?.map((it, idx) => (
                         <div key={idx} className="flex justify-between">
-                          <span>{it.quantity}x {it.title} ({it.portion})</span>
-                          <span className="font-mono">${Number(it.price || 0).toFixed(2)}</span>
+                          <span>{it.quantity}x {it.name || it.title} ({it.portion || 'Standard'})</span>
+                          <span className="font-mono">{currency}{Number(it.price || 0).toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
