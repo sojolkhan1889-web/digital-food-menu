@@ -147,7 +147,7 @@ export const handleNonFineDineDeviceVisit = async ({ restaurantId }) => {
           expires_at: existing.expires_at,
           is_confirmed: Boolean(existing.confirmed_at)
         }));
-      } catch {}
+      } catch { }
 
       return {
         success: true,
@@ -183,7 +183,7 @@ export const handleNonFineDineDeviceVisit = async ({ restaurantId }) => {
         };
       }
     }
-  } catch {}
+  } catch { }
 
   // 3. Start a new 12-hour device session + 1 scan + 1 billing ledger + 1 DGM order
   const expiresAtIso = new Date(nowMs + NON_FINE_LOCK_MS).toISOString();
@@ -202,7 +202,7 @@ export const handleNonFineDineDeviceVisit = async ({ restaurantId }) => {
       expires_at: expiresAtIso,
       is_confirmed: false
     }));
-  } catch {}
+  } catch { }
 
   try {
     const { error: sessErr } = await supabase.from('dgm_table_sessions').insert([{
@@ -222,7 +222,7 @@ export const handleNonFineDineDeviceVisit = async ({ restaurantId }) => {
 
     if (sessErr) {
       console.warn('Non-Fine Dine session insert error:', sessErr.message);
-      try { localStorage.removeItem(lockKey); } catch {}
+      try { localStorage.removeItem(lockKey); } catch { }
       return { success: false, error: sessErr.message };
     }
 
@@ -302,7 +302,7 @@ export const confirmNonFineDineSession = async (sessionId, restaurantId) => {
           const parsed = JSON.parse(raw);
           localStorage.setItem(lockKey, JSON.stringify({ ...parsed, is_confirmed: true }));
         }
-      } catch {}
+      } catch { }
     }
 
     if (error) {
@@ -769,8 +769,8 @@ export const fetchSuperAdminDGMMetrics = async ({ restaurantType = 'all' } = {})
       restaurantType === 'fine'
         ? fineSessions
         : restaurantType === 'non_fine'
-        ? nonFineSessions
-        : allSessions;
+          ? nonFineSessions
+          : allSessions;
 
     const targetLegacyOrders = restaurantType === 'fine' ? [] : legacyNonFineOrders;
 
@@ -794,8 +794,8 @@ export const fetchSuperAdminDGMMetrics = async ({ restaurantType = 'all' } = {})
       if (!iso) return false;
       const d = new Date(iso);
       return d.getFullYear() === yesterday.getFullYear() &&
-             d.getMonth() === yesterday.getMonth() &&
-             d.getDate() === yesterday.getDate();
+        d.getMonth() === yesterday.getMonth() &&
+        d.getDate() === yesterday.getDate();
     };
 
     let totalDgmOrders = targetSessions.length + targetLegacyOrders.length;

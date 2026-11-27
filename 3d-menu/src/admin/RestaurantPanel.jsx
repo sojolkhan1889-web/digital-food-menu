@@ -81,6 +81,7 @@ import TableQRManagement from './TableQRManagement';
 import RestaurantTopBar from './components/RestaurantTopBar';
 import RestaurantDueSettlementModal from './components/RestaurantDueSettlementModal';
 import RestaurantSettlementView from './components/RestaurantSettlementView';
+import RestaurantOrderManagementView from './components/RestaurantOrderManagementView';
 import {
   getSuperAdminRestaurants,
   fetchMerchantQRConfigFromSupabase,
@@ -4567,98 +4568,17 @@ export default function RestaurantPanel({
           {/* SECTION 8: ORDER MANAGE (PREMIUM ONLY)                 */}
           {/* ====================================================== */}
           {activeTab === 'orders' && hasOrderManageAccess && (
-            <div className="space-y-6">
-              <div className={`p-4 rounded-[5px] border flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-300 shadow-sm'
-                }`}>
-                <div className={`flex items-center rounded-[5px] border p-0.5 self-start ${isDark ? 'bg-[#0B0F19] border-slate-800' : 'bg-slate-100 border-slate-200'
-                  }`}>
-                  {['all', 'pending', 'preparing', 'completed', 'cancelled'].map(st => (
-                    <button
-                      key={st}
-                      onClick={() => setOrderStatusFilter(st)}
-                      className={`px-3 py-1.5 rounded-[5px] text-xs font-semibold capitalize transition-colors ${orderStatusFilter === st
-                          ? 'bg-orange-600 text-white'
-                          : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                    >
-                      {st}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="relative sm:w-64">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search order no, table, name..."
-                    value={orderSearchQuery}
-                    onChange={(e) => setOrderSearchQuery(e.target.value)}
-                    className={`w-full pl-9 pr-3 py-1.5 rounded-[5px] border text-xs focus:outline-none focus:border-orange-500 ${isDark ? 'bg-[#0B0F19] border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
-                      }`}
-                  />
-                </div>
-              </div>
-
-              {/* Order Cards Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredOrders.map(ord => (
-                  <div
-                    key={ord.id}
-                    className={`rounded-[5px] border p-4 space-y-3 ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-300 shadow-sm'
-                      }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-mono font-bold text-orange-600 text-sm">
-                          {ord.orderNumber}
-                        </span>
-                        <span className="text-[11px] text-slate-500 ml-2">
-                          {ord.tableNumber || 'Takeaway'} &bull; {ord.displayTime || 'Recent'}
-                        </span>
-                      </div>
-
-                      <div className="relative inline-block">
-                        <select
-                          value={ord.orderStatus}
-                          onChange={(e) => onUpdateOrderStatus && onUpdateOrderStatus(ord.id, e.target.value)}
-                          className={`appearance-none pl-3 pr-7 py-1 rounded-[5px] border text-xs font-bold focus:outline-none cursor-pointer ${ord.orderStatus === 'completed'
-                              ? 'bg-emerald-600 text-white border-emerald-600'
-                              : ord.orderStatus === 'preparing'
-                                ? 'bg-blue-600 text-white border-blue-600'
-                                : 'bg-amber-600 text-white border-amber-600'
-                            }`}
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="preparing">Preparing</option>
-                          <option value="completed">Completed</option>
-                          <option value="cancelled">Cancelled</option>
-                        </select>
-                        <ChevronDown className="w-3.5 h-3.5 text-white absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      </div>
-                    </div>
-
-                    <div className="border-t border-b py-2 space-y-1 text-xs border-slate-200 dark:border-slate-800">
-                      {ord.items?.map((it, idx) => (
-                        <div key={idx} className="flex justify-between gap-2">
-                          <span>
-                            {it.quantity || 1}x {it.name || it.title || 'Item'} ({it.portion || 'Standard'})
-                            {it.addons ? ` · ${it.addons}` : ''}
-                          </span>
-                          <span className="font-mono shrink-0">{currency}{Number(it.price || 0).toFixed(2)}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs font-bold">
-                      <span>Total Amount:</span>
-                      <span className="text-orange-600 font-mono text-sm">
-                        {currency}{Number(ord.totalAmount || 0).toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <RestaurantOrderManagementView
+              orders={displayOrders}
+              currency={currency}
+              isDark={isDark}
+              onUpdateOrderStatus={(orderId, newStatus) => {
+                setLiveRestoOrders(prev =>
+                  (prev || []).map(o => String(o.id) === String(orderId) ? { ...o, order_status: newStatus } : o)
+                );
+                onUpdateOrderStatus && onUpdateOrderStatus(orderId, newStatus);
+              }}
+            />
           )}
 
           {/* ====================================================== */}
