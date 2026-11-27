@@ -2945,6 +2945,15 @@ export default function App() {
       clearTimeout(autoConfirmTimerRef.current);
     }
 
+    // Immediately show mandatory order confirmation popup right upon exiting customization (200ms)
+    // Customer won't have time to navigate anywhere else before answering
+    if (isDgmOrderPopupActive && !isFineDineConfirmed && !isDirectOrderManagementEnabled) {
+      autoConfirmTimerRef.current = setTimeout(() => {
+        setIsAutoConfirmPopupOpen(true);
+      }, 200);
+    }
+  };
+
   // When customer clicks "Confirm Your Order" inside Order List (Order Management Premium Feature)
   const handleConfirmDirectMenuOrder = async () => {
     if (isPlacingDirectOrder || !selectedList || selectedList.length === 0) return;
@@ -3076,15 +3085,6 @@ export default function App() {
           setIsAutoConfirmPopupOpen(true);
         }, 200);
       }
-    }
-  };
-
-  // Immediately show mandatory order confirmation popup right upon exiting customization (200ms)
-    // Customer won't have time to navigate anywhere else before answering
-    if (isDgmOrderPopupActive && !isFineDineConfirmed && !isDirectOrderManagementEnabled) {
-      autoConfirmTimerRef.current = setTimeout(() => {
-        setIsAutoConfirmPopupOpen(true);
-      }, 200);
     }
   };
 
