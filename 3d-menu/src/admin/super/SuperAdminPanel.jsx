@@ -1397,16 +1397,32 @@ function KpiRow({ stats, onNavigate, onSelectClearedPeriod, currentClearedPeriod
 function TrendChart({ orders = [], feePerBill = 5 }) {
   const [hoveredIdx, setHoveredIdx] = useState(null);
 
-  // Group real orders by the last 14 days in Asia/Dhaka (UTC+6) calendar date
+  // Group real orders by the last 14 days in the active local/country timezone (universal multi-country support)
   const trendData = useMemo(() => {
-    const toDhakaYmd = (dateInput) => {
+    const activeTimeZone = (() => {
       try {
-        return new Intl.DateTimeFormat('en-CA', {
-          timeZone: 'Asia/Dhaka',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit'
-        }).format(new Date(dateInput));
+        return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+      } catch {
+        return undefined;
+      }
+    })();
+
+    const toLocalYmd = (dateInput) => {
+      try {
+        const dt = new Date(dateInput);
+        if (isNaN(dt.getTime())) return '';
+        if (activeTimeZone) {
+          return new Intl.DateTimeFormat('en-CA', {
+            timeZone: activeTimeZone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          }).format(dt);
+        }
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const day = String(dt.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
       } catch {
         return '';
       }
@@ -1417,14 +1433,14 @@ function TrendChart({ orders = [], feePerBill = 5 }) {
     for (let i = 13; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
-      const dayKey = toDhakaYmd(d);
-      const dayLabel = d.toLocaleDateString('en-US', { timeZone: 'Asia/Dhaka', month: 'short', day: 'numeric' });
-      const dayFull = d.toLocaleDateString('en-US', { timeZone: 'Asia/Dhaka', month: 'short', day: 'numeric', year: 'numeric' });
+      const dayKey = toLocalYmd(d);
+      const dayLabel = d.toLocaleDateString('en-US', { ...(activeTimeZone ? { timeZone: activeTimeZone } : {}), month: 'short', day: 'numeric' });
+      const dayFull = d.toLocaleDateString('en-US', { ...(activeTimeZone ? { timeZone: activeTimeZone } : {}), month: 'short', day: 'numeric', year: 'numeric' });
 
       const dayOrders = orders.filter(o => {
         const rawDate = o.createdAt || o.created_at || o.date;
         if (!rawDate) return false;
-        return toDhakaYmd(rawDate) === dayKey;
+        return toLocalYmd(rawDate) === dayKey;
       });
 
       const count = dayOrders.length;
