@@ -71,7 +71,11 @@ import {
   Smartphone,
   AlertTriangle,
   Info,
-  FileCheck2
+  FileCheck2,
+  BookOpen,
+  Calendar,
+  FileText,
+  ClipboardList
 } from 'lucide-react';
 
 import { QRCodeSVG } from 'qrcode.react';
@@ -638,25 +642,26 @@ export default function RestaurantPanel({
     };
   }, [panelRestoId]);
 
-  // --- Computed Metrics ---
+  // --- Computed Metrics (Live Realtime Supabase Data) ---
   const metrics = useMemo(() => {
     const publishedCount = foods.filter(f => f.is_published !== false && f.status !== 'draft' && f.status !== 'unpublished').length;
     const unpublishedCount = foods.length - publishedCount;
 
-    const totalOrdersCount = orders.length;
+    const sourceOrders = (liveRestoOrders && liveRestoOrders.length > 0) ? liveRestoOrders : orders;
+    const totalOrdersCount = sourceOrders.length;
 
-    const totalSales = orders
-      .filter(o => o.orderStatus !== 'cancelled')
-      .reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+    const totalSales = sourceOrders
+      .filter(o => (o.order_status || o.orderStatus) !== 'cancelled')
+      .reduce((sum, o) => sum + Number(o.total_amount ?? o.totalAmount ?? 0), 0);
 
-    const todayOrders = orders.filter(o => {
-      const orderDate = o.createdAt || o.created_at;
+    const todayOrders = sourceOrders.filter(o => {
+      const orderDate = o.created_at || o.createdAt;
       return isSameCalendarDay(orderDate);
     });
 
     const todaySales = todayOrders
-      .filter(o => o.orderStatus !== 'cancelled')
-      .reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+      .filter(o => (o.order_status || o.orderStatus) !== 'cancelled')
+      .reduce((sum, o) => sum + Number(o.total_amount ?? o.totalAmount ?? 0), 0);
 
     const isFineDine = (activeRestaurant?.type === 'fine' || activeRestaurant?.restaurant_type === 'fine' || panelRestoId === 'resto_001' || panelRestoId === 'resto_003');
     // For Fine-Dine, 1 table session (1:30h) = 1 DGM order. Confirming with "Yes, I Ordered" does NOT add a second order.
@@ -671,7 +676,7 @@ export default function RestaurantPanel({
       todayOrders: finalTodayOrders,
       unpublishedItems: unpublishedCount
     };
-  }, [foods, orders, activeRestaurant, panelRestoId, fineDineSessionCounts]);
+  }, [foods, liveRestoOrders, orders, activeRestaurant, panelRestoId, fineDineSessionCounts]);
 
   // Restaurant Suspension Status State & Realtime Sync
   const [currentStatus, setCurrentStatus] = useState(() => {
@@ -4422,141 +4427,209 @@ export default function RestaurantPanel({
           {/* ====================================================== */}
           {activeTab === 'dashboard' && hasDashboardAccess && (
             <div className="space-y-6">
-              {/* 6 Metric Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
-                <div className={`p-4 rounded-[5px] border flex flex-col justify-between ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-300 shadow-sm'
-                  }`}>
-                  <span className="text-[11px] font-semibold text-slate-500">Today's Sales</span>
-                  <div className="my-2">
-                    <span className={`text-xl sm:text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              {/* 6 Modern SaaS KPI Metric Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 sm:gap-4">
+                {/* 1. Today's Sales */}
+                <div className={`p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all ${
+                  isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-200/90 shadow-xs'
+                }`}>
+                  <div className="w-9 h-9 rounded-xl bg-orange-50 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-900/50 flex items-center justify-center text-orange-600 mb-3">
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Today&apos;s Sales</span>
+                  <div className="my-1.5">
+                    <span className={`text-xl sm:text-2xl font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
                       {currency}{metrics.todaySales.toFixed(2)}
                     </span>
                   </div>
-                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                    <TrendingUp className="w-3 h-3" /> Live updated
+                  <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                    <TrendingUp className="w-3.5 h-3.5" /> Live updated
                   </span>
                 </div>
 
-                <div className={`p-4 rounded-[5px] border flex flex-col justify-between ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-300 shadow-sm'
-                  }`}>
-                  <span className="text-[11px] font-semibold text-slate-500">Total Sales</span>
-                  <div className="my-2">
-                    <span className={`text-xl sm:text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                {/* 2. Total Sales (Highlighted Card) */}
+                <div className={`p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all ${
+                  isDark
+                    ? 'bg-[#111827] border-orange-500/60 shadow-[0_0_20px_rgba(234,88,12,0.12)]'
+                    : 'bg-white border-orange-400/80 shadow-[0_6px_24px_rgba(234,88,12,0.10)]'
+                }`}>
+                  <div className="w-9 h-9 rounded-xl bg-orange-50 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-900/50 flex items-center justify-center text-orange-600 mb-3">
+                    <Wallet className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Sales</span>
+                  <div className="my-1.5">
+                    <span className={`text-xl sm:text-2xl font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
                       {currency}{metrics.totalSales.toFixed(2)}
                     </span>
                   </div>
-                  <span className="text-[10px] text-slate-500 font-medium">All completed</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">All completed</span>
                 </div>
 
-                <div className={`p-4 rounded-[5px] border flex flex-col justify-between ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-300 shadow-sm'
-                  }`}>
-                  <span className="text-[11px] font-semibold text-slate-500">Published Items</span>
-                  <div className="my-2">
-                    <span className="text-xl sm:text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                {/* 3. Published Items */}
+                <div className={`p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all ${
+                  isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-200/90 shadow-xs'
+                }`}>
+                  <div className="w-9 h-9 rounded-xl bg-orange-50 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-900/50 flex items-center justify-center text-orange-600 mb-3">
+                    <BookOpen className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Published Items</span>
+                  <div className="my-1.5">
+                    <span className="text-xl sm:text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
                       {metrics.totalPublishedItems}
                     </span>
                   </div>
-                  <span className="text-[10px] text-slate-500 font-medium">Active on menu</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Active on menu</span>
                 </div>
 
-                <div className={`p-4 rounded-[5px] border flex flex-col justify-between ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-300 shadow-sm'
-                  }`}>
-                  <span className="text-[11px] font-semibold text-slate-500">Total Orders</span>
-                  <div className="my-2">
-                    <span className={`text-xl sm:text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                {/* 4. Total Orders */}
+                <div className={`p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all ${
+                  isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-200/90 shadow-xs'
+                }`}>
+                  <div className="w-9 h-9 rounded-xl bg-orange-50 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-900/50 flex items-center justify-center text-orange-600 mb-3">
+                    <ShoppingCart className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Orders</span>
+                  <div className="my-1.5">
+                    <span className={`text-xl sm:text-2xl font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
                       {metrics.totalOrders}
                     </span>
                   </div>
-                  <span className="text-[10px] text-slate-500 font-medium">Lifetime orders</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Lifetime orders</span>
                 </div>
 
-                <div className={`p-4 rounded-[5px] border flex flex-col justify-between ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-300 shadow-sm'
-                  }`}>
-                  <span className="text-[11px] font-semibold text-slate-500">Today's Orders</span>
-                  <div className="my-2">
-                    <span className="text-xl sm:text-2xl font-bold text-orange-600">
+                {/* 5. Today's Orders */}
+                <div className={`p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all ${
+                  isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-200/90 shadow-xs'
+                }`}>
+                  <div className="w-9 h-9 rounded-xl bg-orange-50 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-900/50 flex items-center justify-center text-orange-600 mb-3">
+                    <Calendar className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Today&apos;s Orders</span>
+                  <div className="my-1.5">
+                    <span className="text-xl sm:text-2xl font-extrabold text-orange-600">
                       {metrics.todayOrders}
                     </span>
                   </div>
-                  <span className="text-[10px] text-slate-500 font-medium">Since 12:00 AM</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Since 12:00 AM</span>
                 </div>
 
-                <div className={`p-4 rounded-[5px] border flex flex-col justify-between ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-300 shadow-sm'
-                  }`}>
-                  <span className="text-[11px] font-semibold text-slate-500">Unpublished Items</span>
-                  <div className="my-2">
-                    <span className="text-xl sm:text-2xl font-bold text-slate-400">
+                {/* 6. Unpublished Items */}
+                <div className={`p-4 sm:p-5 rounded-2xl border flex flex-col justify-between transition-all ${
+                  isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-200/90 shadow-xs'
+                }`}>
+                  <div className="w-9 h-9 rounded-xl bg-orange-50 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-900/50 flex items-center justify-center text-orange-600 mb-3">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Unpublished Items</span>
+                  <div className="my-1.5">
+                    <span className="text-xl sm:text-2xl font-extrabold text-slate-400">
                       {metrics.unpublishedItems}
                     </span>
                   </div>
-                  <span className="text-[10px] text-slate-500 font-medium">Draft / Offline</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Draft / Offline</span>
                 </div>
               </div>
 
-              {/* Live Orders Table */}
-              <div className={`rounded-[5px] border overflow-hidden ${isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-300 shadow-sm'
+              {/* Live Customer Orders Table */}
+              <div className={`rounded-2xl border overflow-hidden ${
+                isDark ? 'bg-[#111827] border-slate-800' : 'bg-white border-slate-200/90 shadow-xs'
+              }`}>
+                <div className={`px-5 py-4 border-b flex items-center justify-between ${
+                  isDark ? 'border-slate-800 bg-[#0B0F19]/60' : 'border-slate-200/80 bg-white'
                 }`}>
-                <div className={`p-4 border-b flex items-center justify-between ${isDark ? 'border-slate-800 bg-[#0B0F19]' : 'border-slate-300 bg-slate-50'}`}>
-                  <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    Live Customer Orders Table
-                  </h3>
-                  <span className="text-[10px] text-emerald-500 font-semibold flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-orange-50 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-900/50 flex items-center justify-center text-orange-600">
+                      <ClipboardList className="w-4 h-4" />
+                    </div>
+                    <h3 className={`text-sm sm:text-base font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      Live Customer Orders Table
+                    </h3>
+                  </div>
+                  <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     Auto-Refreshed
                   </span>
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className={`border-b uppercase text-[10px] tracking-wider ${isDark ? 'bg-[#0B0F19] text-slate-400 border-slate-800' : 'bg-slate-100 text-slate-600 border-slate-200'
-                      }`}>
+                  <table className="w-full text-left text-xs sm:text-sm">
+                    <thead className={`border-b uppercase text-[11px] font-bold tracking-wider ${
+                      isDark ? 'bg-[#0B0F19] text-slate-400 border-slate-800' : 'bg-slate-50/90 text-slate-500 border-slate-200/80'
+                    }`}>
                       <tr>
-                        <th className="px-4 py-3">Order No</th>
-                        <th className="px-4 py-3">Table / Mode</th>
-                        <th className="px-4 py-3">Customer Items</th>
-                        <th className="px-4 py-3">Amount</th>
-                        <th className="px-4 py-3">Payment</th>
-                        <th className="px-4 py-3">Status</th>
+                        <th className="px-5 py-3.5">Order No</th>
+                        <th className="px-5 py-3.5">Table / Mode</th>
+                        <th className="px-5 py-3.5">Customer Items</th>
+                        <th className="px-5 py-3.5">Amount</th>
+                        <th className="px-5 py-3.5">Payment</th>
+                        <th className="px-5 py-3.5 text-right">Status</th>
                       </tr>
                     </thead>
-                    <tbody className={`divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-200'}`}>
-                      {displayOrders.slice(0, 5).map(order => (
-                        <tr key={order.id} className={isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}>
-                          <td className="px-4 py-3 font-mono font-bold text-orange-600">
-                            {order.orderNumber}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="font-semibold block">{order.tableNumber || 'Takeaway'}</span>
-                            <span className="text-[10px] text-slate-500 capitalize">{order.diningMode}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="space-y-0.5">
-                              {order.items?.map((it, idx) => (
-                                <div key={idx} className="text-[11px] truncate max-w-xs">
-                                  {it.quantity || 1}x {it.name || it.title || 'Item'} ({it.portion || 'Standard'}){it.addons ? ` · ${it.addons}` : ''}
-                                </div>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 font-mono font-bold">
-                            {currency}{Number(order.totalAmount || 0).toFixed(2)}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="font-semibold block">{order.paymentMethod}</span>
-                            <span className="text-[10px] text-emerald-600 capitalize">{order.paymentStatus}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`px-2 py-0.5 rounded-[5px] text-[10px] font-bold ${order.orderStatus === 'completed'
-                                ? 'bg-emerald-600 text-white'
-                                : order.orderStatus === 'preparing'
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-amber-600 text-white'
-                              }`}>
-                              {order.orderStatus}
-                            </span>
+                    <tbody className={`divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-100'}`}>
+                      {displayOrders.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-5 py-10 text-center text-xs sm:text-sm text-slate-500">
+                            No live orders recorded yet for this restaurant.
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        displayOrders.slice(0, 5).map(order => {
+                          const rawSt = String(order.orderStatus || 'pending').toLowerCase();
+                          const stBadge =
+                            rawSt === 'completed'
+                              ? 'bg-[#16A34A] text-white'
+                              : rawSt === 'preparing'
+                              ? 'bg-[#1D63D0] text-white'
+                              : rawSt === 'cancelled'
+                              ? 'bg-rose-600 text-white'
+                              : 'bg-[#E57B00] text-white';
+                          const payStatusLabel = String(order.paymentStatus || 'pending').toLowerCase() === 'paid' ? 'Paid' : 'Pending';
+
+                          return (
+                            <tr key={order.id} className={isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50/70'}>
+                              <td className="px-5 py-3.5 font-mono font-extrabold text-orange-600 whitespace-nowrap">
+                                {order.orderNumber}
+                              </td>
+                              <td className="px-5 py-3.5 whitespace-nowrap">
+                                <span className={`font-bold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                                  {order.tableNumber || 'Customer QR'}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5">
+                                <div className="space-y-0.5 max-w-md">
+                                  {Array.isArray(order.items) && order.items.length > 0 ? (
+                                    order.items.map((it, idx) => (
+                                      <div key={idx} className={`text-xs truncate ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                                        {it.quantity || 1}x {it.name || it.title || 'Item'} ({it.portion || 'Standard'}){it.addons ? ` · ${it.addons}` : ''}
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <span className="text-xs text-slate-400 italic">Awaiting items</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-5 py-3.5 font-mono font-extrabold whitespace-nowrap">
+                                {currency}{Number(order.totalAmount || 0).toFixed(2)}
+                              </td>
+                              <td className="px-5 py-3.5 whitespace-nowrap">
+                                <span className={`font-bold block text-xs ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                  {order.paymentMethod || 'Cash'}
+                                </span>
+                                <span className={`text-[11px] font-semibold ${
+                                  payStatusLabel === 'Paid' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
+                                }`}>
+                                  {payStatusLabel}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold capitalize ${stBadge}`}>
+                                  {rawSt}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>
